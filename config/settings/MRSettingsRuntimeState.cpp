@@ -1,3 +1,7 @@
+#define Uses_TProgram
+#include <tvision/tv.h>
+
+#include "../../app/MRCommands.hpp"
 #include "../../app/utils/MRStringUtils.hpp"
 #include "MRSettingsHistory.hpp"
 #include "MRSettingsRuntimeState.hpp"
@@ -935,6 +939,7 @@ bool configuredFileCompareComparePanelReadOnly() {
 bool setConfiguredAutosaveWorkspace(bool enabled, std::string *errorMessage) {
 	if (configuredAutosaveWorkspace() != enabled) markConfiguredSettingsDirty();
 	storeConfiguredRuntimeInt("autosaveWorkspace", enabled ? 1 : 0);
+	if (enabled && TProgram::application != nullptr) message(TProgram::application, evBroadcast, cmMrWorkspaceAutosaveScheduled, nullptr);
 	if (errorMessage != nullptr) errorMessage->clear();
 	return true;
 }
@@ -946,6 +951,7 @@ bool configuredAutosaveWorkspace() {
 
 void setRuntimePreserveAutosavedWorkspace(bool enabled) {
 	storeConfiguredRuntimeInt("preserveAutosavedWorkspace", enabled ? 1 : 0);
+	if (!enabled && TProgram::application != nullptr) message(TProgram::application, evBroadcast, cmMrWorkspaceAutosaveScheduled, nullptr);
 }
 
 bool runtimePreserveAutosavedWorkspace() {

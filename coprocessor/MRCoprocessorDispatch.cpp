@@ -23,6 +23,7 @@
 #include "MRWindowCommands.hpp"
 
 #include "../app/MRCommands.hpp"
+#include "../app/MRRuntimeTimerSource.hpp"
 #include "../app/MRUpdate.hpp"
 #include "../app/commands/MRExternalCommand.hpp"
 #include "../app/commands/MRBuildCommands.hpp"
@@ -513,6 +514,7 @@ void releaseMacroTask(MREditWindow *win, const mr::coprocessor::Result &result, 
 } // namespace
 
 void handleCoprocessorResult(const mr::coprocessor::Result &result) {
+	if (result.task.kind == mr::coprocessor::TaskKind::MacroJob) scheduleRuntimeTimerSource();
 	logWarmupCancelFinish(result);
 	if (mrAdoptUpdateCoprocessorResult(result)) return;
 	if (result.task.executionOwnerKind == mr::coprocessor::ExecutionOwnerKind::Dialog) {

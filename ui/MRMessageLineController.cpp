@@ -290,7 +290,7 @@ void clearSlotsLocked(MRVMRuntimeKv &runtimeKv) {
 Token postTimed(Owner owner, std::string_view text, Kind kind, std::chrono::milliseconds duration, int priority) {
 	if (!validOwner(owner) || !heroMessageLineAllowed(owner, text)) return 0;
 	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
-	std::lock_guard<std::mutex> lock(stateMutex());
+	std::unique_lock<std::mutex> lock(stateMutex());
 	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
 	const auto now = std::chrono::steady_clock::now();
 	Slot slot;
@@ -309,6 +309,8 @@ Token postTimed(Owner owner, std::string_view text, Kind kind, std::chrono::mill
 	slot.token = takeCounter(runtimeKv, "nextToken");
 	slot.sequence = takeCounter(runtimeKv, "nextSequence");
 	writeSlot(runtimeKv, owner, slot);
+	lock.unlock();
+	if (auto *menuBar = dynamic_cast<MRMenuBar *>(TProgram::menuBar)) menuBar->refreshMessageLine();
 	return slot.token;
 }
 
@@ -318,7 +320,7 @@ Token postTimedSegments(Owner owner, const std::vector<VisibleMessage::Segment> 
 		text += segment.text;
 	if (!validOwner(owner) || !heroMessageLineAllowed(owner, text)) return 0;
 	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
-	std::lock_guard<std::mutex> lock(stateMutex());
+	std::unique_lock<std::mutex> lock(stateMutex());
 	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
 	const auto now = std::chrono::steady_clock::now();
 	Slot slot;
@@ -336,13 +338,15 @@ Token postTimedSegments(Owner owner, const std::vector<VisibleMessage::Segment> 
 	slot.token = takeCounter(runtimeKv, "nextToken");
 	slot.sequence = takeCounter(runtimeKv, "nextSequence");
 	writeSlot(runtimeKv, owner, slot);
+	lock.unlock();
+	if (auto *menuBar = dynamic_cast<MRMenuBar *>(TProgram::menuBar)) menuBar->refreshMessageLine();
 	return slot.token;
 }
 
 Token postSticky(Owner owner, std::string_view text, Kind kind, int priority) {
 	if (!validOwner(owner) || !heroMessageLineAllowed(owner, text)) return 0;
 	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
-	std::lock_guard<std::mutex> lock(stateMutex());
+	std::unique_lock<std::mutex> lock(stateMutex());
 	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
 	Slot slot;
 
@@ -357,6 +361,8 @@ Token postSticky(Owner owner, std::string_view text, Kind kind, int priority) {
 	slot.token = takeCounter(runtimeKv, "nextToken");
 	slot.sequence = takeCounter(runtimeKv, "nextSequence");
 	writeSlot(runtimeKv, owner, slot);
+	lock.unlock();
+	if (auto *menuBar = dynamic_cast<MRMenuBar *>(TProgram::menuBar)) menuBar->refreshMessageLine();
 	return slot.token;
 }
 
@@ -388,7 +394,7 @@ Token postFileAutoTimedAfter(Owner owner, std::string_view text, Kind kind, std:
 
 void clearOwner(Owner owner) {
 	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
-	std::lock_guard<std::mutex> lock(stateMutex());
+	std::unique_lock<std::mutex> lock(stateMutex());
 	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
 	Slot slot;
 
@@ -403,6 +409,8 @@ void clearOwner(Owner owner) {
 	slot.token = takeCounter(runtimeKv, "nextToken");
 	slot.sequence = takeCounter(runtimeKv, "nextSequence");
 	writeSlot(runtimeKv, owner, slot);
+	lock.unlock();
+	if (auto *menuBar = dynamic_cast<MRMenuBar *>(TProgram::menuBar)) menuBar->refreshMessageLine();
 }
 
 void setStaticMode(bool active) {

@@ -34,6 +34,7 @@ class MRMenuBar : public TMenuBar {
 	void handleEvent(TEvent &event) override;
 	virtual void draw() override;
 	void tickMarquee();
+	void refreshMessageLine();
 	void setPersistentBlocksMenuState(bool enabled);
 	void setInsertModeMenuState(bool enabled);
 	void setLineDrawingMenuState(bool enabled, bool doubleLines);
@@ -164,6 +165,7 @@ class MRMenuBar : public TMenuBar {
 	bool runtimeMenuGroupExists(const std::string &menuKey) const noexcept;
 
 	TMenu *mBaseMenu = nullptr;
+	TTimerId mMessageExpiryTimer = nullptr;
 	std::vector<RuntimeMenuNode> mRuntimeNodes;
 	std::uint32_t mNextRuntimeOrder = 0;
 	ushort mNextRuntimeCommand = 0x7400;

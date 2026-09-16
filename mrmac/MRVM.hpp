@@ -310,7 +310,7 @@ class VirtualMachine {
 	bool hasPendingDelay() const noexcept {
 		return delayState.pending;
 	}
-	bool resumePendingDelay();
+	bool resumePendingDelay(bool *resumed = nullptr);
 	bool cancelPendingDelay();
 	bool wasCancelled() const noexcept {
 		return cancelledExecution;
@@ -335,6 +335,7 @@ struct MRMacroJobResult {
 	}
 };
 
+bool mrvmIsBackgroundExecution() noexcept;
 MRMacroJobResult mrvmRunBytecodeBackgroundAt(const unsigned char *bytecode, std::size_t length, std::size_t entryOffset, const std::string &macroName, const std::string &closureId, MRMacroExecutionSessionId sessionId = 0, std::shared_ptr<std::atomic_bool> cancelFlag = nullptr);
 MRMacroDebugRunResult mrvmRunBytecodeDebugAt(const unsigned char *bytecode, std::size_t length, std::size_t entryOffset, const std::string &macroName, const std::vector<std::size_t> &breakpointOffsets);
 MRMacroDebugRunResult mrvmStartDebugSessionAt(const unsigned char *bytecode, std::size_t length, std::size_t entryOffset, const std::string &macroName, const MRMacroExecutionOwner &owner, const std::vector<std::size_t> &breakpointOffsets, MRMacroExecutionSession *sessionOut = nullptr, bool firstRun = false,

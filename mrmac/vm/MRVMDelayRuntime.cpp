@@ -59,10 +59,12 @@ void VirtualMachine::execute(const unsigned char *bytecode, size_t length) {
 	executeAt(bytecode, length, 0, std::string(), std::string(), true, false);
 }
 
-bool VirtualMachine::resumePendingDelay() {
+bool VirtualMachine::resumePendingDelay(bool *resumed) {
+	if (resumed != nullptr) *resumed = false;
 	if (!delayState.pending) return false;
 	if (!delayState.ready || std::chrono::steady_clock::now() < delayState.deadline) return true;
 	executeAt(nullptr, 0, 0, std::string(), std::string(), false, false);
+	if (resumed != nullptr) *resumed = true;
 	return delayState.pending;
 }
 

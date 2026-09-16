@@ -126,13 +126,13 @@ bool MREditorApp::quitPrepared() const noexcept {
 }
 
 void MREditorApp::refreshConfiguredUiSettingsSnapshot() {
-	runtimeRefreshPending = true;
 	cursorPositionMarkerFormat = configuredCursorPositionMarker();
 	persistentBlocksMenuEnabled = configuredPersistentBlocksSetting();
 	virtualDesktopCount = configuredVirtualDesktops();
 	cyclicVirtualDesktopsEnabled = configuredCyclicVirtualDesktops();
 	mrRefreshVirtualDesktopSettingsSnapshot(virtualDesktopCount, cyclicVirtualDesktopsEnabled);
 	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar)) mrMenuBar->setPersistentBlocksMenuState(persistentBlocksMenuEnabled);
+	refreshEditorContext();
 }
 
 void MREditorApp::setSnippetSidekickHintsActive(bool active) {
@@ -173,6 +173,10 @@ void MREditorApp::endInteractiveMouseCapture() noexcept {
 MREditorApp::~MREditorApp() {
 	const auto prepareStartedAt = std::chrono::steady_clock::now();
 	prepareForQuit();
+	killTimer(runtimeSchedulerTimer);
+	killTimer(workspaceAutosaveTimer);
+	killTimer(deferredUiTimer);
+	killTimer(macroBrainBlinkTimer);
 	{
 		std::ostringstream line;
 		line << "App destructor phase prepare_for_quit took_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - prepareStartedAt).count() << ".";
@@ -356,9 +360,7 @@ bool MREditorApp::showPreviousHelpTopic() {
 	return helpSystem.showPreviousTopic();
 }
 
-void MREditorApp::handleEvent(TEvent &event) {
-	if (event.what == evNothing) return;
-	runtimeRefreshPending = true;
+void MREditorApp::handleApplicationEvent(TEvent &event) {
 	const std::size_t pendingResults = mr::coprocessor::globalCoprocessor().pendingResults();
 	mr::coprocessor::globalCoprocessor().pumpFor(pendingResults > 16 ? coprocessorBurstPumpBudget : coprocessorPumpBudget,
 	                                             mr::coprocessor::TaskKind::FoldWarmup);

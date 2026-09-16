@@ -9,8 +9,62 @@
 
 #include <algorithm>
 #include <chrono>
+#include <limits>
 #include <string>
 #include <vector>
+
+namespace {
+MRMenuBar::MarqueeKind mapMessageNoticeKind(mr::messageline::Kind kind) {
+	switch (kind) {
+		case mr::messageline::Kind::Success:
+			return MRMenuBar::MarqueeKind::Success;
+		case mr::messageline::Kind::Warning:
+			return MRMenuBar::MarqueeKind::Warning;
+		case mr::messageline::Kind::Error:
+			return MRMenuBar::MarqueeKind::Error;
+		case mr::messageline::Kind::Info:
+		default:
+			return MRMenuBar::MarqueeKind::Info;
+	}
+}
+
+std::vector<MRMenuBar::MarqueeSegment> mapMessageNoticeSegments(const std::vector<mr::messageline::VisibleMessage::Segment> &segments) {
+	std::vector<MRMenuBar::MarqueeSegment> mapped;
+
+	mapped.reserve(segments.size());
+	for (const mr::messageline::VisibleMessage::Segment &segment : segments)
+		mapped.push_back(MRMenuBar::MarqueeSegment{segment.text, mapMessageNoticeKind(segment.kind)});
+	return mapped;
+}
+
+bool isHeroVisibleMessage(const mr::messageline::VisibleMessage &visible) {
+	mr::messageline::VisibleMessage ownerMessage;
+	if (mr::messageline::currentOwnerMessage(mr::messageline::Owner::HeroEvent, ownerMessage) && ownerMessage.kind == visible.kind && ownerMessage.text == visible.text) return true;
+	if (mr::messageline::currentOwnerMessage(mr::messageline::Owner::HeroEventFollowup, ownerMessage) && ownerMessage.kind == visible.kind && ownerMessage.text == visible.text) return true;
+	if (mr::messageline::currentOwnerMessage(mr::messageline::Owner::MacroBrain, ownerMessage) && ownerMessage.kind == visible.kind && ownerMessage.text == visible.text) return true;
+	return false;
+}
+
+} // namespace
+
+void MRMenuBar::refreshMessageLine() {
+	killTimer(mMessageExpiryTimer);
+	mMessageExpiryTimer = nullptr;
+	mr::messageline::VisibleMessage visible;
+	std::chrono::steady_clock::time_point nextExpiry;
+	if (mr::messageline::currentVisibleMessage(visible, &nextExpiry)) {
+		MarqueeKind kind = mapMessageNoticeKind(visible.kind);
+		if (isHeroVisibleMessage(visible)) kind = MarqueeKind::Hero;
+		if (!visible.segments.empty()) setAutoMarqueeStatusSegments(mapMessageNoticeSegments(visible.segments), kind);
+		else
+			setAutoMarqueeStatus(visible.text, kind);
+	} else
+		setAutoMarqueeStatus(std::string());
+	if (nextExpiry != std::chrono::steady_clock::time_point::max()) {
+		const long long delayMs = std::chrono::duration_cast<std::chrono::milliseconds>(nextExpiry - std::chrono::steady_clock::now()).count();
+		mMessageExpiryTimer = setTimer(static_cast<unsigned>(std::max<long long>(1, std::min<long long>(delayMs, std::numeric_limits<unsigned>::max()))));
+	}
+}
 
 void MRMenuBar::setAutoMarqueeStatusSegments(const std::vector<MarqueeSegment> &segments, MarqueeKind kind) {
 	std::string status;
@@ -26,6 +80,8 @@ void MRMenuBar::setAutoMarqueeStatusSegments(const std::vector<MarqueeSegment> &
 }
 
 void MRMenuBar::setStaticProgressMode(bool active) {
+	killTimer(mMessageExpiryTimer);
+	mMessageExpiryTimer = nullptr;
 	static_cast<void>(active);
 	resetMarqueeState();
 	drawView();

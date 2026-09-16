@@ -1,4 +1,5 @@
 #include "MRRuntimeScheduler.hpp"
+#include "MRRuntimeTimerSource.hpp"
 
 #include "MRMacroDebuggerCommandRoute.hpp"
 #include "../mrmac/MRMacroRunner.hpp"
@@ -217,6 +218,7 @@ std::size_t removeRuntimeScheduledConsumersLocked(const std::string *macroSpec, 
 		++removed;
 	}
 	mrvmStoreRuntimeSchedulerNextPumpMs(0);
+	scheduleRuntimeTimerSource();
 	return removed;
 }
 } // namespace
@@ -233,6 +235,7 @@ MRRuntimeScheduledConsumerId registerRuntimeScheduledConsumer(const MRRuntimeSch
 	mrvmStoreRuntimeScheduledConsumer(consumer);
 	mrvmStoreRuntimeSchedulerNextPumpMs(0);
 	recordRuntimeSchedulerEventLocked(consumer.consumerId, consumer.config, MRRuntimeSchedulerEventKind::ConsumerRegistered, MRRuntimeSchedulerSkipReason::None, 0, 0, 0, 0, std::string());
+	scheduleRuntimeTimerSource();
 	return consumer.consumerId;
 }
 
@@ -244,6 +247,7 @@ bool removeRuntimeScheduledConsumer(MRRuntimeScheduledConsumerId consumerId) {
 	recordRuntimeSchedulerEventLocked(consumerId, consumer.config, MRRuntimeSchedulerEventKind::ConsumerRemoved, MRRuntimeSchedulerSkipReason::None, consumer.activeSessionId, 0, 0, 0, std::string());
 	mrvmRemoveRuntimeScheduledConsumer(consumerId);
 	mrvmStoreRuntimeSchedulerNextPumpMs(0);
+	scheduleRuntimeTimerSource();
 	return true;
 }
 

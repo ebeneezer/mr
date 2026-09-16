@@ -2,7 +2,6 @@
 #define MRVMHASH_HPP
 
 #include <cstdint>
-#include <atomic>
 #include <map>
 #include <set>
 #include <string>
@@ -13,7 +12,6 @@
 class MRVMHashStore {
   public:
 	void setIoTrackingEnabled(bool enabled) noexcept;
-	bool takeRuntimeChanges() noexcept;
 	void clear();
 	void clearExceptRoots(const std::vector<int> &roots);
 	int createHash();
@@ -32,8 +30,6 @@ class MRVMHashStore {
 
 	int nextHandle = 1;
 	bool ioTrackingEnabled = false;
-	// Coalesced notification for the UI pump; contains no runtime values.
-	std::atomic<bool> runtimeChanges{false};
 	std::map<int, std::map<std::string, VirtualMachine::Value>> hashes;
 };
 

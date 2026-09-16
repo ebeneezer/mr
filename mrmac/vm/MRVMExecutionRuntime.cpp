@@ -174,6 +174,10 @@ MRMacroStagedJobResult mrvmBuildStagedJobResult(const VirtualMachine &vm, const 
 	return result;
 }
 
+bool mrvmIsBackgroundExecution() noexcept {
+	return g_backgroundEditSession != nullptr || g_backgroundMacroCancelFlag != nullptr;
+}
+
 MRMacroJobResult mrvmRunBytecodeBackgroundAt(const unsigned char *bytecode, std::size_t length, std::size_t entryOffset, const std::string &macroName, const std::string &closureId, MRMacroExecutionSessionId sessionId, std::shared_ptr<std::atomic_bool> cancelFlag) {
 	MRMacroJobResult result;
 	VirtualMachine vm;

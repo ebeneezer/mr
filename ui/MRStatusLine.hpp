@@ -230,7 +230,7 @@ class MRStatusLine : public TStatusLine {
 	}
 
 	virtual void handleEvent(TEvent &event) override {
-		if (mr::messageline::staticModeActive()) {
+		if ((event.what == evKeyDown || event.what == evMouseDown) && mr::messageline::staticModeActive()) {
 			if ((event.what == evKeyDown && isFunctionKey(TKey(event.keyDown).code)) || event.what == evMouseDown) clearEvent(event);
 			return;
 		}

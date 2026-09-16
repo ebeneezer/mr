@@ -47,6 +47,8 @@ class MREditorApp : public TApplication {
 	static constexpr std::chrono::microseconds coprocessorBurstPumpBudget{8000};
 
 	void prepareForQuit();
+	void handleApplicationEvent(TEvent &event);
+	void refreshEditorContext();
 	bool isRecorderToggleKey(const TEvent &event) const;
 	bool isRecorderToggleCommand(const TEvent &event) const;
 	void startKeystrokeRecording();
@@ -73,8 +75,10 @@ class MREditorApp : public TApplication {
 	void toggleFullscreenPresentation();
 
 	bool exitPrepared;
-	bool runtimeRefreshPending = true;
-	std::chrono::steady_clock::time_point runtimeRefreshAt = std::chrono::steady_clock::time_point::max();
+	TTimerId runtimeSchedulerTimer = nullptr;
+	TTimerId workspaceAutosaveTimer = nullptr;
+	TTimerId deferredUiTimer = nullptr;
+	TTimerId macroBrainBlinkTimer = nullptr;
 	bool restartAfterExit;
 	bool updateCheckStarted;
 	bool keystrokeRecording;

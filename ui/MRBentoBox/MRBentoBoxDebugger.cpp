@@ -392,13 +392,13 @@ bool MRBentoBox::continueMacroDebuggerSession() {
 	return true;
 }
 
-void MRBentoBox::pumpMacroDebuggerSession() {
+bool MRBentoBox::pumpMacroDebuggerSession() {
 	MRMacroDebugRunResult debugResult;
 	std::string errorMessage;
 
-	if (!macroDebuggerExecutionRunning || macroDebuggerSessionId == 0 || macroDebuggerRouteUsesWorker(macroDebuggerExecutionRoute)) return;
-	if (!mrvmPumpDebugSession(macroDebuggerSessionId, macroDebuggerMacroKey, debugResult, &errorMessage)) return;
-	if (debugResult.stopReason == mrdStopBudget) return;
+	if (!macroDebuggerExecutionRunning || macroDebuggerSessionId == 0 || macroDebuggerRouteUsesWorker(macroDebuggerExecutionRoute)) return false;
+	if (!mrvmPumpDebugSession(macroDebuggerSessionId, macroDebuggerMacroKey, debugResult, &errorMessage)) return false;
+	if (debugResult.stopReason == mrdStopBudget) return true;
 	macroDebuggerExecutionRunning = false;
 	refreshMacroDebuggerVariables(debugResult.variables);
 	refreshMacroDebuggerRunMarkers(debugResult);
@@ -408,6 +408,7 @@ void MRBentoBox::pumpMacroDebuggerSession() {
 	if (!debugResult.paused && !debugResult.hadError) macroDebuggerSessionId = 0;
 	bentoProjectionDirty |= bpdContent | bpdChrome;
 	flushBentoProjection();
+	return true;
 }
 
 bool MRBentoBox::stepMacroDebuggerSession(MRMacroDebugStepMode mode) {

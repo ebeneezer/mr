@@ -1,9 +1,19 @@
+#define Uses_TProgram
+#include <tvision/tv.h>
+
 #include "MRRuntimeTimerSource.hpp"
+#include "MRCommands.hpp"
+#include "../mrmac/MRVM.hpp"
 
 #include "MRRuntimeScheduler.hpp"
-#include "../mrmac/ui/modeless/MRMacroModelessUi.hpp"
 
 #include <chrono>
+
+void scheduleRuntimeTimerSource() {
+	// Worker-side registrations reach the UI timer source through result delivery.
+	if (mrvmIsBackgroundExecution() || TProgram::application == nullptr) return;
+	message(TProgram::application, evBroadcast, cmMrRuntimeScheduleChanged, nullptr);
+}
 
 std::uint64_t runtimeTimerSourceNowMs() {
 	const std::chrono::steady_clock::duration elapsed = std::chrono::steady_clock::now().time_since_epoch();
@@ -11,6 +21,5 @@ std::uint64_t runtimeTimerSourceNowMs() {
 }
 
 std::size_t pumpRuntimeTimerSource(std::uint64_t *nextWakeupMs) {
-	refreshMacroModelessWindows();
 	return pumpRuntimeScheduler(runtimeTimerSourceNowMs(), nextWakeupMs);
 }

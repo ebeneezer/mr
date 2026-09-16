@@ -46,7 +46,6 @@
 #include "MRMacroDebuggerCommandRoute.hpp"
 #include "MRHelpTopics.generated.hpp"
 
-#include <algorithm>
 #include <ctime>
 #include <chrono>
 #include <array>
@@ -276,14 +275,10 @@ void MREditorApp::updateRecordingBlink() {
 	if (!keystrokeRecording) return;
 
 	now = std::chrono::steady_clock::now();
-	if (now < recordingBlinkToggleAt) {
-		runtimeRefreshAt = std::min(runtimeRefreshAt, recordingBlinkToggleAt);
-		return;
-	}
+	if (now < recordingBlinkToggleAt) return;
 
 	recordingMarkerVisible = !recordingMarkerVisible;
 	recordingBlinkToggleAt = now + recordingBlinkInterval;
-	runtimeRefreshAt = std::min(runtimeRefreshAt, recordingBlinkToggleAt);
 	mrSetKeystrokeRecordingMarkerVisible(recordingMarkerVisible);
 	if (auto *mrStatusLine = dynamic_cast<MRStatusLine *>(statusLine)) mrStatusLine->setRecordingState(keystrokeRecording, recordingMarkerVisible);
 	redrawActiveMarkerFrame();
@@ -294,14 +289,10 @@ void MREditorApp::updateMacroBrainBlink() {
 	if (!mrIsMacroBrainMarkerActive()) return;
 
 	now = std::chrono::steady_clock::now();
-	if (now < macroBrainBlinkToggleAt) {
-		runtimeRefreshAt = std::min(runtimeRefreshAt, macroBrainBlinkToggleAt);
-		return;
-	}
+	if (now < macroBrainBlinkToggleAt) return;
 
 	macroBrainMarkerVisible = !macroBrainMarkerVisible;
 	macroBrainBlinkToggleAt = now + recordingBlinkInterval;
-	runtimeRefreshAt = std::min(runtimeRefreshAt, macroBrainBlinkToggleAt);
 	mrSetMacroBrainMarkerVisible(macroBrainMarkerVisible);
 	redrawActiveMarkerFrame();
 }

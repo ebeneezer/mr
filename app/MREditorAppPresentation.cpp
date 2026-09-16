@@ -22,8 +22,7 @@
 #include "../coprocessor/MRCoprocessor.hpp"
 #include "../mrmac/MRVM.hpp"
 #include "../mrmac/MRMacroRunner.hpp"
-#include "../mrmac/vm/MRVMRuntimeState.hpp"
-#include "../mrmac/vm/MRVMRuntimeKv.hpp"
+#include "../mrmac/ui/modeless/MRMacroModelessUi.hpp"
 #include "../coprocessor/MRCoprocessorDispatch.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../dialogs/setup/MRSetupCommon.hpp"
@@ -42,6 +41,7 @@
 #include "../ui/MRWindowSupport.hpp"
 #include "MRAppState.hpp"
 #include "MRCommandRouter.hpp"
+#include "MRCommands.hpp"
 #include "MRFunctionKeyBindings.hpp"
 #include "MRMenuFactory.hpp"
 #include "MRMacroDebuggerCommandRoute.hpp"
@@ -49,6 +49,7 @@
 #include "MRUpdate.hpp"
 #include <algorithm>
 #include <chrono>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -93,37 +94,6 @@ std::string buildTopRightCursorStatus(const std::string &markerFormat) {
 			out.push_back(ch);
 	}
 	return out;
-}
-
-MRMenuBar::MarqueeKind mapMessageNoticeKind(mr::messageline::Kind kind) {
-	switch (kind) {
-		case mr::messageline::Kind::Success:
-			return MRMenuBar::MarqueeKind::Success;
-		case mr::messageline::Kind::Warning:
-			return MRMenuBar::MarqueeKind::Warning;
-		case mr::messageline::Kind::Error:
-			return MRMenuBar::MarqueeKind::Error;
-		case mr::messageline::Kind::Info:
-		default:
-			return MRMenuBar::MarqueeKind::Info;
-	}
-}
-
-std::vector<MRMenuBar::MarqueeSegment> mapMessageNoticeSegments(const std::vector<mr::messageline::VisibleMessage::Segment> &segments) {
-	std::vector<MRMenuBar::MarqueeSegment> mapped;
-
-	mapped.reserve(segments.size());
-	for (const mr::messageline::VisibleMessage::Segment &segment : segments)
-		mapped.push_back(MRMenuBar::MarqueeSegment{segment.text, mapMessageNoticeKind(segment.kind)});
-	return mapped;
-}
-
-bool isHeroVisibleMessage(const mr::messageline::VisibleMessage &visible) {
-	mr::messageline::VisibleMessage ownerMessage;
-	if (mr::messageline::currentOwnerMessage(mr::messageline::Owner::HeroEvent, ownerMessage) && ownerMessage.kind == visible.kind && ownerMessage.text == visible.text) return true;
-	if (mr::messageline::currentOwnerMessage(mr::messageline::Owner::HeroEventFollowup, ownerMessage) && ownerMessage.kind == visible.kind && ownerMessage.text == visible.text) return true;
-	if (mr::messageline::currentOwnerMessage(mr::messageline::Owner::MacroBrain, ownerMessage) && ownerMessage.kind == visible.kind && ownerMessage.text == visible.text) return true;
-	return false;
 }
 
 const TPalette &extendedAppBasePalette() {
@@ -242,7 +212,6 @@ void MREditorApp::updateFullscreenHint() {
 	if (fullscreenPresentationActive && fullscreenWindow != nullptr && !fullscreenTargetStillOpen()) fullscreenWindow = nullptr;
 	const bool fullscreenDesktopEmpty = fullscreenPresentationActive && fullscreenWindow == nullptr && currentEditWindow() == nullptr;
 	const bool fullscreenHintTimed = fullscreenPresentationActive && now < fullscreenHintVisibleUntil;
-	if (fullscreenHintTimed) runtimeRefreshAt = std::min(runtimeRefreshAt, fullscreenHintVisibleUntil);
 	const bool hintVisible = fullscreenPresentationActive && (fullscreenDesktopEmpty || fullscreenHintTimed);
 
 	if (!hintVisible) {
@@ -413,6 +382,78 @@ void MREditorApp::applyConfiguredDisplayLayout() {
 	updateFullscreenHint();
 }
 
+void MREditorApp::handleEvent(TEvent &event) {
+	if (event.what == evNothing) return;
+	if (event.what == evBroadcast) {
+		switch (event.message.command) {
+			case cmMrRuntimeScheduleChanged:
+				killTimer(runtimeSchedulerTimer);
+				runtimeSchedulerTimer = exitPrepared ? nullptr : setTimer(1);
+				return;
+			case cmMrWorkspaceAutosaveScheduled:
+				killTimer(workspaceAutosaveTimer);
+				workspaceAutosaveTimer = exitPrepared ? nullptr : setTimer(1000);
+				return;
+			case cmMrDeferredUiQueued:
+				killTimer(deferredUiTimer);
+				deferredUiTimer = exitPrepared ? nullptr : setTimer(1);
+				return;
+			case cmMrMacroBrainStateChanged:
+				killTimer(macroBrainBlinkTimer);
+				macroBrainBlinkTimer = !exitPrepared && event.message.infoInt != 0 ? setTimer(450, 450) : nullptr;
+				return;
+			case cmTimerExpired:
+				if (runtimeSchedulerTimer != nullptr && event.message.infoPtr == runtimeSchedulerTimer) {
+					killTimer(runtimeSchedulerTimer);
+					runtimeSchedulerTimer = nullptr;
+					std::uint64_t nextDueMs = 0;
+					pumpRuntimeTimerSource(&nextDueMs);
+					if (nextDueMs != 0 && runtimeSchedulerTimer == nullptr) {
+						const std::uint64_t nowMs = runtimeTimerSourceNowMs();
+						const std::uint64_t delayMs = nextDueMs > nowMs ? nextDueMs - nowMs : 1;
+						runtimeSchedulerTimer = setTimer(static_cast<unsigned>(std::min<std::uint64_t>(delayMs, std::numeric_limits<unsigned>::max())));
+					}
+					refreshEditorContext();
+					return;
+				}
+				if (workspaceAutosaveTimer != nullptr && event.message.infoPtr == workspaceAutosaveTimer) {
+					killTimer(workspaceAutosaveTimer);
+					workspaceAutosaveTimer = nullptr;
+					std::uint64_t nextDueMs = 0;
+					mrFlushWorkspaceAutosaveIfDue(&nextDueMs);
+					if (nextDueMs != 0 && workspaceAutosaveTimer == nullptr) {
+						const std::uint64_t nowMs = runtimeTimerSourceNowMs();
+						workspaceAutosaveTimer = setTimer(static_cast<unsigned>(nextDueMs > nowMs ? nextDueMs - nowMs : 1));
+					}
+					return;
+				}
+				if (deferredUiTimer != nullptr && event.message.infoPtr == deferredUiTimer) {
+					killTimer(deferredUiTimer);
+					deferredUiTimer = nullptr;
+					const std::uint64_t nextDueMs = pumpDeferredMacroUiPlayback();
+					if (nextDueMs != 0 && deferredUiTimer == nullptr) {
+						const std::uint64_t nowMs = runtimeTimerSourceNowMs();
+						deferredUiTimer = setTimer(static_cast<unsigned>(nextDueMs > nowMs ? nextDueMs - nowMs : 1));
+					}
+					refreshEditorContext();
+					return;
+				}
+				if (macroBrainBlinkTimer != nullptr && event.message.infoPtr == macroBrainBlinkTimer) {
+					updateMacroBrainBlink();
+					return;
+				}
+				TApplication::handleEvent(event);
+				return;
+			default:
+				break;
+		}
+	}
+	const bool refreshContext = event.what != evBroadcast ||
+	                            (event.message.command != cmTimerExpired && event.message.command != cmCommandSetChanged);
+	handleApplicationEvent(event);
+	if (refreshContext && !exitPrepared) refreshEditorContext();
+}
+
 void MREditorApp::idle() {
 	if (!updateCheckStarted) {
 		updateCheckStarted = true;
@@ -429,36 +470,28 @@ void MREditorApp::idle() {
 	TApplication::idle();
 	if (interactiveMouseCaptureDepth > 0) return;
 	updatePerformancePanel();
-	if (pumpForegroundMacroDelays()) runtimeRefreshPending = true;
+	if (pumpForegroundMacroDelays()) refreshEditorContext();
 	const std::vector<MREditWindow *> windows = allEditWindowsInZOrder();
 	for (MREditWindow *window : windows) {
 		MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(window);
 
-		if (bentoBox != nullptr) bentoBox->pumpMacroDebuggerSession();
+		if (bentoBox != nullptr && bentoBox->pumpMacroDebuggerSession()) refreshEditorContext();
 		if (window != nullptr && window->frame != nullptr)
 			if (auto *mrFrame = dynamic_cast<MRFrame *>(window->frame)) mrFrame->tickTaskOverviewAnimation();
 	}
 	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar)) mrMenuBar->tickMarquee();
 	if (auto *mrStatus = dynamic_cast<MRStatusLine *>(statusLine)) mrStatus->tickFunctionKeyLabelTransitions();
 	const std::size_t pendingResults = mr::coprocessor::globalCoprocessor().pendingResults();
-	const bool runtimeChanged = mrvmRuntimeKv().globalStore().takeRuntimeChanges();
-	if (!runtimeRefreshPending && !runtimeChanged && pendingResults == 0 && std::chrono::steady_clock::now() < runtimeRefreshAt) return;
-	runtimeRefreshPending = false;
-	runtimeRefreshAt = std::chrono::steady_clock::time_point::max();
-	std::uint64_t nextSchedulerMs = 0;
-	pumpRuntimeTimerSource(&nextSchedulerMs);
-	if (nextSchedulerMs != 0) runtimeRefreshAt = std::chrono::steady_clock::time_point(std::chrono::milliseconds(nextSchedulerMs));
+	const std::size_t adopted = mr::coprocessor::globalCoprocessor().pumpFor(
+	    pendingResults > 16 ? coprocessorBurstPumpBudget : coprocessorPumpBudget, mr::coprocessor::TaskKind::FoldWarmup);
+	if (adopted != 0) refreshEditorContext();
 	updateRecordingBlink();
-	updateMacroBrainBlink();
-	mr::coprocessor::globalCoprocessor().pumpFor(pendingResults > 16 ? coprocessorBurstPumpBudget : coprocessorPumpBudget,
-	                                             mr::coprocessor::TaskKind::FoldWarmup);
-	pumpDeferredMacroUiPlayback();
-	std::uint64_t nextAutosaveMs = 0;
-	mrFlushWorkspaceAutosaveIfDue(&nextAutosaveMs);
-	if (nextAutosaveMs != 0) runtimeRefreshAt = std::min(runtimeRefreshAt, std::chrono::steady_clock::time_point(std::chrono::milliseconds(nextAutosaveMs)));
 	updateFullscreenHint();
+}
+
+void MREditorApp::refreshEditorContext() {
+	refreshMacroModelessWindows();
 	if (auto *mrMenuBar = dynamic_cast<MRMenuBar *>(menuBar)) {
-		mr::messageline::VisibleMessage message;
 		std::string rightStatus = buildTopRightCursorStatus(cursorPositionMarkerFormat);
 		mrMenuBar->setRightStatus(rightStatus);
 		mrMenuBar->setPersistentBlocksMenuState(persistentBlocksMenuEnabled);
@@ -470,16 +503,6 @@ void MREditorApp::idle() {
 			mrMenuBar->setInsertModeMenuState(false);
 			mrMenuBar->setLineDrawingMenuState(false, false);
 		}
-		std::chrono::steady_clock::time_point nextMessageExpiry;
-		if (mr::messageline::currentVisibleMessage(message, &nextMessageExpiry)) {
-			MRMenuBar::MarqueeKind marqueeKind = mapMessageNoticeKind(message.kind);
-			if (isHeroVisibleMessage(message)) marqueeKind = MRMenuBar::MarqueeKind::Hero;
-			if (!message.segments.empty()) mrMenuBar->setAutoMarqueeStatusSegments(mapMessageNoticeSegments(message.segments), marqueeKind);
-			else
-				mrMenuBar->setAutoMarqueeStatus(message.text, marqueeKind);
-		} else
-			mrMenuBar->setAutoMarqueeStatus(std::string());
-		runtimeRefreshAt = std::min(runtimeRefreshAt, nextMessageExpiry);
 	}
 	MRWindowLayout::handleDesktopLayoutChange();
 	updateAppCommandState(virtualDesktopCount, cyclicVirtualDesktopsEnabled);

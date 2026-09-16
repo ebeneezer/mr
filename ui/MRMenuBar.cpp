@@ -285,14 +285,21 @@ std::string menuTitleWithHotkeyMarker(const std::string &title, char hotkey) {
 
 MRMenuBar::MRMenuBar(const TRect &r, TSubMenu &aMenu) : TMenuBar(r, aMenu), mBaseMenu(nullptr), mRuntimeNodes(), mStartupFunctionKeysActive(false), mEditorFunctionKeysActive(false), mDebuggerFunctionKeysActive(false), mRightStatus(), mAutoMarqueeStatus(), mManualMarqueeStatus(), mAutoMarqueeKind(MarqueeKind::Info) {
 	mBaseMenu = cloneMenu(menu);
+	eventMask |= evBroadcast;
 }
 
 MRMenuBar::~MRMenuBar() {
+	killTimer(mMessageExpiryTimer);
 	delete mBaseMenu;
 	mBaseMenu = nullptr;
 }
 
 void MRMenuBar::handleEvent(TEvent &event) {
+	if (event.what == evBroadcast && event.message.command == cmTimerExpired && mMessageExpiryTimer != nullptr && event.message.infoPtr == mMessageExpiryTimer) {
+		refreshMessageLine();
+		clearEvent(event);
+		return;
+	}
 	if (mrHandleRuntimeKeymapEvent(event, MRKeymapContext::Menu, nullptr)) return;
 	if (event.what == evKeyDown && currentEditWindow() != nullptr && runtimeKeymapResolver().hasPending(MRKeymapContext::Edit)) return;
 	TMenuBar::handleEvent(event);

@@ -266,7 +266,7 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] bool macroDebuggerFunctionKeysActive() const noexcept;
 	[[nodiscard]] bool macroDebuggerHasLiveSession() const noexcept;
 	[[nodiscard]] bool macroDebuggerSessionRunning() const noexcept;
-	void pumpMacroDebuggerSession();
+	bool pumpMacroDebuggerSession();
 	[[nodiscard]] bool handleMacroDebuggerFunctionKey(TEvent &event);
 	[[nodiscard]] bool debuggerFunctionKeysActive() const noexcept;
 	[[nodiscard]] bool debuggerHasLiveSession() const noexcept;

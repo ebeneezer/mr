@@ -734,6 +734,13 @@ bool mrIsKeystrokeRecordingMarkerVisible() {
 void mrSetMacroBrainMarkerActive(bool active) {
 	storeApplicationUiStateInt("indicators", "macroBrainMarkerActive", active ? 1 : 0);
 	if (!active) storeApplicationUiStateInt("indicators", "macroBrainMarkerVisible", 0);
+	if (TProgram::application != nullptr) {
+		TEvent event{};
+		event.what = evBroadcast;
+		event.message.command = cmMrMacroBrainStateChanged;
+		event.message.infoInt = active ? 1 : 0;
+		TProgram::application->handleEvent(event);
+	}
 }
 
 bool mrIsMacroBrainMarkerActive() {

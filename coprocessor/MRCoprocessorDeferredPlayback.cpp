@@ -3,6 +3,7 @@
 
 #include "MRCoprocessorDeferredPlayback.hpp"
 #include "MRCoprocessorDispatch.hpp"
+#include "../app/MRCommands.hpp"
 
 #include <algorithm>
 #include <array>
@@ -713,19 +714,20 @@ void logDeferredMacroUiPlaybackSummary(const DeferredMacroUiPlayback &playback) 
 	mrLogMessage(summary.str().c_str());
 }
 
-void pumpDeferredMacroUiPlaybackQueue() {
+std::uint64_t pumpDeferredMacroUiPlaybackQueue() {
 	const auto deadline = std::chrono::steady_clock::now() + kMacroUiPlaybackBudgetSlice;
 	std::size_t remainingCommands = kMacroUiPlaybackBudgetCommands;
 	std::uint64_t playbackId = 0;
 	DeferredMacroUiPlayback playback(0, std::string(), std::vector<MRMacroDeferredUiCommand>());
 
-	while (loadFirstDeferredPlayback(playbackId, playback) && remainingCommands > 0 && std::chrono::steady_clock::now() < deadline) {
+	while (loadFirstDeferredPlayback(playbackId, playback)) {
+		if (remainingCommands == 0 || std::chrono::steady_clock::now() >= deadline)
+			return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count()) + 1;
 		MREditWindow *targetWindow = findEditWindowByBufferId(static_cast<int>(playback.documentId));
 
 		if (playback.waitingForDelay) {
 			if (std::chrono::steady_clock::now() < playback.resumeAfter) {
-				storeDeferredPlaybackProgress(playbackId, playback);
-				break;
+				return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(playback.resumeAfter.time_since_epoch()).count());
 			}
 			playback.waitingForDelay = false;
 			playback.resumeAfter = std::chrono::steady_clock::time_point::min();
@@ -777,15 +779,18 @@ void pumpDeferredMacroUiPlaybackQueue() {
 			continue;
 		}
 		storeDeferredPlaybackProgress(playbackId, playback);
-		break;
+		const auto nextDue = playback.waitingForDelay ? playback.resumeAfter : std::chrono::steady_clock::now() + std::chrono::milliseconds(1);
+		return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(nextDue.time_since_epoch()).count());
 	}
+	return 0;
 }
 } // namespace
 
 void queueDeferredMacroUiPlayback(std::size_t documentId, const std::string &displayName, const std::vector<MRMacroDeferredUiCommand> &commands) {
 	queueDeferredMacroUiPlaybackInternal(documentId, displayName, commands);
+	if (!commands.empty() && TProgram::application != nullptr) message(TProgram::application, evBroadcast, cmMrDeferredUiQueued, nullptr);
 }
 
-void pumpDeferredMacroUiPlayback() {
-	pumpDeferredMacroUiPlaybackQueue();
+std::uint64_t pumpDeferredMacroUiPlayback() {
+	return pumpDeferredMacroUiPlaybackQueue();
 }
