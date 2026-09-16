@@ -15,6 +15,7 @@ MREditWindow *mrvmEditorActiveWindow() {
 }
 
 MRFileEditor *mrvmEditorCurrentEditor() {
+	if (mrvm_runtime::currentBackgroundEditSession() != nullptr) return nullptr;
 	MREditWindow *win = currentEditorCommandWindow();
 
 	return win != nullptr ? win->getEditor() : nullptr;

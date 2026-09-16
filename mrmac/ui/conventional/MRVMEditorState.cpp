@@ -626,23 +626,23 @@ int expandedTabsAdjustedIndex(const std::string &value, int index) {
 }
 
 int currentEditorIndentLevel() {
-	MREditWindow *win = currentEditorCommandWindow();
 	BackgroundEditSession *session = currentBackgroundEditSession();
-	if (win != nullptr) return win->indentLevel();
-	return session != nullptr ? session->indentLevel : 1;
+	if (session != nullptr) return session->indentLevel;
+	MREditWindow *win = currentEditorCommandWindow();
+	return win != nullptr ? win->indentLevel() : 1;
 }
 
 bool setCurrentEditorIndentLevel(int level) {
-	MREditWindow *win = currentEditorCommandWindow();
 	BackgroundEditSession *session = currentBackgroundEditSession();
-	if (win != nullptr) {
-		win->setIndentLevel(level);
+	if (session != nullptr) {
+		if (level < 1) level = 1;
+		if (level > 254) level = 254;
+		session->indentLevel = level;
 		return true;
 	}
-	if (session == nullptr) return false;
-	if (level < 1) level = 1;
-	if (level > 254) level = 254;
-	session->indentLevel = level;
+	MREditWindow *win = currentEditorCommandWindow();
+	if (win == nullptr) return false;
+	win->setIndentLevel(level);
 	return true;
 }
 

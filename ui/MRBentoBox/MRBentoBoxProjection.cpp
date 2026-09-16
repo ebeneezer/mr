@@ -533,5 +533,7 @@ void MRBentoBox::shutDown() {
 	cancelAllBentoProjectionTasks();
 	restoreFileCompareSources();
 	windowCloseInProgress = true;
+	// Finish desktop focus notifications while the pane views are still alive.
+	if (owner != nullptr) owner->remove(this);
 	MREditWindow::shutDown();
 }
