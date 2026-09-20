@@ -15,7 +15,7 @@ void setMacroUiListItems(TView *view, std::vector<std::string> values, int start
 int macroUiListSelectedIndex(const TView *view);
 std::string macroUiListSelectedText(const TView *view);
 
-TView *createMacroUiGridView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, unsigned short command);
+TView *createMacroUiGridView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, unsigned short command, bool activateOnClick = false);
 void setMacroUiGridItems(TView *view, std::vector<std::string> values, int start);
 void refreshMacroUiGridItems(TView *view, std::vector<std::string> values);
 int macroUiGridSelectedIndex(const TView *view);

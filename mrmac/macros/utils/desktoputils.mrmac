@@ -170,7 +170,6 @@ IF ParseRc = 0 THEN
     SET_CLIPBOARD_TEXT(UTF8(Code));
     MAKE_MESSAGE('ASCII character copied to clipboard.');
 END;
-UI_MODELESS_CLOSE('DesktopUtilsAsciiTable');
 END_MACRO;
 
 $MACRO SHOW_EMOJI_TABLE FROM EDIT;
@@ -202,7 +201,6 @@ IF LENGTH(SelectedText) > 0 THEN
     SET_CLIPBOARD_TEXT(SelectedText);
     MAKE_MESSAGE('Emoji copied to clipboard.');
 END;
-UI_MODELESS_CLOSE('DesktopUtilsEmojiTable');
 END_MACRO;
 $MACRO CalculatorFormatValue FROM EDIT;
 DEF_INT(Base, Value, Negative, Digit);

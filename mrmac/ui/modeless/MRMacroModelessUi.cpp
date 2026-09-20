@@ -675,7 +675,7 @@ class MRMacroModelessWindow final : public TWindow, public MRDesktopWindow {
 			if (nextCommand >= cmMacroModelessMax) break;
 			if (!grid.label.empty()) insertContentControl(new TStaticText(TRect(grid.x, grid.y, grid.x + strwidth(grid.label.c_str()), grid.y + 1), grid.label.c_str()));
 			insertContentControl(scrollBar);
-			gridView = createMacroUiGridView(TRect(grid.x, gridTop, grid.x + grid.width - 1, gridTop + grid.height), scrollBar, items, nextCommand);
+			gridView = createMacroUiGridView(TRect(grid.x, gridTop, grid.x + grid.width - 1, gridTop + grid.height), scrollBar, items, nextCommand, true);
 			insertContentControl(gridView);
 			setMacroUiGridItems(gridView, items, grid.start);
 			commandToGrid[nextCommand] = grid.id;

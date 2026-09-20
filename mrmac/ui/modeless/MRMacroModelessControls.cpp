@@ -137,8 +137,9 @@ std::vector<MRMacroGridItem> parseGridItems(const std::vector<std::string> &valu
 
 class MRMacroUiGridView final : public TView {
   public:
-	MRMacroUiGridView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, ushort command) : TView(bounds), items(parseGridItems(values)), scrollBar(scrollBar), activateCommand(command) {
+	MRMacroUiGridView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, ushort command, bool activateOnClick) : TView(bounds), items(parseGridItems(values)), scrollBar(scrollBar), activateCommand(command), activateOnClick(activateOnClick) {
 		options |= ofSelectable;
+		if (activateOnClick) options |= ofFirstClick;
 		eventMask |= evMouseDown | evMouseWheel | evKeyDown | evBroadcast;
 		updateCellWidth();
 		updateScrollBar();
@@ -168,10 +169,10 @@ class MRMacroUiGridView final : public TView {
 	}
 
 	void handleEvent(TEvent &event) override {
-		if (event.what == evMouseDown && containsMouse(event)) {
+		if (event.what == evMouseDown && (event.mouse.buttons & mbLeftButton) != 0 && containsMouse(event)) {
 			TPoint local = makeLocal(event.mouse.where);
 			const int gridLeft = gridLeftOffset();
-			if (local.x >= gridLeft && local.x < gridLeft + gridWidth()) {
+			if (local.y >= 0 && local.y < size.y - 2 && local.x >= gridLeft && local.x < gridLeft + gridWidth()) {
 				const int col = cellWidth > 0 ? (local.x - gridLeft) / cellWidth : 0;
 				const int row = local.y + scrollOffset;
 				const std::size_t index = static_cast<std::size_t>(row * columns() + col);
@@ -179,7 +180,7 @@ class MRMacroUiGridView final : public TView {
 					selectedIndex = index;
 					ensureSelectedVisible();
 					drawView();
-					if ((event.mouse.eventFlags & meDoubleClick) != 0) sendMacroUiActivationCommand(this, activateCommand);
+					if (activateOnClick || (event.mouse.eventFlags & meDoubleClick) != 0) sendMacroUiActivationCommand(this, activateCommand);
 				}
 			}
 			clearEvent(event);
@@ -375,6 +376,7 @@ class MRMacroUiGridView final : public TView {
 	std::vector<MRMacroGridItem> items;
 	TScrollBar *scrollBar = nullptr;
 	ushort activateCommand = 0;
+	bool activateOnClick;
 	std::size_t selectedIndex = 0;
 	int scrollOffset = 0;
 	int cellWidth = 4;
@@ -569,8 +571,8 @@ std::string macroUiListSelectedText(const TView *view) {
 	return listView != nullptr ? listView->selectedText() : std::string();
 }
 
-TView *createMacroUiGridView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, unsigned short command) {
-	return new MRMacroUiGridView(bounds, scrollBar, std::move(values), static_cast<ushort>(command));
+TView *createMacroUiGridView(const TRect &bounds, TScrollBar *scrollBar, std::vector<std::string> values, unsigned short command, bool activateOnClick) {
+	return new MRMacroUiGridView(bounds, scrollBar, std::move(values), static_cast<ushort>(command), activateOnClick);
 }
 
 void setMacroUiGridItems(TView *view, std::vector<std::string> values, int start) {
