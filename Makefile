@@ -442,6 +442,7 @@ CXX_SOURCES = \
 	ui/MRFileEditor/MRFileEditorSave.cpp \
 	ui/MRFileEditor/MRFileEditorMarkers.cpp \
 	ui/MRFileEditor/MRFileEditorFoldAnalysis.cpp \
+	ui/MRFileEditor/MRFileEditorFoldSelection.cpp \
 	ui/MRFileEditor/MRFileEditorFoldCodeRules.cpp \
 	ui/MRFileEditor/MRFileEditorFoldStructuralRules.cpp \
 	ui/MRFileEditor/MRFileEditorFoldWarmup.cpp \
@@ -929,6 +930,7 @@ ui/MRFileEditor/MRFileEditorClipboard.o: ui/MRFileEditor/MRFileEditorClipboard.c
 ui/MRFileEditor/MRFileEditorSave.o: ui/MRFileEditor/MRFileEditorSave.cpp ui/MRFileEditor/MRFileEditor.hpp app/MRPrivilegedFileBroker.hpp config/settings/MRSettingsStorage.hpp
 ui/MRFileEditor/MRFileEditorMarkers.o: ui/MRFileEditor/MRFileEditorMarkers.cpp ui/MRFileEditor/MRFileEditor.hpp
 ui/MRFileEditor/MRFileEditorFoldAnalysis.o: ui/MRFileEditor/MRFileEditorFoldAnalysis.cpp ui/MRFileEditor/MRFileEditorFoldAnalysis.hpp ui/MRFileEditor/MRFoldWarmupPayload.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntaxBasic.hpp
+ui/MRFileEditor/MRFileEditorFoldSelection.o: ui/MRFileEditor/MRFileEditorFoldSelection.cpp ui/MRFileEditor/MRFileEditorFoldAnalysis.hpp ui/MRFileEditor/MRFoldWarmupPayload.hpp ui/MRSyntaxBasic.hpp
 ui/MRFileEditor/MRFileEditorFoldCodeRules.o: ui/MRFileEditor/MRFileEditorFoldCodeRules.cpp ui/MRFileEditor/MRFileEditorFoldAnalysis.hpp ui/MRFileEditor/MRFoldWarmupPayload.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntaxBasic.hpp
 ui/MRFileEditor/MRFileEditorFoldStructuralRules.o: ui/MRFileEditor/MRFileEditorFoldStructuralRules.cpp ui/MRFileEditor/MRFileEditorFoldAnalysis.hpp ui/MRFileEditor/MRFoldWarmupPayload.hpp ui/MRFileEditor/MRFileEditor.hpp ui/MRSyntaxBasic.hpp
 ui/MRFileEditor/MRFileEditorFoldWarmup.o: ui/MRFileEditor/MRFileEditorFoldWarmup.cpp ui/MRFileEditor/MRFileEditorFoldAnalysis.hpp ui/MRFileEditor/MRFoldWarmupPayload.hpp ui/MRFileEditor/MRFileEditor.hpp outline/MROutlineFoldProducer.hpp

@@ -46,6 +46,25 @@ struct MRFoldScanOutput {
 	int visibleMaxLevel = 1;
 };
 
+enum : int {
+	kSelectionBlock = 100,
+	kSelectionArm = 101,
+};
+
+struct MRFoldSelectionLine {
+	bool opensSelection = false;
+	bool opensArm = false;
+	bool closesSelection = false;
+	bool closesArm = false;
+	bool hasBody = false;
+	bool joinsLabels = false;
+	char closer = 0;
+	std::size_t startLine = 0;
+};
+
+MRFoldSelectionLine classifyFoldSelectionLine(MRSyntaxLanguage language, std::string_view line, const std::vector<std::string> &recentLines,
+	const std::vector<MRFoldOpenBlockState> &openBlocks, std::size_t lineIndex);
+
 bool isIndentWhitespace(char ch) noexcept;
 bool isStatefulSyntaxLanguage(MRSyntaxLanguage language) noexcept;
 std::string_view trimView(std::string_view text) noexcept;

@@ -86,10 +86,9 @@ int main() {
 		return reportFailure("BASIC source without a file extension was not classified.") ? 0 : 1;
 	if (!hasToken(highlighted, 0, 3, MRSyntaxToken::Keyword) || !hasToken(highlighted, 4, 5, MRSyntaxToken::Key) || !hasToken(highlighted, 14, 10, MRSyntaxToken::Comment))
 		return reportFailure("highlighting did not classify keyword, callable name and REM comment.") ? 0 : 1;
-	if (selectFold.find("\xE2\x95\xAD | SELECT CASE value") == std::string::npos || selectFold.find("\xE2\x94\x9C | CASE 0") == std::string::npos ||
-	    selectFold.find("\xE2\x94\x9C | CASE ELSE") == std::string::npos ||
-	    selectFold.find("\xE2\x94\x82\xE2\x95\xAD | CASE 0") != std::string::npos || selectFold.find("\xE2\x95\xB0 | END SELECT") == std::string::npos)
-		return reportFailure("SELECT CASE folding did not produce one selector span.") ? 0 : 1;
+	if (selectFold.find("╭  | SELECT CASE value") == std::string::npos || selectFold.find("│╭ | CASE 0") == std::string::npos ||
+	    selectFold.find("│╭ | CASE ELSE") == std::string::npos || selectFold.find("╰  | END SELECT") == std::string::npos)
+		return reportFailure("SELECT CASE folding did not produce nested case spans.") ? 0 : 1;
 	warmedRanges.rememberWarmedLineRange(7, MRSyntaxLanguage::Basic, 2, 5);
 	warmedRanges.rememberWarmedLineRange(7, MRSyntaxLanguage::Basic, 4, 7);
 	warmedRanges.rememberWarmedLineRange(7, MRSyntaxLanguage::Basic, 7, 9);

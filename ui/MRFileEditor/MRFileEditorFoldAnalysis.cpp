@@ -69,7 +69,6 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 		kFishIfBlock = 3,
 		kFishLoopBlock = 4,
 		kFishSwitchBlock = 5,
-		kFishCaseBlock = 6,
 		kFishGenericBlock = 7,
 		kXmlTagBlock = 8,
 		kLatexEnvironmentBlock = 9,
@@ -250,7 +249,10 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 		currentLineIndex = lineIndex;
 		const std::string &lineText = lineTexts[localLineIndex];
 		std::string_view structuralLine = lineText;
-		if (language == MRSyntaxLanguage::Zsh || language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp) {
+		if (language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp || language == MRSyntaxLanguage::JavaScript || language == MRSyntaxLanguage::CSharp ||
+		    language == MRSyntaxLanguage::Swift || language == MRSyntaxLanguage::Go || language == MRSyntaxLanguage::Rust || language == MRSyntaxLanguage::Kotlin ||
+		    language == MRSyntaxLanguage::Python || language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh || language == MRSyntaxLanguage::Fish ||
+		    language == MRSyntaxLanguage::Pascal || language == MRSyntaxLanguage::Basic || language == MRSyntaxLanguage::Perl) {
 			MRSyntaxLineResult syntaxLine = tmrHighlightTextLine(language, lineText, syntaxState);
 
 			structuralLineText.assign(lineText);
@@ -262,6 +264,7 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 				const std::size_t end = std::min<std::size_t>(start + run.length, structuralLineText.size());
 
 				std::fill(structuralLineText.begin() + static_cast<std::ptrdiff_t>(start), structuralLineText.begin() + static_cast<std::ptrdiff_t>(end), ' ');
+				if (run.token == MRSyntaxToken::String && start < end) structuralLineText[start] = '0';
 			}
 			syntaxState = syntaxLine.stateOut;
 			structuralLine = structuralLineText;
@@ -299,7 +302,6 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 		const bool shellDedent = (language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh) && isShellDedentLead(trimmed, upperLine);
 		const bool shellSiblingLead = (language == MRSyntaxLanguage::Bash || language == MRSyntaxLanguage::Zsh) && isShellSiblingLead(upperLine);
 		const bool fishConditionalLead = language == MRSyntaxLanguage::Fish && (isFishElseIfLead(upperLine) || isFishElseLead(upperLine));
-		const bool fishCaseLead = language == MRSyntaxLanguage::Fish && isFishCaseLead(upperLine);
 		const bool fishEndLead = language == MRSyntaxLanguage::Fish && isFishEndLead(upperLine);
 		const int fishBlockKind = language == MRSyntaxLanguage::Fish ? fishIndentBlockKind(upperLine) : kFishBlockNone;
 		const bool pascalElseLead = language == MRSyntaxLanguage::Pascal && isPascalElseLead(upperLine);
@@ -417,24 +419,66 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 					break;
 				}
 
-		if (nonEmpty && lineIndex > 0) {
+		bool pythonSelection = false;
+		if (language == MRSyntaxLanguage::Python)
+			for (const MRFoldOpenBlock &block : openBlocks)
+				if (block.languageBlockKind == kSelectionBlock) pythonSelection = true;
+		if (pythonSelection && nonEmpty) {
+			while (!openBlocks.empty() && currentIndent <= openBlocks.back().indent) {
+				appendVisibleSpan(openBlocks.back(), lineIndex - 1);
+				openBlocks.pop_back();
+			}
+		}
+		const MRFoldSelectionLine selection = classifyFoldSelectionLine(language, trimmed, recentLineTexts, openBlocks, lineIndex);
+		std::size_t armStartLine = selection.startLine;
+		if (selection.opensArm && !openBlocks.empty() && openBlocks.back().languageBlockKind == kSelectionArm) {
+			const MRFoldOpenBlock &arm = openBlocks.back();
+			if (selection.joinsLabels && arm.lastContentLine == std::numeric_limits<std::size_t>::max() && arm.closer == 0) armStartLine = arm.startLine;
+			else appendVisibleSpan(arm, selection.startLine - 1);
+			openBlocks.pop_back();
+		}
+		if (selection.closesSelection) {
+			if (!openBlocks.empty() && openBlocks.back().languageBlockKind == kSelectionArm) {
+				appendVisibleSpan(openBlocks.back(), lineIndex - 1);
+				openBlocks.pop_back();
+			}
+			if (!openBlocks.empty() && openBlocks.back().languageBlockKind == kSelectionBlock) {
+				appendVisibleSpan(openBlocks.back(), lineIndex);
+				openBlocks.pop_back();
+			}
+		}
+		if (nonEmpty && lineIndex > 0 && !selection.closesSelection && !selection.opensArm && !selection.opensSelection) {
 			std::size_t closerIndex = 0;
-			while (!openBlocks.empty() && closerIndex < trimmed.size() && openBlocks.back().sourceKind == MRFoldSourceKind::Delimiter && openBlocks.back().closer != 0 &&
-			       trimmed[closerIndex] == openBlocks.back().closer) {
+			while (!openBlocks.empty() && closerIndex < trimmed.size()) {
+				if (trimmed[closerIndex] == ' ' || trimmed[closerIndex] == '\t') {
+					++closerIndex;
+					continue;
+				}
+				if (trimmed[closerIndex] == '}' && openBlocks.back().languageBlockKind == kSelectionArm && openBlocks.back().closer == 0) {
+					appendVisibleSpan(openBlocks.back(), lineIndex - 1);
+					openBlocks.pop_back();
+					continue;
+				}
+				if (openBlocks.back().sourceKind != MRFoldSourceKind::Delimiter || trimmed[closerIndex] != openBlocks.back().closer) break;
 				appendVisibleSpan(openBlocks.back(), (perlSiblingAfterLeadingCloser || javascriptSiblingAfterLeadingCloser || cLikeSiblingAfterLeadingCloser) ? lineIndex - 1 : lineIndex);
 				openBlocks.pop_back();
 				++closerIndex;
 			}
 			if (perlSiblingAfterLeadingCloser || javascriptSiblingAfterLeadingCloser || cLikeSiblingAfterLeadingCloser) openSiblingContinuation = true;
 		}
-		if (language != MRSyntaxLanguage::Xml && nonEmpty && lineIndex > 0) {
+		if (language != MRSyntaxLanguage::Xml && nonEmpty && lineIndex > 0 && !selection.opensArm && !selection.opensSelection) {
 			const std::size_t splitOffset = trailingSmartDedentSplitOffset(structuralLine, language);
 			if (splitOffset != std::string_view::npos) {
 				const std::string_view trailingDedent = trimView(structuralLine.substr(splitOffset));
 				std::size_t closerIndex = 0;
 
-				while (!openBlocks.empty() && closerIndex < trailingDedent.size() && openBlocks.back().sourceKind == MRFoldSourceKind::Delimiter && openBlocks.back().closer != 0 &&
-				       trailingDedent[closerIndex] == openBlocks.back().closer) {
+				while (!openBlocks.empty() && closerIndex < trailingDedent.size()) {
+					if (trailingDedent[closerIndex] == '}' && openBlocks.back().languageBlockKind == kSelectionArm && openBlocks.back().closer == 0) {
+						appendVisibleSpan(openBlocks.back(), lineIndex);
+						openBlocks.pop_back();
+						continue;
+					}
+					if (openBlocks.back().sourceKind != MRFoldSourceKind::Delimiter || trailingDedent[closerIndex] != openBlocks.back().closer) break;
 					appendVisibleSpan(openBlocks.back(), lineIndex);
 					openBlocks.pop_back();
 					++closerIndex;
@@ -489,32 +533,13 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 			}
 			openSiblingContinuation = true;
 		}
-		if (language == MRSyntaxLanguage::Fish && fishCaseLead) {
-			bool closedFishCase = false;
-			while (!openBlocks.empty()) {
-				const MRFoldOpenBlock &block = openBlocks.back();
-				if (block.languageBlockKind == kFishSwitchBlock) break;
-				appendVisibleSpan(block, lineIndex - 1);
-				const int closedKind = block.languageBlockKind;
-				openBlocks.pop_back();
-				if (closedKind == kFishCaseBlock) {
-					closedFishCase = true;
-					break;
-				}
-			}
-			openSiblingContinuation = closedFishCase;
-		}
-		if (language == MRSyntaxLanguage::Fish && fishEndLead) {
-			while (!openBlocks.empty() && openBlocks.back().languageBlockKind == kFishCaseBlock) {
-				appendVisibleSpan(openBlocks.back(), lineIndex - 1);
-				openBlocks.pop_back();
-			}
+		if (!selection.opensArm && !selection.closesSelection && !selection.closesArm && language == MRSyntaxLanguage::Fish && fishEndLead) {
 			if (!openBlocks.empty()) {
 				appendVisibleSpan(openBlocks.back(), lineIndex);
 				openBlocks.pop_back();
 			}
 		}
-		if (language == MRSyntaxLanguage::Pascal && pascalElseLead) {
+		if (!selection.opensArm && !selection.closesSelection && !selection.closesArm && language == MRSyntaxLanguage::Pascal && pascalElseLead) {
 			while (!openBlocks.empty()) {
 				const MRFoldOpenBlock &block = openBlocks.back();
 				appendVisibleSpan(block, lineIndex - 1);
@@ -534,36 +559,17 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 			}
 			openSiblingContinuation = true;
 		}
-		if (language == MRSyntaxLanguage::Basic && basicLine.disposition == MRBasicBlockDisposition::Continue) {
-			bool selectParentOpen = false;
-
-			if (basicLine.kind == MRBasicBlockKind::Select)
-				for (std::size_t index = openBlocks.size(); index-- > 0;)
-					if (openBlocks[index].languageBlockKind == static_cast<int>(MRBasicBlockKind::Select)) {
-						selectParentOpen = true;
-						break;
-					}
-			if (selectParentOpen) {
-				while (!openBlocks.empty()) {
-					const MRFoldOpenBlock &block = openBlocks.back();
-
-					if (block.languageBlockKind == static_cast<int>(MRBasicBlockKind::Select)) break;
-					appendVisibleSpan(block, lineIndex - 1);
-					openBlocks.pop_back();
-				}
-				if (!openBlocks.empty()) output.branches.push_back(MRFoldGutterBranch(lineIndex, openBlocks.back().level));
-			} else {
-				while (!openBlocks.empty()) {
-					const MRFoldOpenBlock &block = openBlocks.back();
-					appendVisibleSpan(block, lineIndex - 1);
-					const int closedKind = block.languageBlockKind;
-					openBlocks.pop_back();
-					if (closedKind == static_cast<int>(basicLine.kind)) break;
-				}
-				openSiblingContinuation = true;
+		if (language == MRSyntaxLanguage::Basic && basicLine.disposition == MRBasicBlockDisposition::Continue && basicLine.kind != MRBasicBlockKind::Select) {
+			while (!openBlocks.empty()) {
+				const MRFoldOpenBlock &block = openBlocks.back();
+				appendVisibleSpan(block, lineIndex - 1);
+				const int closedKind = block.languageBlockKind;
+				openBlocks.pop_back();
+				if (closedKind == static_cast<int>(basicLine.kind)) break;
 			}
+			openSiblingContinuation = true;
 		}
-		if (language == MRSyntaxLanguage::Basic && basicLine.disposition == MRBasicBlockDisposition::Close) {
+		if (!selection.opensArm && !selection.closesSelection && !selection.closesArm && language == MRSyntaxLanguage::Basic && basicLine.disposition == MRBasicBlockDisposition::Close) {
 			while (!openBlocks.empty()) {
 				const MRFoldOpenBlock &block = openBlocks.back();
 				appendVisibleSpan(block, block.languageBlockKind == static_cast<int>(basicLine.kind) ? lineIndex : lineIndex - 1);
@@ -601,8 +607,9 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 				openBlocks.pop_back();
 			}
 		}
-		while (!openBlocks.empty()) {
+		while (!selection.closesSelection && !selection.closesArm && !openBlocks.empty()) {
 			const MRFoldOpenBlock block = openBlocks.back();
+			if (block.languageBlockKind == kSelectionBlock || block.languageBlockKind == kSelectionArm) break;
 			bool closeBlock = false;
 			std::size_t endLine = lineIndex;
 
@@ -652,7 +659,7 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 						} else if (upperLine == "ESAC" && block.languageBlockKind == kShellBlockCase) {
 							closeBlock = true;
 						}
-					} else if (language == MRSyntaxLanguage::Python && pythonDedent) {
+					} else if (language == MRSyntaxLanguage::Python && pythonDedent && currentIndent <= block.indent) {
 						closeBlock = true;
 						endLine = lineIndex - 1;
 						if (upperLine == "ELSE:" || upperLine == "FINALLY:" || upperLine == "EXCEPT:" || upperLine.starts_with("ELIF ") || upperLine.starts_with("CASE ") ||
@@ -705,9 +712,19 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 			if (!closeBlock) break;
 			appendVisibleSpan(block, endLine);
 			openBlocks.pop_back();
+			if (language == MRSyntaxLanguage::Pascal && pascalEndLead) break;
 		}
 
-		switch (language) {
+		if (!selection.opensArm && nonEmpty && !openBlocks.empty() && openBlocks.back().languageBlockKind == kSelectionArm)
+			openBlocks.back().lastContentLine = lineIndex;
+		const std::size_t blocksBeforeOpen = openBlocks.size();
+		if (selection.opensSelection || selection.opensArm) {
+			const MRFoldSourceKind source = selection.closer == '}' ? MRFoldSourceKind::Delimiter :
+			    (selection.opensSelection ? MRFoldSourceKind::Indent : MRFoldSourceKind::Generic);
+			openBlock(source, currentIndent, selection.closer, 0, 0, 0, selection.opensSelection ? kSelectionBlock : kSelectionArm,
+			    selection.opensSelection ? selection.startLine : armStartLine);
+			if (selection.opensArm && !selection.hasBody) openBlocks.back().lastContentLine = std::numeric_limits<std::size_t>::max();
+		} else if (!selection.closesSelection && !selection.closesArm) switch (language) {
 			case MRSyntaxLanguage::C:
 				if (isCLikeBraceFoldCandidateLine(trimmed))
 					openBlock(MRFoldSourceKind::Delimiter, currentIndent, '}', 0, 0, 0, kLanguageBlockNone, recentCBraceStartLine, openSiblingContinuation);
@@ -754,7 +771,7 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 				break;
 			}
 			case MRSyntaxLanguage::Python:
-				if (!upperLine.empty() && upperLine.back() == ':' && isPythonIndentLead(upperLine)) openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, kLanguageBlockNone,
+				if (!startsWithKeywordToken(upperLine, "CASE") && !upperLine.empty() && upperLine.back() == ':' && isPythonIndentLead(upperLine)) openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, kLanguageBlockNone,
 				                                                                                                  std::numeric_limits<std::size_t>::max(), openSiblingContinuation);
 				break;
 			case MRSyntaxLanguage::Bash:
@@ -772,8 +789,6 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, kFishLoopBlock);
 				else if (fishBlockKind == kFishBlockSwitch)
 					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, kFishSwitchBlock);
-				else if (fishBlockKind == kFishBlockCase)
-					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, kFishCaseBlock, std::numeric_limits<std::size_t>::max(), openSiblingContinuation);
 				else if (fishBlockKind == kFishBlockGeneric)
 					openBlock(MRFoldSourceKind::Indent, currentIndent, 0, 0, 0, 0, kFishGenericBlock);
 				break;
@@ -843,6 +858,13 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 				break;
 		}
 
+		if (selection.closesArm && !openBlocks.empty() && openBlocks.back().languageBlockKind == kSelectionArm) {
+			appendVisibleSpan(openBlocks.back(), lineIndex);
+			openBlocks.pop_back();
+		}
+		if (!selection.opensArm && !selection.opensSelection && blocksBeforeOpen == openBlocks.size() && !openBlocks.empty() &&
+		    openBlocks.back().languageBlockKind == kSelectionArm && !trimmed.empty() && trimmed.back() == '{')
+			openBlock(MRFoldSourceKind::Delimiter, currentIndent, '}');
 		previousPreviousLineText = previousLineText;
 		previousPreviousUpperLine = previousUpperLine;
 		previousLineText.assign(structuralLine.begin(), structuralLine.end());
@@ -860,7 +882,9 @@ MRFoldScanOutput computeFoldSpansForLineTexts(const std::vector<std::string> &li
 	if (finalizeAtDocumentEnd) {
 		const std::size_t finalLine = baseLineIndex + processedLineCount - 1;
 		for (const MRFoldOpenBlock &block : openBlocks)
-			if (language == MRSyntaxLanguage::Xml && block.languageBlockKind == kXmlTagBlock)
+			if ((block.languageBlockKind == kSelectionBlock || block.languageBlockKind == kSelectionArm) && language != MRSyntaxLanguage::Python)
+				continue;
+			else if (language == MRSyntaxLanguage::Xml && block.languageBlockKind == kXmlTagBlock)
 				continue;
 			else if (language == MRSyntaxLanguage::Latex && block.languageBlockKind == kLatexEnvironmentBlock)
 				continue;
