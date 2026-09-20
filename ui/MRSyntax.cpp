@@ -2496,6 +2496,7 @@ MRSyntaxLineResult MRBashSyntaxHighlighter::highlightLine(std::string_view line,
 	MRSyntaxLineResult result;
 	result.stateOut = MRSyntaxLineState();
 	MRSyntaxTokenMap tokens(line.size(), MRSyntaxToken::Text);
+	std::size_t quoteScanStart = 0;
 
 	if (previousState.mode == MRSyntaxMode::HereDocument) {
 		if (lineMatchesHereDocumentEnd(line, previousState)) {
@@ -2511,15 +2512,17 @@ MRSyntaxLineResult MRBashSyntaxHighlighter::highlightLine(std::string_view line,
 
 	if (previousState.mode == MRSyntaxMode::QuotedString) {
 		const char quote = static_cast<char>(previousState.payload);
-		const std::size_t end = findStringContinuationEnd(line, 0, quote);
+		bool quoteClosed = false;
+		const std::size_t end = findStringContinuationEnd(line, 0, quote, &quoteClosed, quote != '\'');
 
 		paint(tokens, 0, end, MRSyntaxToken::String);
-		if (end == line.size()) {
+		if (!quoteClosed) {
 			result.stateOut.mode = MRSyntaxMode::QuotedString;
 			result.stateOut.payload = previousState.payload;
 			result.tokenRuns = tmrBuildTokenRunsFromTokenMap(tokens);
 			return result;
 		}
+		quoteScanStart = end;
 		if (end < line.size()) {
 			MRSyntaxTokenMap suffixTokens(line.size() - end, MRSyntaxToken::Text);
 			tokenizeBash(suffixTokens, std::string(line.substr(end)));
@@ -2529,16 +2532,18 @@ MRSyntaxLineResult MRBashSyntaxHighlighter::highlightLine(std::string_view line,
 	} else
 		tokenizeBash(tokens, std::string(line));
 
-	for (std::size_t i = 0; i < line.size();) {
+	for (std::size_t i = quoteScanStart; i < line.size();) {
 		if (isZshCommentStart(line, i)) break;
 		if (line[i] == '\'' || line[i] == '"' || line[i] == '`') {
-			const std::size_t end = consumeZshStringLiteral(line, i, line[i]);
-			if (end == line.size()) {
+			bool quoteClosed = false;
+			const std::size_t end = consumeZshStringLiteral(line, i, line[i], &quoteClosed);
+			if (!quoteClosed) {
 				paint(tokens, i, end, MRSyntaxToken::String);
 				result.stateOut.mode = MRSyntaxMode::QuotedString;
 				result.stateOut.payload = static_cast<std::uint32_t>(line[i]);
 			}
-			break;
+			i = end;
+			continue;
 		}
 		if (line[i] == '\\' && i + 1 < line.size()) {
 			i += 2;
@@ -2569,18 +2574,21 @@ MRSyntaxLineResult MRFishSyntaxHighlighter::highlightLine(std::string_view line,
 	MRSyntaxLineResult result;
 	result.stateOut = MRSyntaxLineState();
 	MRSyntaxTokenMap tokens(line.size(), MRSyntaxToken::Text);
+	std::size_t quoteScanStart = 0;
 
 	if (previousState.mode == MRSyntaxMode::QuotedString) {
 		const char quote = static_cast<char>(previousState.payload);
-		const std::size_t end = findStringContinuationEnd(line, 0, quote);
+		bool quoteClosed = false;
+		const std::size_t end = findStringContinuationEnd(line, 0, quote, &quoteClosed);
 
 		paint(tokens, 0, end, MRSyntaxToken::String);
-		if (end == line.size()) {
+		if (!quoteClosed) {
 			result.stateOut.mode = MRSyntaxMode::QuotedString;
 			result.stateOut.payload = previousState.payload;
 			result.tokenRuns = tmrBuildTokenRunsFromTokenMap(tokens);
 			return result;
 		}
+		quoteScanStart = end;
 		if (end < line.size()) {
 			MRSyntaxTokenMap suffixTokens(line.size() - end, MRSyntaxToken::Text);
 			tokenizeFish(suffixTokens, std::string(line.substr(end)));
@@ -2590,16 +2598,18 @@ MRSyntaxLineResult MRFishSyntaxHighlighter::highlightLine(std::string_view line,
 	} else
 		tokenizeFish(tokens, std::string(line));
 
-	for (std::size_t i = 0; i < line.size();) {
+	for (std::size_t i = quoteScanStart; i < line.size();) {
 		if (isFishCommentStart(line, i)) break;
 		if (line[i] == '\'' || line[i] == '"') {
-			const std::size_t end = consumeZshStringLiteral(line, i, line[i]);
-			if (end == line.size()) {
+			bool quoteClosed = false;
+			const std::size_t end = consumeZshStringLiteral(line, i, line[i], &quoteClosed);
+			if (!quoteClosed) {
 				paint(tokens, i, end, MRSyntaxToken::String);
 				result.stateOut.mode = MRSyntaxMode::QuotedString;
 				result.stateOut.payload = static_cast<std::uint32_t>(line[i]);
 			}
-			break;
+			i = end;
+			continue;
 		}
 		if (line[i] == '\\' && i + 1 < line.size()) {
 			i += 2;
@@ -2665,6 +2675,7 @@ MRSyntaxLineResult MRPerlSyntaxHighlighter::highlightLine(std::string_view line,
 	MRSyntaxLineResult result;
 	result.stateOut = MRSyntaxLineState();
 	MRSyntaxTokenMap tokens(line.size(), MRSyntaxToken::Text);
+	std::size_t quoteScanStart = 0;
 	const std::size_t trimmed = skipWhitespaceView(line);
 
 	if (previousState.mode == MRSyntaxMode::HereDocument) {
@@ -2692,15 +2703,17 @@ MRSyntaxLineResult MRPerlSyntaxHighlighter::highlightLine(std::string_view line,
 
 	if (previousState.mode == MRSyntaxMode::QuotedString) {
 		const char quote = static_cast<char>(previousState.payload);
-		const std::size_t end = findStringContinuationEnd(line, 0, quote);
+		bool quoteClosed = false;
+		const std::size_t end = findStringContinuationEnd(line, 0, quote, &quoteClosed);
 
 		paint(tokens, 0, end, MRSyntaxToken::String);
-		if (end == line.size()) {
+		if (!quoteClosed) {
 			result.stateOut.mode = MRSyntaxMode::QuotedString;
 			result.stateOut.payload = previousState.payload;
 			result.tokenRuns = tmrBuildTokenRunsFromTokenMap(tokens);
 			return result;
 		}
+		quoteScanStart = end;
 		if (end < line.size()) {
 			MRSyntaxTokenMap suffixTokens(line.size() - end, MRSyntaxToken::Text);
 			tokenizePerl(suffixTokens, std::string(line.substr(end)));
@@ -2717,16 +2730,18 @@ MRSyntaxLineResult MRPerlSyntaxHighlighter::highlightLine(std::string_view line,
 		return result;
 	}
 
-	for (std::size_t i = 0; i < line.size();) {
+	for (std::size_t i = quoteScanStart; i < line.size();) {
 		if (line[i] == '#') break;
 		if (line[i] == '\'' || line[i] == '"' || line[i] == '`') {
-			const std::size_t end = consumeZshStringLiteral(line, i, line[i]);
-			if (end == line.size()) {
+			bool quoteClosed = false;
+			const std::size_t end = consumeZshStringLiteral(line, i, line[i], &quoteClosed);
+			if (!quoteClosed) {
 				paint(tokens, i, end, MRSyntaxToken::String);
 				result.stateOut.mode = MRSyntaxMode::QuotedString;
 				result.stateOut.payload = static_cast<std::uint32_t>(line[i]);
 			}
-			break;
+			i = end;
+			continue;
 		}
 		if (line[i] == '\\' && i + 1 < line.size()) {
 			i += 2;
@@ -3149,10 +3164,11 @@ MRSyntaxLineResult MRJavaScriptSyntaxHighlighter::highlightLine(std::string_view
 	}
 
 	if (previousState.mode == MRSyntaxMode::QuotedString && previousState.payload == static_cast<std::uint32_t>('`')) {
-		const std::size_t end = findStringContinuationEnd(line, 0, '`');
+		bool quoteClosed = false;
+		const std::size_t end = findStringContinuationEnd(line, 0, '`', &quoteClosed);
 
 		appendRun(result.tokenRuns, 0, end, MRSyntaxToken::String);
-		if (end == line.size()) {
+		if (!quoteClosed) {
 			result.stateOut.mode = MRSyntaxMode::QuotedString;
 			result.stateOut.payload = static_cast<std::uint32_t>('`');
 			return result;
@@ -3168,6 +3184,7 @@ MRSyntaxLineResult MRJavaScriptSyntaxHighlighter::highlightLine(std::string_view
 
 		if (i + 1 < line.size() && line[i] == '/' && line[i + 1] == '*') {
 			std::size_t start = i;
+			blockCommentOpen = true;
 			i += 2;
 			while (i + 1 < line.size()) {
 				if (line[i] == '*' && line[i + 1] == '/') {
@@ -3177,8 +3194,9 @@ MRSyntaxLineResult MRJavaScriptSyntaxHighlighter::highlightLine(std::string_view
 				}
 				++i;
 			}
-			appendRun(result.tokenRuns, start, std::min(i, line.size()), MRSyntaxToken::Comment);
-			if (i >= line.size() && (line.size() < 2 || line[line.size() - 2] != '*' || line[line.size() - 1] != '/')) {
+			if (blockCommentOpen) i = line.size();
+			appendRun(result.tokenRuns, start, i, MRSyntaxToken::Comment);
+			if (blockCommentOpen) {
 				result.stateOut.mode = MRSyntaxMode::BlockComment;
 				break;
 			}
@@ -3293,9 +3311,10 @@ MRSyntaxLineResult MRSwiftSyntaxHighlighter::highlightLine(std::string_view line
 		i = end;
 	} else if (previousState.mode == MRSyntaxMode::QuotedString) {
 		const char quote = static_cast<char>(previousState.payload);
-		const std::size_t end = findStringContinuationEnd(line, 0, quote);
+		bool quoteClosed = false;
+		const std::size_t end = findStringContinuationEnd(line, 0, quote, &quoteClosed);
 		appendRun(result.tokenRuns, 0, end, MRSyntaxToken::String);
-		if (end == line.size()) {
+		if (!quoteClosed) {
 			result.stateOut.mode = MRSyntaxMode::QuotedString;
 			result.stateOut.payload = previousState.payload;
 			return result;
@@ -3485,9 +3504,10 @@ MRSyntaxLineResult MRRustSyntaxHighlighter::highlightLine(std::string_view line,
 		i = end;
 	} else if (previousState.mode == MRSyntaxMode::QuotedString) {
 		const char quote = static_cast<char>(previousState.payload);
-		const std::size_t end = findStringContinuationEnd(line, 0, quote);
+		bool quoteClosed = false;
+		const std::size_t end = findStringContinuationEnd(line, 0, quote, &quoteClosed);
 		appendRun(result.tokenRuns, 0, end, MRSyntaxToken::String);
-		if (end == line.size()) {
+		if (!quoteClosed) {
 			result.stateOut.mode = MRSyntaxMode::QuotedString;
 			result.stateOut.payload = previousState.payload;
 			return result;
@@ -4230,9 +4250,10 @@ MRSyntaxLineResult MRGoSyntaxHighlighter::highlightLine(std::string_view line, M
 		i = end + 1;
 	} else if (previousState.mode == MRSyntaxMode::QuotedString) {
 		const char quote = static_cast<char>(previousState.payload);
-		const std::size_t end = findStringContinuationEnd(line, 0, quote);
+		bool quoteClosed = false;
+		const std::size_t end = findStringContinuationEnd(line, 0, quote, &quoteClosed);
 		appendRun(result.tokenRuns, 0, end, MRSyntaxToken::String);
-		if (end == line.size()) {
+		if (!quoteClosed) {
 			result.stateOut.mode = MRSyntaxMode::QuotedString;
 			result.stateOut.payload = previousState.payload;
 			return result;
