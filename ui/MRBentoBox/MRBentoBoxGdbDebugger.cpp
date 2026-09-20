@@ -158,6 +158,7 @@ bool MRBentoBox::startGdbDebugger(const std::string &programPath, const std::str
 
 	stopGdbDebugger();
 	gdbDebuggerVariableRows.clear();
+	gdbDebuggerWatchRows.clear();
 	if (!ensureGdbDebuggerPanes(outputWindow, variablesWindow, watchesWindow, terminalWindow)) {
 		errorMessage = "Unable to establish GDB debugger panes.";
 		return false;
@@ -214,6 +215,7 @@ void MRBentoBox::stopGdbDebugger() noexcept {
 	if (gdbSession != nullptr) gdbSession->stop();
 	gdbSession.reset();
 	gdbDebuggerVariableRows.clear();
+	gdbDebuggerWatchRows.clear();
 	clearGdbDebuggerState();
 	if (getEditor() != nullptr) getEditor()->clearDebuggerInstructionLine();
 	if (macroDebuggerActive) refreshMacroDebuggerBreakpointRanges();
@@ -232,7 +234,6 @@ bool MRBentoBox::acceptGdbEvent(const mr::coprocessor::GdbEventPayload &payload)
 	if (gdbSession == nullptr || payload.generation != gdbSession->currentGeneration()) return false;
 	MREditWindow *outputWindow = debuggerOutputPane();
 	MREditWindow *variablesWindow = variablesPane();
-	MREditWindow *watchesWindow = watchesPane();
 	MRGdbTerminalPane *terminalWindow = programTerminalPane();
 	switch (payload.event.kind) {
 		case MRGdbEventKind::Started:
@@ -254,6 +255,7 @@ bool MRBentoBox::acceptGdbEvent(const mr::coprocessor::GdbEventPayload &payload)
 			if (payload.event.text.rfind("exited", 0) == 0) {
 				cancelDebuggerValueInput();
 				gdbDebuggerVariableRows.clear();
+				gdbDebuggerWatchRows.clear();
 				if (variablesWindow != nullptr) {
 					static_cast<void>(variablesWindow->replaceTextBuffer("(inferior exited)\n", "Variables"));
 					variablesWindow->setReadOnly(true);
@@ -264,41 +266,18 @@ bool MRBentoBox::acceptGdbEvent(const mr::coprocessor::GdbEventPayload &payload)
 			if (getEditor() != nullptr) getEditor()->clearDebuggerInstructionLine();
 			if (getEditor() != nullptr && payload.event.line > 0 &&
 			    (payload.event.file.empty() || normalizeConfiguredPathInput(payload.event.file) == gdbDebuggerSourcePath())) {
-				getEditor()->setDebuggerInstructionLine(static_cast<std::size_t>(payload.event.line - 1));
-				getEditor()->centerDocumentLocationInView(static_cast<std::size_t>(payload.event.line - 1), 1);
+				MRFileEditor *sourceEditor = getEditor();
+				const std::size_t line = static_cast<std::size_t>(payload.event.line - 1);
+				std::size_t offset = sourceEditor->bufferModel().lineStartByIndex(line);
+				while (offset < sourceEditor->bufferLength() && (sourceEditor->charAtOffset(offset) == ' ' || sourceEditor->charAtOffset(offset) == '\t')) ++offset;
+				sourceEditor->setCursorOffset(offset);
+				sourceEditor->setDebuggerInstructionLine(line);
+				sourceEditor->centerDocumentLocationInView(line, sourceEditor->actualCursorVisualColumn(offset));
 			}
 			break;
 		case MRGdbEventKind::Variables:
-			if (variablesWindow != nullptr) {
-				std::string text;
-				gdbDebuggerVariableRows.clear();
-				if (payload.event.variables.empty()) text = "(no variables in current frame)\n";
-				else for (const MRGdbMiVariable &variable : payload.event.variables) {
-					GdbDebuggerVariableRow row;
-
-					row.start = text.size();
-					row.expression = variable.name;
-					row.objectName = variable.objectName;
-					row.value = variable.value;
-					text.append(static_cast<std::size_t>(std::max(0, variable.depth)) * 2, ' ');
-					text += variable.name;
-					if (!variable.type.empty()) text += " [" + variable.type + "]";
-					text += " = " + variable.value;
-					row.end = text.size();
-					gdbDebuggerVariableRows.push_back(std::move(row));
-					text += "\n";
-				}
-				static_cast<void>(variablesWindow->replaceTextBuffer(text.c_str(), "Variables"));
-				variablesWindow->setReadOnly(true);
-				variablesWindow->setFileChanged(false);
-			}
-			break;
 		case MRGdbEventKind::Watches:
-			if (watchesWindow != nullptr && !payload.event.text.empty()) {
-				static_cast<void>(watchesWindow->replaceTextBuffer(payload.event.text.c_str(), "Watches"));
-				watchesWindow->setReadOnly(true);
-				watchesWindow->setFileChanged(false);
-			}
+			refreshGdbDebuggerValues(payload.event);
 			break;
 		case MRGdbEventKind::Breakpoints:
 			writeGdbBreakpointLines(gdbDebuggerSourcePath(), payload.event.breakpointLines);

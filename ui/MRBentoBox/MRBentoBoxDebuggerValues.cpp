@@ -22,6 +22,7 @@
 #include <sstream>
 #include <string>
 #include <utility>
+#include <unordered_map>
 
 class MRDebuggerValueInput : public TInputLine {
   public:
@@ -337,6 +338,79 @@ bool MRBentoBox::showMacroDebuggerValueInputAtCursor() {
 		return true;
 	}
 	return false;
+}
+
+void MRBentoBox::refreshGdbDebuggerValues(const MRGdbEvent &event) {
+	const bool watches = event.kind == MRGdbEventKind::Watches;
+	MREditWindow *window = watches ? watchesPane() : variablesPane();
+	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+	if (editor == nullptr) return;
+	std::vector<GdbDebuggerVariableRow> &rows = watches ? gdbDebuggerWatchRows : gdbDebuggerVariableRows;
+	std::vector<GdbDebuggerVariableRow> previous = std::move(rows);
+	std::unordered_map<std::string, std::size_t> previousPaths;
+	const TPoint scroll = editor->delta;
+	const int visualColumn = editor->displayedCursorColumn();
+	const std::size_t cursor = editor->cursorOffset();
+	std::size_t cursorRow = 0;
+	std::size_t topRow = 0;
+	std::size_t column = 0;
+	for (std::size_t i = 0; i < previous.size(); ++i) {
+		previousPaths.emplace(previous[i].expression, i);
+		if (previous[i].start <= cursor) {
+			cursorRow = i;
+			column = cursor - previous[i].start;
+		}
+		if (editor->lineIndexOfOffset(previous[i].start) <= static_cast<std::size_t>(std::max(0, scroll.y))) topRow = i;
+	}
+	std::size_t newCursorRow = cursorRow;
+	std::size_t newTopRow = topRow;
+	std::vector<std::string> parents;
+	std::vector<std::pair<std::size_t, std::size_t>> changedRanges;
+	std::string text;
+	rows.reserve(event.variables.size());
+	for (const MRGdbMiVariable &variable : event.variables) {
+		const std::size_t depth = static_cast<std::size_t>(std::max(0, variable.depth));
+		parents.resize(depth + 1);
+		// GDB recreates local var objects at each stop; use the frame and value path for view identity.
+		parents[depth] = depth == 0 ? (watches ? variable.objectName : event.text + ":" + variable.name) : parents[depth - 1] + "/" + variable.name;
+		GdbDebuggerVariableRow row;
+		row.start = text.size();
+		row.expression = parents[depth];
+		row.objectName = variable.objectName;
+		row.value = variable.value;
+		text.append(depth * 2, ' ');
+		if (watches && depth == 0) text += variable.objectName + ": ";
+		text += variable.name;
+		if (!variable.type.empty()) text += " [" + variable.type + "]";
+		text += " = ";
+		const std::size_t valueStart = text.size();
+		text += variable.value;
+		row.end = text.size();
+		const auto found = previousPaths.find(row.expression);
+		if (found != previousPaths.end()) {
+			const std::size_t oldRow = found->second;
+			if (oldRow == cursorRow) newCursorRow = rows.size();
+			if (oldRow == topRow) newTopRow = rows.size();
+			if (previous[oldRow].value != row.value) changedRanges.emplace_back(valueStart, row.end);
+		}
+		rows.push_back(std::move(row));
+		text += '\n';
+	}
+	if (rows.empty()) text = watches ? "(no watches)\n" : "(no variables in current frame)\n";
+	if (editor->snapshotText() != text) {
+		window->lock();
+		static_cast<void>(window->replaceTextBuffer(text.c_str(), watches ? "Watches" : "Variables"));
+		if (!rows.empty()) {
+			const GdbDebuggerVariableRow &row = rows[std::min(newCursorRow, rows.size() - 1)];
+			editor->setCursorOffsetAtVisualColumn(row.start + std::min(column, row.end - row.start), visualColumn, true);
+			const std::size_t top = editor->lineIndexOfOffset(rows[std::min(newTopRow, rows.size() - 1)].start);
+			editor->scrollTo(scroll.x, static_cast<int>(top));
+		}
+		window->unlock();
+	}
+	window->setReadOnly(true);
+	window->setFileChanged(false);
+	editor->setDebuggerVariableChangedRanges(changedRanges);
 }
 
 bool MRBentoBox::showGdbDebuggerValueInputAtCursor() {

@@ -17,6 +17,7 @@
 
 class MRBentoPaneFrameView;
 class MRGdbSession;
+struct MRGdbEvent;
 class MRGdbTerminalPane;
 enum class MRGdbCommandKind : unsigned char;
 class MRDebuggerValueInput;
@@ -452,6 +453,7 @@ class MRBentoBox : public MREditWindow {
 	void refreshMacroDebuggerVariables(const std::vector<MRMacroDebugVariableSnapshot> &variables);
 	[[nodiscard]] bool showMacroDebuggerValueInputAtCursor();
 	[[nodiscard]] bool showGdbDebuggerValueInputAtCursor();
+	void refreshGdbDebuggerValues(const MRGdbEvent &event);
 	[[nodiscard]] bool debuggerValueInputContains(const TPoint &point) const noexcept;
 	void commitDebuggerValueInput();
 	void cancelDebuggerValueInput() noexcept;
@@ -612,6 +614,7 @@ class MRBentoBox : public MREditWindow {
 	std::vector<MRMacroDebugVariableSnapshot> macroDebuggerVariables;
 	std::vector<std::pair<std::size_t, std::size_t>> macroDebuggerVariableRows;
 	std::vector<GdbDebuggerVariableRow> gdbDebuggerVariableRows;
+	std::vector<GdbDebuggerVariableRow> gdbDebuggerWatchRows;
 	std::unique_ptr<MRGdbSession> gdbSession;
 	std::shared_ptr<const std::vector<MRCompilerDiagnostic>> compilerDiagnostics;
 	std::shared_ptr<const MRBentoDiagnosticSourceChange> compilerDiagnosticSourceChanges;
