@@ -101,6 +101,10 @@ These rules apply to new dialogs and to layout changes in existing dialogs.
 - Neighboring clusters must keep two columns of horizontal spacing.
 - Stacked widgets must keep one empty row of vertical spacing unless they form one logical multi-line control.
 - Button rows must keep one empty row of spacing to the dialog frame.
+- Maintainer-approved Window List exception: the workspace autosave retention
+  slider has no separate label, and the bottom Help/Done row has no extra blank
+  row before the frame. The Auto/Load workspace pair is shifted one column
+  left within the otherwise centered workspace row.
 
 ## Boundaries
 
