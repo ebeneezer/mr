@@ -23,7 +23,7 @@ struct MacroDebuggerCommandDescriptor {
 };
 
 static const MacroDebuggerCommandDescriptor kMacroDebuggerCommands[] = {
-	{cmMrOtherBuildCurrentFile, kbF9, 0, "MACRODBG key stage=app-build-command"},
+	{cmMrDebugBuildCurrentFile, kbF9, 0, "MACRODBG key stage=app-build-command"},
 	{cmMrMacroDebuggerEvaluate, kbF4, 0, nullptr},
 	{cmMrMacroDebuggerContinue, kbF5, 0, "MACRODBG key stage=app-continue-command"},
 	{cmMrMacroDebuggerStep, kbF10, 0, nullptr},

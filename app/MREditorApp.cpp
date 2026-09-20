@@ -558,7 +558,7 @@ void MREditorApp::handleApplicationEvent(TEvent &event) {
 			}
 		prepareForQuit();
 	}
-	if (isBuildCurrentFileDefaultKey(event) && TView::commandEnabled(cmMrOtherBuildCurrentFile) && handleMRCommand(cmMrOtherBuildCurrentFile)) {
+	if (isBuildCurrentFileDefaultKey(event) && TView::commandEnabled(cmMrDebugBuildCurrentFile) && handleMRCommand(cmMrDebugBuildCurrentFile)) {
 		clearEvent(event);
 		return;
 	}

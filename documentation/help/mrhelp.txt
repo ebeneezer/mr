@@ -66,7 +66,8 @@ Main menu chapters
   {Block menu:MenuBlock}
   {Search menu:MenuSearch}
   {Text menu:MenuText}
-  {Other and setup menus:MenuOther}
+  {Setup menu:MenuSetup}
+  {Debug menu:MenuDebug}
   {Macro menu:MenuMacro}
   {Help menu:MenuHelp}
 
@@ -83,7 +84,11 @@ Reference chapters
 F1 opens context-sensitive Help for the active menu or dialog.
 Shift-F1 opens the detailed Help index.
 Alt-F1 or BACKSPACE returns to the previously referenced Help topic.
-F10 activates the menu bar.
+F10 activates the menu bar. Global Alt-letter menu activation requires Alt alone;
+additional Shift, Ctrl, or Super modifiers do not open a main menu. Explicit
+command shortcuts with these modifiers remain available.
+Alt+P opens Setup; Alt+D opens Debug. The supplied Emacs profile uses
+Alt+Shift+D for Delete word forward.
 
 Within Help, Tab and Shift-Tab move between references, Enter follows the
 selected reference, Backspace returns to the previous topic, and Esc closes
@@ -293,6 +298,7 @@ More detail
  TEXT MENU
 
 Push and Get position expose the same marker-stack operations as Search.
+Match parenthesis (Alt+Shift+P) moves between matching brackets or parentheses.
 Line drawing changes typed line characters; Double lines selects the double
 line set. Hex editor opens the current file in the Bento hex editor.
 
@@ -310,11 +316,10 @@ More detail
   {The Format Line and Margins:UserManualC14}
   {Drawing, calculator, and character tables:GuideTools}
 
-.topic MenuOther=17
- OTHER MENU
+.topic MenuDebug=17
+ DEBUG MENU
 
-Installation and setup contains color, keymap, filename-extension, compiler,
-path, backup, user-interface, and live-log configuration.
+Alt+D opens this menu.
 
 Build current file chooses the matching compiler profile and starts its build
 pipeline. Git changes presents repository changes. Stop current program and
@@ -322,9 +327,6 @@ Restart current program control the active run session. Clear current output
 clears the associated output view.
 
 Next and previous compiler error navigate the current build diagnostics.
-Match parenthesis moves between matching brackets or parentheses.
-
-See {Installation and Setup:MenuInstallationSetup}.
 
 More detail
 
@@ -332,8 +334,10 @@ More detail
   {Building and debugging:GuideDebugging}
   {Display and language features:GuideDisplay}
 
-.topic MenuInstallationSetup=18
- INSTALLATION AND SETUP SUBMENU
+.topic MenuSetup=18
+ SETUP MENU
+
+Alt+P opens this menu. Its configuration commands are available directly.
 
 Color setup edits palette groups and theme files. Key mapping edits profiles
 and bindings. Filename extensions associates language and editor behavior
@@ -1489,7 +1493,7 @@ assigned that key another meaning.
 .topic UserManualC01S04=207
  1.4 WHERE PERSONAL CONFIGURATION LIVES
 
-Open Other > Installation and setup. Its entries divide configuration by
+Open Setup. Its entries divide configuration by
 the thing being changed:
 
 Color setup: changes palette roles and loads or saves reusable color
@@ -1525,7 +1529,7 @@ experimentation reversible until the last confirmation.
 .topic UserManualC01S05=208
  1.5 USER INTERFACE SETTINGS
 
-Press F12, or choose Other > Installation and setup > User interface
+Press F12, or choose Setup > User interface
 settings. The dialog is larger than a small terminal, so it can scroll
 while the selected control remains reachable. The following options are
 the useful starting controls.
@@ -1919,7 +1923,7 @@ A useful first exploration is deliberately small:
 
 6. Open Window > List to see the managed-window model.
 
-7. Inspect Other > Installation and setup without changing a draft.
+7. Inspect Setup without changing a draft.
 
 This route establishes the three recurring ideas of the manual: commands
 are contextual, visible UI state is authoritative, and setup dialogs stage
@@ -2015,7 +2019,8 @@ remain available during a longer editing operation.
 .topic UserManualC03S04=229
  3.4 MATCHING AND STRUCTURAL MOTION
 
-Other > Match parenthesis moves between matching brackets or parentheses.
+Text > Match parenthesis (Alt+Shift+P) moves between matching brackets or
+parentheses.
 Language-aware folding and outline commands provide larger-scale
 structural navigation. Their results depend on the detected language and
 the current syntax state; plain text remains navigable even when no
@@ -2058,7 +2063,7 @@ In this chapter:
 .topic UserManualC04S01=232
  4.1 ONE APPLICATION, STAGED CONFIGURATION
 
-MR has no separate setup executable. Other > Installation and setup opens
+MR has no separate setup executable. Setup opens
 the configuration areas for colors, keymaps, filename extensions, compiler
 profiles, paths, backups, interface behavior, search defaults, and live
 logs. Each dialog edits a working draft. Accepting the dialog applies
@@ -2081,7 +2086,12 @@ through F1 or its mnemonic; it is not the implicit acceptance action.
 .topic UserManualC04S02=233
  4.2 KEYMAP PROFILES
 
-Installation and setup > Key mapping manages profiles and their bindings.
+Global main-menu mnemonics require Alt without additional Shift, Ctrl, or
+Super modifiers. Explicit command shortcuts with these modifiers remain
+available. Alt+P opens Setup; Alt+D opens Debug. The supplied Emacs profile
+uses Alt+Shift+D for Delete word forward.
+
+Setup > Key mapping manages profiles and their bindings.
 A binding has a context, a target type, a target action or macro, a key
 sequence, and a description. Context prevents an editing binding from
 silently taking over a dialog or menu. Multi-key sequences are supported
@@ -2127,7 +2137,7 @@ emulations.
 .topic UserManualC04S03=234
  4.3 COLORS AND THEMES
 
-Installation and setup > Color setup groups color roles by domain. Each
+Setup > Color setup groups color roles by domain. Each
 item-list row begins with a three-column Aa sample rendered in the role's
 foreground and background colors. Selection highlighting affects only the
 following description, leaving the sample exact and readable. Foreground
@@ -3917,7 +3927,7 @@ folding controls, difference markers, a minimap, scrollbars, a status
 line, and function-key assignments around the document. These elements do
 not become part of the file.
 
-Use Other > Installation and setup > User interface settings to choose the
+Use Setup > User interface settings to choose the
 global projection. Filename-extension profiles can then adapt relevant
 editor behavior to a file class. Keep enough context to navigate safely,
 but do not spend half a narrow terminal describing the other half.
@@ -4014,7 +4024,7 @@ compiler profile, color theme, path, and optional lifecycle macros. This
 keeps a C++ source file, a Makefile, and a plain-text note from sharing
 inappropriate defaults merely because they occupy the same desktop.
 
-Other > Installation and setup > Filename extensions opens the profile
+Setup > Filename extensions opens the profile
 editor. The dialog works on a draft. Its Help describes the selected
 fields without applying the draft.
 
@@ -4240,8 +4250,8 @@ temporarily absent entry has been deleted from the document.
 .topic UserManualC23S03=354
  23.3 PARENTHESES AND STRUCTURAL NAVIGATION
 
-Other > Match parenthesis moves between a supported matching pair near the
-cursor: parentheses, square brackets, or braces. It starts at the cursor
+Text > Match parenthesis (Alt+Shift+P) moves between a supported matching
+pair near the cursor: parentheses, square brackets, or braces. It starts at the cursor
 or immediately before it and counts nesting of the chosen delimiter pair.
 This is character-based matching; it does not exclude strings or comments.
 
@@ -4273,7 +4283,7 @@ use Undo before saving if the indentation does not match your intent.
 .topic UserManualC23S05=356
  23.5 COMPILER PROFILES AND DIAGNOSTICS
 
-Other > Build current file chooses the compiler profile associated with
+Debug > Build current file chooses the compiler profile associated with
 the active file. A compiler profile describes the executable, toolchain,
 version and target constraints, build flags, include and library
 arguments, runtime paths, a pre-build shell command, build-succeeded and
@@ -4281,7 +4291,7 @@ build-failed shell commands, and optional pre- and post-build MRMAC hooks.
 Separate success and failure audio paths can announce the result through
 the configured audio player.
 
-Installation and setup > Compiler profiles exposes these fields and the
+Setup > Compiler profiles exposes these fields and the
 Automatic Setup action. If the selected profile names an executable,
 Automatic Setup resolves and probes it, then fills toolchain, version,
 target, default flags, include paths, library paths, and runtime paths.
@@ -4298,7 +4308,7 @@ result. Build context values identify the source, output, profile,
 toolchain, and exit status to hooks without requiring them to reconstruct
 the command line.
 
-Other > Next compiler error and Previous compiler error navigate adopted
+Debug > Next compiler error and Previous compiler error navigate adopted
 diagnostics. User Interface Settings controls whether warnings and notes
 are tracked in addition to errors and how diagnostic messages are
 presented. The minimap can provide long-range orientation, but the
@@ -4327,7 +4337,7 @@ whose name or ID contains Debug. Check its debug-information flags.
 3. Save and build the file with that profile. The expected output must
 exist, be executable, and be at least as recent as the source.
 
-4. Choose Other > Debug current file, or press Alt+F9. The command is
+4. Choose Debug > Debug current file, or press Alt+F9. The command is
 enabled only while an editor with a recognized source language is focused.
 Starting the session also checks the source, profile, and build artifact. An unavailable command is a reason to check the profile,
 unsaved source, and build output first.
@@ -4454,7 +4464,7 @@ restarting MR.
 For a named file in a Git work tree, MR probes the file's status in the
 background. The frame displays its Git changes marker when the file
 differs from the repository state or is untracked. Hovering explains the
-marker; clicking it is equivalent to Other > Git changes.
+marker; clicking it is equivalent to Debug > Git changes.
 
 Git changes is file-scoped. If the editor contains unsaved changes, MR
 offers to save them first and stops if they are not saved. It then opens a

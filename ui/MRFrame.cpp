@@ -632,7 +632,7 @@ void MRFrame::handleEvent(TEvent &event) {
 			MarkerState state = markerState();
 			if (gitMarkerHit(mouse, state)) {
 				event.what = evCommand;
-				event.message.command = cmMrOtherGitChanges;
+				event.message.command = cmMrDebugGitChanges;
 				event.message.infoPtr = owner;
 				putEvent(event);
 				clearEvent(event);

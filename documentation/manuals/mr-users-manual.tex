@@ -268,7 +268,7 @@ that key another meaning.
 
 \section{Where personal configuration lives}
 
-Open \menu{Other > Installation and setup}. Its entries divide configuration
+Open \menu{Setup}. Its entries divide configuration
 by the thing being changed:
 \begin{description}
 \item[Color setup] changes palette roles and loads or saves reusable color
@@ -284,7 +284,7 @@ virtual desktops, file-comparison layout, and indentation style.
 \item[Live logs] controls how a live log is displayed and how search hits are
 announced.
 \end{description}
-\index{Installation and setup}\index{configuration!locations}
+\index{Setup}\index{configuration!locations}
 
 Setup dialogs use a draft. Moving through controls changes the draft, not the
 application. \textsf{OK}, or \textsf{Save} in the unsaved-changes question,
@@ -297,7 +297,7 @@ experimentation reversible until the last confirmation.
 \section{User Interface Settings}
 
 Press \key{F12}, or choose
-\menu{Other > Installation and setup > User interface settings}. The dialog is
+\menu{Setup > User interface settings}. The dialog is
 larger than a small terminal, so it can scroll while the selected control
 remains reachable. The following options are the useful starting controls.
 
@@ -622,7 +622,7 @@ A useful first exploration is deliberately small:
 \item Open \menu{Help > Keys} and compare it with the function-key line.
 \item Mark several lines, copy them, and undo the copy destination.
 \item Open \menu{Window > List} to see the managed-window model.
-\item Inspect \menu{Other > Installation and setup} without changing a draft.
+\item Inspect \menu{Setup} without changing a draft.
 \end{enumerate}
 This route establishes the three recurring ideas of the manual: commands are
 contextual, visible UI state is authoritative, and setup dialogs stage changes
@@ -692,7 +692,7 @@ available during a longer editing operation.
 
 \section{Matching and structural motion}
 
-\menu{Other > Match parenthesis} moves between matching brackets or
+\menu{Text > Match parenthesis} (\key{Alt+Shift+P}) moves between matching brackets or
 parentheses. Language-aware folding and outline commands provide larger-scale
 structural navigation. Their results depend on the detected language and the
 current syntax state; plain text remains navigable even when no structural
@@ -716,7 +716,7 @@ the reliable fallback over remote or restricted terminal connections.
 
 \section{One application, staged configuration}
 
-\mr{} has no separate setup executable. \menu{Other > Installation and setup}
+\mr{} has no separate setup executable. \menu{Setup}
 opens the configuration areas for colors, keymaps, filename extensions,
 compiler profiles, paths, backups, interface behavior, search defaults, and
 live logs. Each dialog edits a working draft. Accepting the dialog applies
@@ -736,7 +736,12 @@ current input control does not consume the key. Help remains available through
 
 \section{Keymap profiles}
 
-\menu{Installation and setup > Key mapping} manages profiles and their
+Global main-menu mnemonics require Alt without additional Shift, Ctrl, or Super
+modifiers. Explicit command shortcuts with these modifiers remain available.
+\key{Alt+P} opens \menu{Setup}; \key{Alt+D} opens \menu{Debug}. The supplied
+Emacs profile uses \key{Alt+Shift+D} for Delete word forward.
+
+\menu{Setup > Key mapping} manages profiles and their
 bindings. A binding has a context, a target type, a target action or macro, a
 key sequence, and a description. Context prevents an editing binding from
 silently taking over a dialog or menu. Multi-key sequences are supported where
@@ -781,7 +786,7 @@ experimenting with stateful or multi-key emulations.
 
 \section{Colors and themes}
 
-\menu{Installation and setup > Color setup} groups color roles by domain.
+\menu{Setup > Color setup} groups color roles by domain.
 Each item-list row begins with a three-column \texttt{Aa } sample rendered in
 the role's foreground and background colors. Selection highlighting affects
 only the following description, leaving the sample exact and readable.
@@ -2099,7 +2104,7 @@ function-key assignments around the document. These elements do not become
 part of the file.\index{gutter}\index{status line}
 \index{function-key line}
 
-Use \menu{Other > Installation and setup > User interface settings} to choose
+Use \menu{Setup > User interface settings} to choose
 the global projection. Filename-extension profiles can then adapt relevant
 editor behavior to a file class. Keep enough context to navigate safely, but
 do not spend half a narrow terminal describing the other half.
@@ -2174,9 +2179,9 @@ profile, color theme, path, and optional lifecycle macros. This keeps a C++
 source file, a Makefile, and a plain-text note from sharing inappropriate
 defaults merely because they occupy the same desktop.
 
-\menu{Other > Installation and setup > Filename extensions} opens the profile
+\menu{Setup > Filename extensions} opens the profile
 editor. The dialog works on a draft. Its Help describes the selected fields
-without applying the draft.\index{Installation and setup}
+without applying the draft.\index{Setup}
 
 \manualscreenshot{mr-users-file-extensions.png}{fig:users-file-extensions}{
 Filename-extension profiles combine matching, language, editor, and build
@@ -2223,7 +2228,7 @@ files supplied on the command line as well as those opened later.
 \section{Build and lifecycle integration}
 
 \field{Compiler profile} associates matching files with a build description.
-\menu{Other > Build current file} uses that relationship to choose a
+\menu{Debug > Build current file} uses that relationship to choose a
 toolchain. A missing or incorrect association can therefore produce the
 wrong build command even when language highlighting looks correct.
 \index{compiler profile!filename association}
@@ -2344,7 +2349,7 @@ been deleted from the document.
 
 \section{Parentheses and structural navigation}
 
-\menu{Other > Match parenthesis} moves between a supported matching pair near
+\menu{Text > Match parenthesis} (\key{Alt+Shift+P}) moves between a supported matching pair near
 the cursor: parentheses, square brackets, or braces. It starts at the cursor
 or immediately before it and counts nesting of the chosen delimiter pair.
 This is character-based matching; it does not exclude strings or comments.
@@ -2370,7 +2375,7 @@ wrong profile or formatter was selected.
 
 \section{Compiler profiles and diagnostics}
 
-\menu{Other > Build current file} chooses the compiler profile associated
+\menu{Debug > Build current file} chooses the compiler profile associated
 with the active file. A compiler profile describes the executable,
 toolchain, version and target constraints, build flags, include and library
 arguments, runtime paths, a pre-build shell command, build-succeeded and
@@ -2379,7 +2384,7 @@ Separate success and failure audio paths can announce the result through the
 configured audio player.\index{compiler profile}\index{build current file}
 \index{compiler profile!build hooks}
 
-\menu{Installation and setup > Compiler profiles} exposes these fields and
+\menu{Setup > Compiler profiles} exposes these fields and
 the \menu{Automatic Setup} action. If the selected profile names an
 executable, Automatic Setup resolves and probes it, then fills toolchain,
 version, target, default flags, include paths, library paths, and runtime
@@ -2395,7 +2400,7 @@ and the post-build \mrmac{} hook are adopted with the final result. Build
 context values identify the source, output, profile, toolchain, and exit
 status to hooks without requiring them to reconstruct the command line.
 
-\menu{Other > Next compiler error} and \menu{Previous compiler error} navigate
+\menu{Debug > Next compiler error} and \menu{Previous compiler error} navigate
 adopted diagnostics. User Interface Settings controls whether warnings and
 notes are tracked in addition to errors and how diagnostic messages are
 presented. The minimap can provide long-range orientation, but the diagnostic
@@ -2420,7 +2425,7 @@ To start a session:
 whose name or ID contains \texttt{Debug}. Check its debug-information flags.
 \item Save and build the file with that profile. The expected output must
 exist, be executable, and be at least as recent as the source.
-\item Choose \menu{Other > Debug current file}, or press \key{Alt+F9}.
+\item Choose \menu{Debug > Debug current file}, or press \key{Alt+F9}.
 The command is enabled only when the current source and artifact satisfy the
 start conditions. An unavailable command is a reason to check the profile,
 unsaved source, and build output first.
@@ -2521,7 +2526,7 @@ resume its instruction pointer after restarting MR.
 For a named file in a Git work tree, \mr{} probes the file's status in the
 background. The frame displays its Git changes marker when the file differs
 from the repository state or is untracked. Hovering explains the marker;
-clicking it is equivalent to \menu{Other > Git changes}.
+clicking it is equivalent to \menu{Debug > Git changes}.
 \index{Git}\index{Git!status marker}
 
 Git changes is file-scoped. If the editor contains unsaved changes, \mr{}

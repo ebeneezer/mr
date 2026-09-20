@@ -471,7 +471,7 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MR_DESKTOP_VIEWPORT_RIGHT", KeymapDispatchKind::AppCommand, cmMrWindowNextDesktop, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_DESKTOP_MOVE_WINDOW_LEFT", KeymapDispatchKind::AppCommand, cmMrWindowMoveToPrevDesktop, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_DESKTOP_MOVE_WINDOW_RIGHT", KeymapDispatchKind::AppCommand, cmMrWindowMoveToNextDesktop, KeymapWindowMethod::None, KeymapCustomAction::None},
-    KeymapActionDispatchEntry{"MR_BUILD_CURRENT_FILE", KeymapDispatchKind::AppCommand, cmMrOtherBuildCurrentFile, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_BUILD_CURRENT_FILE", KeymapDispatchKind::AppCommand, cmMrDebugBuildCurrentFile, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_DEBUGGER_START", KeymapDispatchKind::AppCommand, cmMrDebuggerStart, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_DEBUGGER_EVALUATE", KeymapDispatchKind::AppCommand, cmMrDebuggerEvaluate, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_DEBUGGER_CONTINUE_PAUSE", KeymapDispatchKind::AppCommand, cmMrDebuggerContinue, KeymapWindowMethod::None, KeymapCustomAction::None},
@@ -491,11 +491,11 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MR_SEARCH_MULTI_FILE_REPLACE", KeymapDispatchKind::AppCommand, cmMrSearchMultiFileSearchReplace, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_COMPILER_PROBLEMS_NEXT", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CompilerProblemsNext},
     KeymapActionDispatchEntry{"MR_COMPILER_PROBLEMS_PREVIOUS", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::CompilerProblemsPrevious},
-    KeymapActionDispatchEntry{"MR_MATCH_PARENTHESIS", KeymapDispatchKind::AppCommand, cmMrOtherMatchBraceOrParen, KeymapWindowMethod::None, KeymapCustomAction::None},
-    KeymapActionDispatchEntry{"MR_FIND_REFERENCES", KeymapDispatchKind::AppCommand, cmMrOtherReferences, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_MATCH_PARENTHESIS", KeymapDispatchKind::AppCommand, cmMrTextMatchBraceOrParen, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_FIND_REFERENCES", KeymapDispatchKind::AppCommand, cmMrTextReferences, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_SNIPPET_PLACEHOLDER_NEXT", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::SnippetPlaceholderNext},
     KeymapActionDispatchEntry{"MR_SNIPPET_PLACEHOLDER_PREVIOUS", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::SnippetPlaceholderPrevious},
-    KeymapActionDispatchEntry{"MR_RENAME", KeymapDispatchKind::AppCommand, cmMrOtherRename, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"MR_RENAME", KeymapDispatchKind::AppCommand, cmMrTextRename, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_MACRO_TOGGLE_RECORDING", KeymapDispatchKind::AppCommand, cmMrMacroToggleRecording, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_SETUP_EDIT_SETTINGS", KeymapDispatchKind::AppCommand, cmMrSetupEditSettings, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_SETUP_COLOR", KeymapDispatchKind::AppCommand, cmMrSetupColorSetup, KeymapWindowMethod::None, KeymapCustomAction::None},
@@ -1246,10 +1246,10 @@ std::vector<ContextMenuEntry> buildEditorContextMenuItems(MREditWindow *win, con
 		entries.push_back(ContextMenuEntry{"Out", cmMrDebuggerStepOut, false});
 		entries.push_back(ContextMenuEntry{"Clear Program Terminal", cmMrDebuggerClearProgramTerminal, false});
 	}
-	entries.push_back(ContextMenuEntry{"Outline", cmMrOtherLocalOutline, false});
+	entries.push_back(ContextMenuEntry{"Outline", cmMrTextLocalOutline, false});
 	if (target != nullptr && !workspaceSearchTextAroundOffset(*editor, target->offset).empty()) {
-		entries.push_back(ContextMenuEntry{"References", cmMrOtherReferences, false});
-		entries.push_back(ContextMenuEntry{"Rename", cmMrOtherRename, false});
+		entries.push_back(ContextMenuEntry{"References", cmMrTextReferences, false});
+		entries.push_back(ContextMenuEntry{"Rename", cmMrTextRename, false});
 	}
 	return entries;
 }
@@ -1391,11 +1391,11 @@ bool showEditorContextMenuForWindow(MREditWindow *targetWindow, TPoint where) {
 		case cmMrDebuggerClearProgramTerminal:
 			if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(targetWindow); bentoBox != nullptr) return bentoBox->clearGdbProgramTerminal();
 			return false;
-		case cmMrOtherReferences:
+		case cmMrTextReferences:
 			return requestWorkspaceReferencesCommand(targetWindow, &target);
-		case cmMrOtherRename:
+		case cmMrTextRename:
 			return requestWorkspaceRenameCommand(targetWindow, &target);
-		case cmMrOtherLocalOutline:
+		case cmMrTextLocalOutline:
 			return showLocalOutlineForWindow(targetWindow, &where);
 		default:
 			break;
@@ -2769,43 +2769,43 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 		case cmMrHelpUpdate:
 			return mrHandleUpdateCommand();
 
-		case cmMrOtherBuildCurrentFile:
+		case cmMrDebugBuildCurrentFile:
 			return handleBuildCurrentFile();
 
 		case cmMrDebuggerRebuildAndStart:
 			return handleBuildCurrentFile(mr::coprocessor::BuildDebuggerContinuation::Start, static_cast<MREditWindow *>(commandInfo));
 
-		case cmMrOtherGitChanges:
+		case cmMrDebugGitChanges:
 			return handleGitChanges();
 
-		case cmMrOtherStopProgram:
+		case cmMrDebugStopProgram:
 			return handleStopCurrentProgram();
 
-		case cmMrOtherRestartProgram:
+		case cmMrDebugRestartProgram:
 			return handleRestartCurrentProgram();
 
-		case cmMrOtherClearOutput:
+		case cmMrDebugClearOutput:
 			return handleClearCurrentOutput();
 
-		case cmMrOtherMacroLibrary:
+		case cmMrMacroLibrary:
 			return runMacroLibraryDialog();
 
-		case cmMrOtherFindNextCompilerError:
+		case cmMrDebugFindNextCompilerError:
 			return handleCompilerErrorNavigation(commandInfo, true);
 
-		case cmMrOtherFindPreviousCompilerError:
+		case cmMrDebugFindPreviousCompilerError:
 			return handleCompilerErrorNavigation(commandInfo, false);
 
-		case cmMrOtherReferences:
+		case cmMrTextReferences:
 			return requestWorkspaceReferencesCommand();
 
-		case cmMrOtherRename:
+		case cmMrTextRename:
 			return requestWorkspaceRenameCommand();
 
-		case cmMrOtherLocalOutline:
+		case cmMrTextLocalOutline:
 			return showLocalOutlineForWindow(currentEditorCommandWindow());
 
-		case cmMrOtherMatchBraceOrParen:
+		case cmMrTextMatchBraceOrParen:
 			return handleMatchParenthesis();
 
 		default:

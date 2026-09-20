@@ -168,7 +168,7 @@ std::vector<MRStatusLine::FunctionKeyLabel> mrEditorFunctionKeyLabels(ushort mod
 	    {TKey(kbF6), cmMrWindowTile, "~F6~ Tile"},
 	    {TKey(kbF7), cmMrBlockMarkLines, "~F7~ Mark"},
 	    {TKey(kbF8), cmMrBlockCopy, "~F8~ CopyBlk"},
-	    {TKey(kbF9), cmMrOtherBuildCurrentFile, "~F9~ Build"},
+	    {TKey(kbF9), cmMrDebugBuildCurrentFile, "~F9~ Build"},
 	    {TKey(kbF10), cmMenu, "~F10~ Menu"},
 	    {TKey(kbF11), cmMrToggleFullscreen, "~F11~ Flscr"},
 	    {TKey(kbF12), cmMrSetupUserInterfaceSettings, "~F12~ Setup"},
@@ -235,7 +235,7 @@ std::vector<MRStatusLine::FunctionKeyLabel> mrEditorFunctionKeyLabels(ushort mod
 			labels = shiftLabels;
 			if (fileCompareActive) labels[7] = {TKey(kbF8, kbShift), cmMrFileComparePreviousChange, "~S-F8~ Prev"};
 			else if (diagnosticsActive)
-				labels[7] = {TKey(kbF8, kbShift), cmMrOtherFindPreviousCompilerError, "~S-F8~ PrevErr"};
+				labels[7] = {TKey(kbF8, kbShift), cmMrDebugFindPreviousCompilerError, "~S-F8~ PrevErr"};
 			if (debuggerActive) {
 				labels[6] = {TKey(kbF7, kbShift), cmMrDebuggerEraseWatch, "~S-F7~ Watch -"};
 				if (macroDebuggerActive) labels[8] = {TKey(kbF9, kbShift), cmMrMacroDebuggerToggleBreakpointEnabled, "~S-F9~ BP +/-"};
@@ -264,14 +264,14 @@ std::vector<MRStatusLine::FunctionKeyLabel> mrEditorFunctionKeyLabels(ushort mod
 	if (fileCompareActive) {
 		labels[2] = {TKey(kbF3), cmMrWindowSplitHorizontal, "~F3~ SplitH"};
 		labels[3] = {TKey(kbF4), cmMrWindowSplitVertical, "~F4~ SplitV"};
-		labels[4] = {TKey(kbF5), cmMrOtherClearOutput, "~F5~ Clear"};
+		labels[4] = {TKey(kbF5), cmMrDebugClearOutput, "~F5~ Clear"};
 		labels[5] = {TKey(kbF6), cmMrWindowTile, "~F6~ Tile"};
 		labels[6] = {TKey(kbShiftF8), cmMrFileComparePreviousChange, "~sF8~ Prev"};
 		labels[7] = {TKey(kbF8), cmMrFileCompareNextChange, "~F8~ Next"};
 	} else if (bentoToolPaneActive) {
 		labels[2] = {TKey(kbF3), cmMrWindowSplitHorizontal, "~F3~ SplitH"};
 		labels[3] = {TKey(kbF4), cmMrWindowSplitVertical, "~F4~ SplitV"};
-		labels[4] = {TKey(kbF5), cmMrOtherClearOutput, "~F5~ Clear"};
+		labels[4] = {TKey(kbF5), cmMrDebugClearOutput, "~F5~ Clear"};
 		labels[5] = {TKey(kbF6), cmMrWindowTile, "~F6~ Tile"};
 		labels[6] = {TKey(kbF7), cmMrSearchGotoLineNumber, "~F7~ Goto"};
 		labels[7] = {TKey(kbF8), cmMrSearchRepeatPrevious, "~F8~ Repeat"};
@@ -286,10 +286,10 @@ std::vector<MRStatusLine::FunctionKeyLabel> mrEditorFunctionKeyLabels(ushort mod
 	if (diagnosticsActive) {
 		labels[2] = {TKey(kbF3), cmMrWindowSplitHorizontal, "~F3~ SplitH"};
 		labels[3] = {TKey(kbF4), cmMrWindowSplitVertical, "~F4~ SplitV"};
-		labels[4] = {TKey(kbF5), cmMrOtherClearOutput, "~F5~ Clear"};
+		labels[4] = {TKey(kbF5), cmMrDebugClearOutput, "~F5~ Clear"};
 		labels[5] = {TKey(kbF6), cmMrWindowTile, "~F6~ Tile"};
-		labels[6] = {TKey(kbF7), cmMrOtherFindPreviousCompilerError, "~F7~ PrevErr"};
-		labels[7] = {TKey(kbF8), cmMrOtherFindNextCompilerError, "~F8~ NextErr"};
+		labels[6] = {TKey(kbF7), cmMrDebugFindPreviousCompilerError, "~F7~ PrevErr"};
+		labels[7] = {TKey(kbF8), cmMrDebugFindNextCompilerError, "~F8~ NextErr"};
 	} else if (!fileCompareActive && !bentoToolPaneActive && !readOnlyActive) {
 		labels[2] = {TKey(kbF3), cmMrBlockLoadFromDisk, "~F3~ LoadBlk"};
 		labels[3] = {TKey(kbF4), cmMrBlockSaveToDisk, "~F4~ SaveBlk"};

@@ -12,13 +12,13 @@ namespace {
 bool splitCommandTargetsSecondaryPane(ushort command) noexcept {
 	switch (command) {
 		case cmClose:
-		case cmMrOtherBuildCurrentFile:
-		case cmMrOtherGitChanges:
-		case cmMrOtherStopProgram:
-		case cmMrOtherRestartProgram:
-		case cmMrOtherClearOutput:
-		case cmMrOtherFindNextCompilerError:
-		case cmMrOtherFindPreviousCompilerError:
+		case cmMrDebugBuildCurrentFile:
+		case cmMrDebugGitChanges:
+		case cmMrDebugStopProgram:
+		case cmMrDebugRestartProgram:
+		case cmMrDebugClearOutput:
+		case cmMrDebugFindNextCompilerError:
+		case cmMrDebugFindPreviousCompilerError:
 		case cmMrMacroDebuggerContinue:
 		case cmMrMacroDebuggerStep:
 		case cmMrMacroDebuggerStop:
