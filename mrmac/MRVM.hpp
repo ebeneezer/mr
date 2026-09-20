@@ -702,6 +702,7 @@ bool mrvmUiProjectRuntimeMenuKeyLabels(const std::vector<std::pair<std::string, 
 bool mrvmUiMessageBox(const std::string &text);
 bool mrvmUiRenderFacadeRenderDeferredCommand(const MRMacroDeferredUiCommand &command);
 bool mrvmLoadMacroFile(const std::string &spec, std::string *errorMessage = nullptr);
+bool mrvmReadMacroExecutionProfile(const std::string &spec, MRMacroExecutionProfile &profile);
 bool mrvmRunMacroSpec(const std::string &spec, std::string *errorMessage = nullptr, std::vector<std::string> *logLines = nullptr);
 bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKeyState, std::string &executedMacroName, std::vector<std::string> *logLines = nullptr);
 

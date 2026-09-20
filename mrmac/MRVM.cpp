@@ -361,6 +361,23 @@ bool mrvmLoadMacroFile(const std::string &spec, std::string *errorMessage) {
 	return true;
 }
 
+bool mrvmReadMacroExecutionProfile(const std::string &spec, MRMacroExecutionProfile &profile) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	std::string filePart;
+	std::string macroPart;
+	std::string parameterString;
+	MacroRef macroRef;
+	LoadedMacroFile file;
+
+	profile = MRMacroExecutionProfile();
+	if (!mrvmParseRunMacroSpec(spec, filePart, macroPart, parameterString)) return false;
+	if (!readLoadedMacroByKey(mrvmUpperKey(macroPart), macroRef)) return false;
+	if (!filePart.empty() && resolveLoadedFileKeyForSpec(filePart) != macroRef.fileKey) return false;
+	if (!readLoadedMacroFileByKey(macroRef.fileKey, file) || file.bytecode.empty()) return false;
+	profile = std::move(file.profile);
+	return true;
+}
+
 bool mrvmRunMacroSpec(const std::string &spec, std::string *errorMessage, std::vector<std::string> *logLines) {
 	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
 

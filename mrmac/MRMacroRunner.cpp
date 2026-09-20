@@ -349,6 +349,12 @@ bool runMacroSource(const char *displayName, const char *source, const MRMacroEx
 	if (!selectedUnitName.empty()) label = selectedUnitName;
 
 	profile = routeProfile != nullptr ? *routeProfile : mrvmAnalyzeBytecode(bytecode + profileOffset, profileLength != 0 ? profileLength : bytecodeSize);
+	// Dynamic callees may require live UI state even when their launcher can be staged.
+	for (std::size_t index = 0; index < profile.stagedWriteSymbols.size(); ++index) {
+		if (profile.stagedWriteSymbols[index] != "RUN_MACRO") continue;
+		profile = MRMacroExecutionProfile();
+		break;
+	}
 	if (mrvmCanRunInBackground(profile)) {
 		MRMacroExecutionSession session = makeMacroExecutionSessionForOwner(label, MRMacroExecutionRoute::Background, win, ownerOverride);
 		const std::string routeLogLine = buildExecutionRouteLogLine(label, "background", profile) + sessionLogSuffix(session);
@@ -762,7 +768,7 @@ namespace {
 bool runMacroSpecByNameAsExecutionSessionForOwnerRouted(const char *macroSpec, const MRMacroExecutionOwner &owner, MRMacroExecutionSession *sessionOut, std::string *errorMessage, bool showErrorDialogs, bool forceUiThread) {
 	std::string spec = macroSpec != nullptr ? trimPathInput(macroSpec) : std::string();
 	std::string runnerSource;
-	MRMacroExecutionProfile uiThreadProfile;
+	MRMacroExecutionProfile targetProfile;
 
 	if (sessionOut != nullptr) *sessionOut = MRMacroExecutionSession();
 	if (errorMessage != nullptr) errorMessage->clear();
@@ -771,8 +777,12 @@ bool runMacroSpecByNameAsExecutionSessionForOwnerRouted(const char *macroSpec, c
 		if (showErrorDialogs) showErrorBox("Macro Runner", "No macro specification specified.");
 		return false;
 	}
+	if (!forceUiThread && mrvmReadMacroExecutionProfile(spec, targetProfile)) {
+		// The named launcher still needs the staged catalog/runtime path on a worker.
+		targetProfile.flags |= mrefUiAffinity | mrefStagedWrite;
+	}
 	runnerSource = "$MACRO ScheduledMacroLauncher;\nRUN_MACRO('" + escapeMrmacSingleQuotedLiteral(spec) + "');\nEND_MACRO;\n";
-	if (!runMacroSource(spec.c_str(), runnerSource.c_str(), forceUiThread ? &uiThreadProfile : nullptr, errorMessage, showErrorDialogs, sessionOut, &owner, nullptr, nullptr, false)) {
+	if (!runMacroSource(spec.c_str(), runnerSource.c_str(), &targetProfile, errorMessage, showErrorDialogs, sessionOut, &owner, nullptr, nullptr, false)) {
 		if (errorMessage != nullptr && errorMessage->empty()) *errorMessage = "Macro execution failed.";
 		return false;
 	}
