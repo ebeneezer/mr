@@ -455,6 +455,7 @@ MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) 
 	snapshot.fileCompareStartConfiguration = configuredFileCompareStartConfiguration();
 	snapshot.fileCompareComparePanelReadOnly = configuredFileCompareComparePanelReadOnly();
 	snapshot.autosaveWorkspace = configuredAutosaveWorkspace();
+	snapshot.workspaceAutosaveLimit = configuredWorkspaceAutosaveLimit();
 	snapshot.autoloadWorkspace = configuredAutoloadWorkspace();
 	snapshot.logHandling = configuredLogHandling();
 	snapshot.logFilePath = configuredLogFilePath();
@@ -655,6 +656,7 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('FILE_COMPARE_START_CONFIGURATION', '" + escapeMrmacSingleQuotedLiteral(formatFileCompareStartConfigurationLiteral(snapshot.fileCompareStartConfiguration)) + "');\n";
 	source += "MRSETUP('FILE_COMPARE_COMPARE_PANEL_READ_ONLY', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.fileCompareComparePanelReadOnly)) + "');\n";
 	source += "MRSETUP('AUTOSAVE_WORKSPACE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.autosaveWorkspace)) + "');\n";
+	source += "MRSETUP('WORKSPACE_AUTOSAVE_LIMIT', '" + std::to_string(snapshot.workspaceAutosaveLimit) + "');\n";
 	source += "MRSETUP('AUTOLOAD_WORKSPACE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.autoloadWorkspace)) + "');\n";
 	source += "MRSETUP('LOG_HANDLING', '" + escapeMrmacSingleQuotedLiteral(formatLogHandlingLiteral(snapshot.logHandling)) + "');\n";
 	source += "MRSETUP('LOGFILE', '" + escapeMrmacSingleQuotedLiteral(snapshot.logFilePath) + "');\n";

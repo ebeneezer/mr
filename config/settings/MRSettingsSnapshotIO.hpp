@@ -50,6 +50,7 @@ struct MRSettingsSnapshot {
 	MRFileCompareStartConfiguration fileCompareStartConfiguration{MRFileCompareStartConfiguration::OriginalCompare};
 	bool fileCompareComparePanelReadOnly{true};
 	bool autosaveWorkspace{false};
+	int workspaceAutosaveLimit{10};
 	bool autoloadWorkspace{false};
 	MRLogHandling logHandling{MRLogHandling::Volatile};
 	std::string logFilePath;

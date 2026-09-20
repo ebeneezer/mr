@@ -4,11 +4,14 @@
 #include "MRWindowCommands.hpp"
 #include "MRWindowCommandsInternal.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <ctime>
 #include <filesystem>
+#include <functional>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "../../config/settings/MRSettingsHistory.hpp"
 #include "../../config/settings/MRSettingsRuntime.hpp"
@@ -168,6 +171,47 @@ void flushWorkspaceAutosave(bool force, std::uint64_t *nextWakeupMs = nullptr) {
 		}
 		persistUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 	}
+	// Reserve one slot for the successful save, even if the clock moved backwards.
+	const std::filesystem::path savedPath(autosavePath);
+	const std::filesystem::path directory = savedPath.parent_path();
+	const std::string savedName = savedPath.filename().string();
+	const std::size_t limit = static_cast<std::size_t>(configuredWorkspaceAutosaveLimit());
+	std::vector<std::string> retained;
+	std::error_code scanError;
+	retained.reserve(limit);
+	for (std::filesystem::directory_iterator entry(directory, scanError), end; !scanError && entry != end; entry.increment(scanError)) {
+		const std::string name = entry->path().filename().string();
+		std::tm timestamp{};
+		char canonicalName[35]{};
+		std::error_code fileError;
+
+		if (name == savedName || name.size() != 34) continue;
+		const char *parsedEnd = ::strptime(name.c_str(), "Autosave %Y-%m-%d %H:%M:%S.mrmac", &timestamp);
+		if (parsedEnd == nullptr || *parsedEnd != '\0') continue;
+		if (std::strftime(canonicalName, sizeof(canonicalName), "Autosave %Y-%m-%d %H:%M:%S.mrmac", &timestamp) == 0 || name != canonicalName) continue;
+		const std::filesystem::file_status status = entry->symlink_status(fileError);
+		if (fileError) {
+			mrLogMessage("Workspace autosave retention could not inspect " + entry->path().string() + ": " + fileError.message());
+			continue;
+		}
+		if (!std::filesystem::is_regular_file(status)) continue;
+
+		// A bounded min-heap keeps only the newest candidates in memory.
+		retained.push_back(name);
+		std::push_heap(retained.begin(), retained.end(), std::greater<std::string>());
+		if (retained.size() < limit) continue;
+		std::pop_heap(retained.begin(), retained.end(), std::greater<std::string>());
+		const std::filesystem::path oldest = directory / retained.back();
+		retained.pop_back();
+		if (std::filesystem::remove(oldest, fileError)) {
+			forgetLoadDialogPath(MRDialogHistoryScope::WorkspaceSave, oldest.c_str());
+			forgetLoadDialogPath(MRDialogHistoryScope::WorkspaceLoad, oldest.c_str());
+		} else if (fileError) {
+			mrLogMessage("Workspace autosave retention could not remove " + oldest.string() + ": " + fileError.message());
+		}
+	}
+	if (scanError) mrLogMessage("Workspace autosave retention could not scan " + directory.string() + ": " + scanError.message());
+	if (configuredSettingsDirty() && !persistConfiguredSettingsSnapshot(&errorText)) mrLogMessage("Workspace autosave history cleanup could not be saved: " + errorText);
 	mrLogSettingsWriteReport("workspace autosave", report);
 	logWindowTiming("Workspace autosave flush timing", std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count(), "persist_us=" + std::to_string(persistUs));
 	mrLogMessage("Workspace autosave flush end.");

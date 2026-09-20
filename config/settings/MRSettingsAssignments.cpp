@@ -67,6 +67,7 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredFileCompareStartConfiguration(MRFileCompareStartConfiguration::OriginalCompare, errorMessage)) return false;
 	if (!setConfiguredFileCompareComparePanelReadOnly(true, errorMessage)) return false;
 	if (!setConfiguredAutosaveWorkspace(false, errorMessage)) return false;
+	if (!setConfiguredWorkspaceAutosaveLimit(10, errorMessage)) return false;
 	if (!setConfiguredAutoloadWorkspace(false, errorMessage)) return false;
 	if (!setConfiguredLogHandling(MRLogHandling::Volatile, errorMessage)) return false;
 	storeConfiguredAutoexecMacroStorage(std::vector<std::string>());
@@ -584,6 +585,11 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				bool parsed = false;
 				if (!parseBooleanLiteral(value, parsed, errorMessage)) return false;
 				return setConfiguredAutosaveWorkspace(parsed, errorMessage);
+			}
+			if (upper == "WORKSPACE_AUTOSAVE_LIMIT") {
+				int parsed = 10;
+				if (!parseWorkspaceAutosaveLimitLiteral(value, parsed, errorMessage)) return false;
+				return setConfiguredWorkspaceAutosaveLimit(parsed, errorMessage);
 			}
 			if (upper == "AUTOLOAD_WORKSPACE") {
 				bool parsed = false;

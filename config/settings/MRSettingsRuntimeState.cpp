@@ -949,6 +949,19 @@ bool configuredAutosaveWorkspace() {
 	return configuredRuntimeInt("autosaveWorkspace", 0) != 0;
 }
 
+bool setConfiguredWorkspaceAutosaveLimit(int limit, std::string *errorMessage) {
+	if (limit < 1 || limit > 50) return setError(errorMessage, "WORKSPACE_AUTOSAVE_LIMIT must be within 1..50.");
+	if (configuredWorkspaceAutosaveLimit() != limit) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeInt("workspaceAutosaveLimit", limit);
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+int configuredWorkspaceAutosaveLimit() {
+	recordSettingsRuntimeRead();
+	return configuredRuntimeInt("workspaceAutosaveLimit", 10);
+}
+
 void setRuntimePreserveAutosavedWorkspace(bool enabled) {
 	storeConfiguredRuntimeInt("preserveAutosavedWorkspace", enabled ? 1 : 0);
 	if (!enabled && TProgram::application != nullptr) message(TProgram::application, evBroadcast, cmMrWorkspaceAutosaveScheduled, nullptr);

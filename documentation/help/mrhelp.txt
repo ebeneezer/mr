@@ -857,6 +857,14 @@ Main workspace selects the workspace's main file. Autosave workspace and
 Autoload workspace toggle their settings. Save workspace and Load workspace
 open the corresponding file dialogs.
 
+The slider below these buttons sets the number of workspace autosave files
+to keep: 1 through 50, default 10. The value is saved automatically. After a
+successful workspace autosave, the oldest timestamped autosave files in its
+save directory are removed to meet this limit, including existing files.
+The newly saved file is always kept. Manually named workspaces are unaffected.
+Lowering the limit takes effect on the next successful workspace autosave;
+with workspace autosave off, no files are removed.
+
 More detail
 
   {Automatic saving and loading:UserManualC06S07P01}
@@ -2557,6 +2565,14 @@ With workspace autosave enabled, a successful autosave writes a named
 snapshot in the remembered Workspace Save directory:
 
   Autosave YYYY-MM-DD HH:MM:SS.mrmac
+
+The slider below the workspace buttons in Window > List controls how many
+of these files are kept (1 through 50, default 10). After each successful
+autosave, older files with this exact naming pattern in the same directory
+are deleted, including files from earlier sessions. The timestamp in the
+name determines age; the newly saved file is always retained. Other names,
+subdirectories, and symbolic links are left untouched. Decreasing the limit
+applies on the next successful autosave, not while moving the slider.
 
 The timestamp is local time. Workspace Load and Save histories remember
 the result, and the workspace extension in settings.mrmac is also updated.

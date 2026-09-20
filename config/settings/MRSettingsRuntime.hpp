@@ -750,6 +750,8 @@ bool setConfiguredFileCompareComparePanelReadOnly(bool enabled, std::string *err
 [[nodiscard]] bool configuredFileCompareComparePanelReadOnly();
 bool setConfiguredAutosaveWorkspace(bool enabled, std::string *errorMessage = nullptr);
 [[nodiscard]] bool configuredAutosaveWorkspace();
+bool setConfiguredWorkspaceAutosaveLimit(int limit, std::string *errorMessage = nullptr);
+[[nodiscard]] int configuredWorkspaceAutosaveLimit();
 void setRuntimePreserveAutosavedWorkspace(bool enabled);
 [[nodiscard]] bool runtimePreserveAutosavedWorkspace();
 bool setConfiguredAutoloadWorkspace(bool enabled, std::string *errorMessage = nullptr);

@@ -38,6 +38,7 @@
 #include "../ui/MREditWindow.hpp"
 #include "../ui/MRBentoBox/MRBentoBox.hpp"
 #include "../ui/MRFrame.hpp"
+#include "../ui/widgets/MRNumericSlider.hpp"
 #include "../ui/MRWindowLayout.hpp"
 #include "../ui/MRWindowSupport.hpp"
 #include "../ui/MRDesktopWindow.hpp"
@@ -441,14 +442,15 @@ class WindowListDialog : public MRDialogFoundation {
 		if (persistWorkspaceToggleSettings()) updateWorkspaceToggleButtons();
 	}
 
-	WindowListDialog(MRWindowListMode aMode, MREditWindow *aCurrent, MREditWindow *aPreferred) : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(computeWidth(), computeHeight(aMode, aCurrent)), "WINDOW LIST", computeWidth(), computeHeight(aMode, aCurrent), initMrDialogFrame), mode(aMode), current(aCurrent), preferred(aPreferred), listView(nullptr), scrollBar(nullptr), hideToggleButton(nullptr), hideAllButton(nullptr), getButton(nullptr), workspaceMainFileButton(nullptr), autosaveWorkspaceButton(nullptr), autoloadWorkspaceButton(nullptr), counterView(nullptr), selected(nullptr), lastFocusedIndex(-1) {
+	WindowListDialog(MRWindowListMode aMode, MREditWindow *aCurrent, MREditWindow *aPreferred) : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(computeWidth(), computeHeight(aMode, aCurrent)), "WINDOW LIST", computeWidth(), computeHeight(aMode, aCurrent), initMrDialogFrame), mode(aMode), current(aCurrent), preferred(aPreferred), listView(nullptr), scrollBar(nullptr), hideToggleButton(nullptr), hideAllButton(nullptr), getButton(nullptr), workspaceMainFileButton(nullptr), autosaveWorkspaceButton(nullptr), autoloadWorkspaceButton(nullptr), workspaceAutosaveLimitSlider(nullptr), counterView(nullptr), selected(nullptr), lastFocusedIndex(-1) {
 		int width = computeWidth();
 		int height = computeHeight(aMode, aCurrent);
 		int listTop = 7;
-		int listBottom = height - 6;
+		int listBottom = height - 9;
 		const int topButtonY = 2;
 		const int actionButtonY = 4;
-		const int workspaceButtonY = height - 5;
+		const int workspaceButtonY = height - 8;
+		const int autosaveLimitY = height - 5;
 		const int bottomButtonY = height - 3;
 		const int buttonGap = 2;
 		const int workspacePairGap = 1;
@@ -510,12 +512,14 @@ class WindowListDialog : public MRDialogFoundation {
 			insert(autosaveWorkspaceButton);
 			left += autoWidth + workspacePairGap;
 			insert(new TButton(TRect(left, workspaceButtonY, left + saveWidth, workspaceButtonY + 2), "Sa~v~e workspace", cmMRWorkspaceSave, bfNormal));
-			left += saveWidth + workspaceGroupGap;
+			left += saveWidth + workspaceGroupGap - 1;
 			autoloadWorkspaceButton = new TButton(TRect(left, workspaceButtonY, left + autoWidth, workspaceButtonY + 2), configuredAutoloadWorkspace() ? kAutoWorkspaceOnTitle : kAutoWorkspaceOffTitle, cmMRWorkspaceAutoloadToggle, bfNormal);
 			insert(autoloadWorkspaceButton);
 			left += autoWidth + workspacePairGap;
 			insert(new TButton(TRect(left, workspaceButtonY, left + loadWidth, workspaceButtonY + 2), "~L~oad workspace", cmMRWorkspaceLoad, bfNormal));
 		}
+		workspaceAutosaveLimitSlider = new MRNumericSlider(TRect(2, autosaveLimitY, std::min(width, static_cast<int>(size.x)) - 2, autosaveLimitY + 1), 1, 50, configuredWorkspaceAutosaveLimit(), 1, 5, MRNumericSlider::fmtRaw, cmMRNumericSliderChanged, this);
+		insert(workspaceAutosaveLimitSlider);
 		{
 			if (mode == mrwlManageWindows) {
 				const std::array bottomButtons{mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
@@ -555,6 +559,7 @@ class WindowListDialog : public MRDialogFoundation {
 		std::string line;
 		refreshEntries();
 		updateWorkspaceToggleButtons();
+		workspaceAutosaveLimitSlider->setValue(configuredWorkspaceAutosaveLimit());
 		focusPreferred();
 		if (windowListDebugEnabled()) {
 			line = "Window List activateModeless before visible=";
@@ -611,6 +616,11 @@ class WindowListDialog : public MRDialogFoundation {
 		const ushort originalCommand = event.what == evCommand || event.what == evBroadcast ? event.message.command : 0;
 		const int oldFocusForTiming = listView != nullptr ? listView->focused : -1;
 
+		if (event.what == evBroadcast && event.message.command == cmMRNumericSliderChanged && event.message.infoPtr == workspaceAutosaveLimitSlider) {
+			static_cast<void>(setConfiguredWorkspaceAutosaveLimit(workspaceAutosaveLimitSlider->getValue()));
+			clearEvent(event);
+			return;
+		}
 		if (event.what == evCommand && event.message.command == cmMRWindowListActivate && event.message.infoPtr == this) {
 			activateModeless();
 			{
@@ -683,7 +693,9 @@ class WindowListDialog : public MRDialogFoundation {
 
 		{
 			const auto phaseStartedAt = std::chrono::steady_clock::now();
+			const int previousAutosaveLimit = configuredWorkspaceAutosaveLimit();
 			MRDialogFoundation::handleEvent(event);
+			if (configuredWorkspaceAutosaveLimit() != previousAutosaveLimit) persistWorkspaceToggleSettings();
 			const long long phaseUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - phaseStartedAt).count();
 			if (phaseUs >= 10000) logWindowListTiming("Window List base event slow", phaseUs, "what=" + std::to_string(originalWhat) + " command=" + std::to_string(originalCommand));
 		}
@@ -827,7 +839,7 @@ class WindowListDialog : public MRDialogFoundation {
 		TRect desk = TProgram::deskTop->getExtent();
 		int deskHeight = desk.b.y - desk.a.y;
 		int listHeight = std::max(1, deskHeight / 2);
-		return std::max(12, listHeight + 12);
+		return std::max(15, listHeight + 15);
 	}
 
 	std::string renderRow(const WindowListEntry &entry) const {
@@ -1165,6 +1177,7 @@ class WindowListDialog : public MRDialogFoundation {
 	TButton *workspaceMainFileButton;
 	TButton *autosaveWorkspaceButton;
 	TButton *autoloadWorkspaceButton;
+	MRNumericSlider *workspaceAutosaveLimitSlider;
 	WindowListCounterView *counterView;
 	MREditWindow *selected;
 	int lastFocusedIndex;

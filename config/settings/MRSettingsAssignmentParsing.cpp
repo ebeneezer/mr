@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <map>
 #include <string>
 #include <string_view>
@@ -270,6 +271,7 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"FILE_COMPARE_START_CONFIGURATION", MRSettingsKeyClass::Global, true},
     {"FILE_COMPARE_COMPARE_PANEL_READ_ONLY", MRSettingsKeyClass::Global, true},
     {"AUTOSAVE_WORKSPACE", MRSettingsKeyClass::Global, true},
+    {"WORKSPACE_AUTOSAVE_LIMIT", MRSettingsKeyClass::Global, true},
     {"AUTOLOAD_WORKSPACE", MRSettingsKeyClass::Global, true},
     {"LOG_HANDLING", MRSettingsKeyClass::Global, true},
     {"LOGFILE", MRSettingsKeyClass::Global, true},
@@ -304,6 +306,17 @@ bool parseBooleanLiteral(const std::string &value, bool &outValue, std::string *
 		return true;
 	}
 	return setError(errorMessage, "Expected boolean literal true/false.");
+}
+
+bool parseWorkspaceAutosaveLimitLiteral(const std::string &value, int &outValue, std::string *errorMessage) {
+	const std::string text = trimAscii(value);
+	char *end = nullptr;
+	const long parsed = std::strtol(text.c_str(), &end, 10);
+
+	if (text.empty() || end == text.c_str() || *end != '\0' || parsed < 1 || parsed > 50) return setError(errorMessage, "WORKSPACE_AUTOSAVE_LIMIT must be within 1..50.");
+	outValue = static_cast<int>(parsed);
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
 }
 
 bool parseLogHandlingLiteral(const std::string &value, MRLogHandling &outValue, std::string *errorMessage) {

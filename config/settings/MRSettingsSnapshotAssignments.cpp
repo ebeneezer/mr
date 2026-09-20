@@ -457,6 +457,7 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 				if (!parseBooleanLiteral(value, snapshot.autosaveWorkspace, errorMessage)) return false;
 				return true;
 			}
+			if (upper == "WORKSPACE_AUTOSAVE_LIMIT") return parseWorkspaceAutosaveLimitLiteral(value, snapshot.workspaceAutosaveLimit, errorMessage);
 			if (upper == "AUTOLOAD_WORKSPACE") {
 				if (!parseBooleanLiteral(value, snapshot.autoloadWorkspace, errorMessage)) return false;
 				return true;

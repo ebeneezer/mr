@@ -18,6 +18,7 @@ bool setError(std::string *errorMessage, const std::string &message);
 void addHistoryEntry(std::vector<std::string> &entries, const std::string &value, int limit);
 void addSerializedHistoryEntry(std::vector<std::string> &entries, const std::string &value, int limit, bool normalizeAsPath);
 bool parseBooleanLiteral(const std::string &value, bool &outValue, std::string *errorMessage);
+bool parseWorkspaceAutosaveLimitLiteral(const std::string &value, int &outValue, std::string *errorMessage);
 bool parseLogHandlingLiteral(const std::string &value, MRLogHandling &outValue, std::string *errorMessage);
 bool parseLiveLogScrollDirectionLiteral(const std::string &value, MRLiveLogScrollDirection &outValue, std::string *errorMessage);
 bool parseCursorBehaviourLiteral(const std::string &value, MRCursorBehaviour &outValue, std::string *errorMessage);

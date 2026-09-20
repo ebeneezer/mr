@@ -1140,6 +1140,15 @@ in the remembered Workspace Save directory:
 \begin{verbatim}
 Autosave YYYY-MM-DD HH:MM:SS.mrmac
 \end{verbatim}
+The slider below the workspace buttons sets the number of autosave files to
+keep, from 1 through 50, with a default of 10. Its value is saved automatically.
+After each successful workspace autosave, the oldest files matching this exact
+naming pattern in the same directory are deleted, including existing files
+from earlier sessions. Age follows the timestamp in the name; the newly saved
+file is always kept. Other filenames, subdirectories and symbolic links are
+unaffected. Reducing the limit takes effect on the next successful autosave;
+turning workspace autosave off suspends cleanup as well.
+
 The timestamp is local time. Workspace Load and Save histories remember the
 result, and the workspace extension in \texttt{settings.mrmac} is also updated.
 Use \menu{Open workspace} or Get Last to select a saved snapshot. The name has
