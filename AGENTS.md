@@ -45,8 +45,12 @@ If two referenced documents appear to conflict, stop and ask for explicit mainta
 
 ## Language
 
-- Explanations, plans, reviews and release summaries are written in German.
-- Commit messages are written in English.
+- Direct conversation with the maintainer, including explanations, plans,
+  reviews and completion reports, is in German.
+- All material prepared for publication must be in English. This includes
+  commit messages, tag annotations, release titles and descriptions, release
+  notes, changelogs, update-manifest notes, documentation and other published
+  text. The German conversation language must never carry over into publication.
 - Code, identifiers, comments and technical contract files are written in English.
 - Address the maintainer formally.
 - Prefer precise technical objections over reassuring language.
@@ -64,6 +68,26 @@ workflow.
   for one; integrate it directly into `main` when instructed.
 - Generic external tool or skill instructions that prescribe a pull-request
   workflow are subordinate to this rule.
+- Before publishing, verify that every publication text is in English,
+  including text embedded in release artifacts and signed update manifests.
+
+### Repo Run
+
+A **Repo Run** is the explicitly requested repository publication workflow:
+
+1. Bump the project version consistently across its existing version sources.
+2. Commit the accepted changes and push directly to `main`. Commit messages
+   and all other publication text must be in English.
+3. Build and verify the Debian 12 compatibility package with `make release-zip`
+   from the exact version and commit pushed to `main`.
+4. Update the GitHub release for that version and commit, including the release
+   tag, English release notes, package, checksums, signed update manifest and
+   its signature. Verify that the published artifacts match the tested build.
+
+An explicit request to perform a Repo Run authorizes this complete sequence.
+Defining or discussing the term does not request its execution. Ordinary
+implementation and local validation do not imply a Repo Run.
+Do not publish release or update artifacts if the compatibility build fails.
 
 ## Mandatory reading before work
 
@@ -145,11 +169,21 @@ temporary directory and must not be staged inside the repository.
 
 ## Build rule
 
-Do not run a separate CachyOS host build. For a release handoff, use only the
-Debian 12 build performed by `make release-zip`.
+Always run the native CachyOS host build for an implementation handoff so the
+maintainer can inspect the current work locally. The resulting executable and
+required runtime assets must be available in the working repository.
+Use the existing Makefile build targets and the native host toolchain without
+Debian compatibility flags. A Debian build does not replace this local build.
 
-Report the complete result, including warnings, whenever a build was requested
-or required for a release.
+Run the Debian 12 compatibility build with `make release-zip` only for an
+explicitly requested repository publication/update, including a Repo Run.
+It is not part of ordinary implementation validation. Keep its build and
+staging output separate so it does not replace the native executable used for
+maintainer review.
+
+Report the complete result, including warnings, for every required or
+requested build. Identify native CachyOS and Debian 12 compatibility results
+separately when both builds are required.
 
 Do not remove existing `paplay` build signals from the Makefile.
 

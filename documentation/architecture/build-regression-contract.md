@@ -32,9 +32,33 @@ Versioned generated headers are treated as tracked source artifacts for clean-bu
   temporary directory, not inside the repository.
 - Version-specific release notes are publication metadata maintained directly
   on GitHub and must not be stored as files in the repository.
+- All published release text must be in English, as required by root
+  `AGENTS.md`. This includes GitHub release titles and bodies, external
+  release-notes input files, and notes embedded in release artifacts or signed
+  update manifests. Verify the language before packaging and signing.
 
-Build invocation, regression timing and `paplay` requirements are defined once
-in root [`AGENTS.md`](../../AGENTS.md).
+## Native validation and repository publication
+
+Root [`AGENTS.md`](../../AGENTS.md#build-rule) defines build invocation,
+regression timing and `paplay` requirements.
+
+- Every implementation handoff requires the native CachyOS build and a current
+  native executable with its required runtime assets in the working repository
+  for maintainer review.
+- The Debian 12 compatibility build is reserved for explicitly requested
+  repository publication/updates, including the
+  [Repo Run](../../AGENTS.md#repo-run) workflow. It does not replace the native
+  build and is not required for ordinary implementation validation.
+- A Repo Run bumps the version, commits and pushes the accepted changes to
+  `main` with English publication text, builds the Debian 12 compatibility
+  package, and updates the corresponding GitHub release and signed update
+  artifacts.
+- Build publication artifacts from the exact pushed commit in a separate
+  system-temporary source snapshot. Preserve the working repository's native
+  executable for local review.
+- Release tags, package versions, release notes, checksums and signed update
+  metadata must refer to the same published source state and verified build.
+- A failed compatibility build blocks publication of release/update artifacts.
 
 ## Boundaries
 

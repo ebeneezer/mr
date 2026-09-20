@@ -66,7 +66,11 @@ After implementation:
 - perform a sight review of the changed code,
 - propose regression checks only after that review, if they still look useful.
 
-A tranche is not complete until the build result is known.
+A tranche is not complete until the native CachyOS build result is known and
+the current native executable and required runtime assets are available in
+the working repository for maintainer review. A Debian 12 compatibility build
+is required only for an explicitly requested repository publication/update,
+including a Repo Run; it does not replace native validation.
 
 Bug fixes require a same-family impact audit before handoff. Treat a defect as
 evidence of a potentially affected class, not as an isolated symptom. Check the
@@ -109,3 +113,25 @@ approval workflow.
 - An explicit maintainer instruction to commit, push or release means direct
   publication to `main`.
 - Use a feature branch only when the maintainer explicitly requests it.
+- Apply the English-only publication rule in root `AGENTS.md` to every
+  publication surface: commits, tag annotations, release titles and bodies,
+  release notes, changelogs, documentation and update-manifest notes.
+- Review publication text for English before committing, tagging, packaging,
+  signing or publishing it. German conversation text is not publication copy.
+
+### Repo Run
+
+The canonical definition and authorization scope of **Repo Run** are in root
+[`AGENTS.md`](../../AGENTS.md#repo-run).
+
+Execute the requested sequence completely: bump the version, commit and push
+the accepted changes directly to `main` using English publication text, build
+the Debian 12 compatibility package from that exact pushed commit, and update
+the corresponding GitHub release and signed update artifacts.
+
+Use the native CachyOS build for local maintainer review before publication.
+Keep the Debian build and packaging in a separate system-temporary source
+snapshot. The snapshot must contain exactly the published source state.
+Publish artifacts only after a successful compatibility build and artifact
+verification. Report a failed publication step precisely; do not claim that
+the Repo Run completed when required work remains.
