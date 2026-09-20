@@ -864,16 +864,21 @@ std::string mrBuildOutlineTrainingAsciiForFoldSpans(const std::vector<std::strin
 	std::string output;
 	std::size_t structureCount = 0;
 	std::size_t functionsCount = 0;
-	std::vector<MRFoldSpan> orderedSpans = spans;
+	std::vector<const MRFoldSpan *> orderedSpans;
 
-	std::stable_sort(orderedSpans.begin(), orderedSpans.end(), [](const MRFoldSpan &lhs, const MRFoldSpan &rhs) {
-		if (lhs.startLine != rhs.startLine) return lhs.startLine < rhs.startLine;
-		return lhs.level < rhs.level;
+	orderedSpans.reserve(spans.size());
+	for (const MRFoldSpan &span : spans) orderedSpans.push_back(&span);
+	std::sort(orderedSpans.begin(), orderedSpans.end(), [](const MRFoldSpan *lhs, const MRFoldSpan *rhs) {
+		if (lhs->startLine != rhs->startLine) return lhs->startLine < rhs->startLine;
+		if (lhs->level != rhs->level) return lhs->level < rhs->level;
+		// Pointers into the same input vector preserve the original order of ties.
+		return lhs < rhs;
 	});
 	auto appendSection = [&](const char *title, MROutlineView view, std::size_t &count) {
 		std::string rows;
 		std::vector<MROutlineAcceptedKey> acceptedKeys;
-		for (const MRFoldSpan &span : orderedSpans) {
+		for (const MRFoldSpan *orderedSpan : orderedSpans) {
+			const MRFoldSpan &span = *orderedSpan;
 			if (span.startLine >= lineTexts.size()) continue;
 			const std::string_view trimmed = outlineTrimView(lineTexts[span.startLine]);
 			std::string_view endTrimmed;
@@ -912,7 +917,7 @@ bool mrBuildFoldOutlineSnapshotFromFoldState(MRSyntaxLanguage language, std::siz
 	std::vector<std::uint32_t> levelLast;
 	std::vector<std::uint32_t> lastChild;
 	std::set<MROutlineAcceptedKey> acceptedKeys;
-	std::vector<MRFoldSpan> orderedSpans = spans;
+	std::vector<const MRFoldSpan *> orderedSpans;
 
 	snapshot.documentId = documentId;
 	snapshot.version = version;
@@ -925,11 +930,16 @@ bool mrBuildFoldOutlineSnapshotFromFoldState(MRSyntaxLanguage language, std::siz
 	if (!request.allowPartial && !complete) return false;
 	if (outlineBuildCancelled(cancelFlag)) return false;
 
-	std::stable_sort(orderedSpans.begin(), orderedSpans.end(), [](const MRFoldSpan &lhs, const MRFoldSpan &rhs) {
-		if (lhs.startLine != rhs.startLine) return lhs.startLine < rhs.startLine;
-		return lhs.level < rhs.level;
+	orderedSpans.reserve(spans.size());
+	for (const MRFoldSpan &span : spans) orderedSpans.push_back(&span);
+	std::sort(orderedSpans.begin(), orderedSpans.end(), [](const MRFoldSpan *lhs, const MRFoldSpan *rhs) {
+		if (lhs->startLine != rhs->startLine) return lhs->startLine < rhs->startLine;
+		if (lhs->level != rhs->level) return lhs->level < rhs->level;
+		// Pointers into the same input vector preserve the original order of ties.
+		return lhs < rhs;
 	});
-	for (const MRFoldSpan &span : orderedSpans) {
+	for (const MRFoldSpan *orderedSpan : orderedSpans) {
+		const MRFoldSpan &span = *orderedSpan;
 		if (outlineBuildCancelled(cancelFlag)) return false;
 		if (span.startLine < topLine || span.startLine >= bottomLine) continue;
 		const std::size_t lineTextIndex = span.startLine - topLine;
