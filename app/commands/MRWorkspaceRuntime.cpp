@@ -44,9 +44,15 @@ bool autosaveWorkspacePath(std::time_t serializedAt, std::string &path) {
 
 	if (::localtime_r(&serializedAt, &localTime) == nullptr) return false;
 	if (std::strftime(dateTime, sizeof(dateTime), "%Y-%m-%d %H:%M:%S", &localTime) == 0) return false;
-	const std::string directory = effectiveRememberedLoadDirectory(MRDialogHistoryScope::WorkspaceSave);
+	const std::string directory = workspaceAutosaveDirectoryPath();
 	if (directory.empty()) return false;
-	path = (std::filesystem::path(directory) / (std::string("Autosave ") + dateTime + ".mrmac")).string();
+	std::error_code directoryError;
+	std::filesystem::create_directories(directory, directoryError);
+	if (directoryError) {
+		mrLogMessage("Workspace autosave directory could not be created: " + directory + ": " + directoryError.message());
+		return false;
+	}
+	path = (std::filesystem::path(directory) / (std::string(".MR autosaved Workspace ") + dateTime + ".mrmac")).string();
 	return true;
 }
 
@@ -182,13 +188,13 @@ void flushWorkspaceAutosave(bool force, std::uint64_t *nextWakeupMs = nullptr) {
 	for (std::filesystem::directory_iterator entry(directory, scanError), end; !scanError && entry != end; entry.increment(scanError)) {
 		const std::string name = entry->path().filename().string();
 		std::tm timestamp{};
-		char canonicalName[35]{};
+		char canonicalName[50]{};
 		std::error_code fileError;
 
-		if (name == savedName || name.size() != 34) continue;
-		const char *parsedEnd = ::strptime(name.c_str(), "Autosave %Y-%m-%d %H:%M:%S.mrmac", &timestamp);
+		if (name == savedName || name.size() != 49) continue;
+		const char *parsedEnd = ::strptime(name.c_str(), ".MR autosaved Workspace %Y-%m-%d %H:%M:%S.mrmac", &timestamp);
 		if (parsedEnd == nullptr || *parsedEnd != '\0') continue;
-		if (std::strftime(canonicalName, sizeof(canonicalName), "Autosave %Y-%m-%d %H:%M:%S.mrmac", &timestamp) == 0 || name != canonicalName) continue;
+		if (std::strftime(canonicalName, sizeof(canonicalName), ".MR autosaved Workspace %Y-%m-%d %H:%M:%S.mrmac", &timestamp) == 0 || name != canonicalName) continue;
 		const std::filesystem::file_status status = entry->symlink_status(fileError);
 		if (fileError) {
 			mrLogMessage("Workspace autosave retention could not inspect " + entry->path().string() + ": " + fileError.message());

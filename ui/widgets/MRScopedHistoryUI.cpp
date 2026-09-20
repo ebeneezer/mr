@@ -264,6 +264,10 @@ class TWheelFileDialog final : public TFileDialog {
 			return;
 		}
 		if (event.what == evCommand && event.message.command == cmMrFileDialogToggleHidden) {
+			if (scope == MRDialogHistoryScope::WorkspaceLoad || scope == MRDialogHistoryScope::WorkspaceSave) {
+				clearEvent(event);
+				return;
+			}
 			const bool active = !configuredFileDialogShowHiddenFiles();
 
 			static_cast<void>(setConfiguredFileDialogShowHiddenFiles(active));
@@ -386,7 +390,9 @@ class TWheelFileDialog final : public TFileDialog {
 			nextTop = static_cast<short>(bounds.a.y + 3);
 		}
 
-		hiddenButton = new TFileDialogToggleButton(hiddenBounds, cmMrFileDialogToggleHidden, configuredFileDialogShowHiddenFiles());
+		const bool workspaceDialog = scope == MRDialogHistoryScope::WorkspaceLoad || scope == MRDialogHistoryScope::WorkspaceSave;
+		hiddenButton = new TFileDialogToggleButton(hiddenBounds, cmMrFileDialogToggleHidden, workspaceDialog || configuredFileDialogShowHiddenFiles());
+		if (workspaceDialog) hiddenButton->setState(sfDisabled, True);
 		hiddenButton->growMode = primary->growMode;
 		insert(hiddenButton);
 	}
@@ -397,7 +403,8 @@ class TWheelFileDialog final : public TFileDialog {
 		char path[MAXPATH] = {0};
 		bool inserted = false;
 
-		if (!configuredFileDialogShowHiddenFiles() || fileList == nullptr || directory == nullptr) return;
+		if (fileList == nullptr || directory == nullptr) return;
+		if (scope != MRDialogHistoryScope::WorkspaceLoad && scope != MRDialogHistoryScope::WorkspaceSave && !configuredFileDialogShowHiddenFiles()) return;
 		entries = fileList->list();
 		if (entries == nullptr) return;
 

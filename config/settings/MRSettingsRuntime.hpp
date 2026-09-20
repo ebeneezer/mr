@@ -769,6 +769,7 @@ bool setConfiguredLastFileDialogPath(const std::string &path, std::string *error
 bool validateSettingsMacroFilePath(const std::string &path, std::string *errorMessage = nullptr);
 bool setConfiguredSettingsMacroFilePath(const std::string &path, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string configuredSettingsMacroFilePath();
+[[nodiscard]] std::string workspaceAutosaveDirectoryPath();
 bool validateMacroDirectoryPath(const std::string &path, std::string *errorMessage = nullptr);
 bool setConfiguredMacroDirectoryPath(const std::string &path, std::string *errorMessage = nullptr);
 [[nodiscard]] std::string configuredMacroDirectoryPath();

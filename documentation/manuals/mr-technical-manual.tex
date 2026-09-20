@@ -2069,9 +2069,11 @@ The result is a TUI workspace in which many windows need not form an
 unmanageable parade. They can live on virtual desktops and reappear in a
 workspace exactly where work was interrupted.
 
-Workspace autosave also writes a named snapshot in the remembered Workspace
-Save directory, using local time in the form
-\texttt{Autosave YYYY-MM-DD HH:MM:SS.mrmac}. It remembers that path in both
+Workspace autosave also writes a hidden named snapshot under the standard MR
+configuration directory in \texttt{workspaces/}, independently of dialog history
+and a relocated settings file. The existing XDG/HOME path resolution applies.
+The local-time filename is
+\texttt{.MR autosaved Workspace YYYY-MM-DD HH:MM:SS.mrmac}. It remembers that path in both
 workspace histories before persisting the workspace extension with the normal
 settings snapshot. A failed write leaves autosave dirty and schedules a retry.
 After both writes succeed, \texttt{WORKSPACE\_AUTOSAVE\_LIMIT} bounds the
@@ -2081,6 +2083,12 @@ newest remaining regular files by filename timestamp. Older matching files
 are removed, and successful deletions are removed from both workspace file
 histories through the existing history and settings persistence paths.
 Symbolic links and directories are excluded. Cleanup failures are logged.
+
+Both workspace file dialogs always include hidden entries without changing
+the global Hidden preference. Existing usable dialog history takes precedence;
+the autosave directory is the fallback for empty or unusable history. Directory
+creation uses the existing save retry path on failure, or logs a dialog seed
+failure. Manual saves retain their selected destination.
 
 The one-second timestamp resolution permits same-second replacement; this is
 not a transactional revision archive.

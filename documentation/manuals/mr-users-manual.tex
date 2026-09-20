@@ -1136,10 +1136,17 @@ saving and startup loading; the neighbouring buttons perform explicit Save
 workspace and Load workspace operations.}
 
 With workspace autosave enabled, a successful autosave writes a named snapshot
-in the remembered Workspace Save directory:
+in \texttt{\textasciitilde/.config/mr/workspaces/}, or
+\texttt{\$XDG\_CONFIG\_HOME/mr/workspaces/} when configured:
 \begin{verbatim}
-Autosave YYYY-MM-DD HH:MM:SS.mrmac
+.MR autosaved Workspace YYYY-MM-DD HH:MM:SS.mrmac
 \end{verbatim}
+The leading dot hides these files in ordinary directory listings. Both workspace
+file dialogs always show hidden files, independently of the general Hidden
+preference. Their history determines the initial directory; with no usable
+history they start in this autosave directory, creating it when needed.
+Manual workspace saves still use the selected filename and directory.
+
 The slider below the workspace buttons sets the number of autosave files to
 keep, from 1 through 50, with a default of 10. Its value is saved automatically.
 After each successful workspace autosave, the oldest files matching this exact

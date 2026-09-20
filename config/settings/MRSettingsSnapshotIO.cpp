@@ -159,6 +159,9 @@ std::string fallbackRememberedLoadDirectory(const MRSettingsSnapshot &snapshot, 
 	std::string cwd = currentWorkingDirectory();
 
 	switch (scope) {
+		case MRDialogHistoryScope::WorkspaceLoad:
+		case MRDialogHistoryScope::WorkspaceSave:
+			return workspaceAutosaveDirectoryPath();
 		case MRDialogHistoryScope::MacroFile:
 		case MRDialogHistoryScope::SetupMacroDirectory:
 		case MRDialogHistoryScope::ExtensionPostLoadMacro:

@@ -328,6 +328,10 @@ std::string configuredSettingsMacroFilePath() {
 	return resolveSetupPathDefaults().settingsMacroUri;
 }
 
+std::string workspaceAutosaveDirectoryPath() {
+	return appendPathSegment(directoryPartOf(resolveSetupPathDefaults().settingsMacroUri), "workspaces");
+}
+
 bool validateMacroDirectoryPath(const std::string &path, std::string *errorMessage) {
 	std::string normalized = normalizeConfiguredPathInput(path);
 

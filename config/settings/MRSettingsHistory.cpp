@@ -1,4 +1,5 @@
 #include "../../app/utils/MRStringUtils.hpp"
+#include "../../ui/MRWindowSupport.hpp"
 #include "MRSettingsHistory.hpp"
 #include "MRSettingsRuntimeState.hpp"
 #include "../../mrmac/mrmac.h"
@@ -8,6 +9,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <ctime>
+#include <filesystem>
 #include <mutex>
 
 MRVMRuntimeKv &mrvmRuntimeKv() noexcept;
@@ -361,6 +363,9 @@ namespace {
 
 std::string defaultRememberedLoadDirectory(MRDialogHistoryScope scope) {
 	switch (scope) {
+		case MRDialogHistoryScope::WorkspaceLoad:
+		case MRDialogHistoryScope::WorkspaceSave:
+			return workspaceAutosaveDirectoryPath();
 		case MRDialogHistoryScope::MacroFile:
 		case MRDialogHistoryScope::SetupMacroDirectory:
 		case MRDialogHistoryScope::ExtensionPostLoadMacro:
@@ -545,6 +550,11 @@ void initRememberedLoadDialogPath(MRDialogHistoryScope scope, char *buffer, std:
 	std::string dir = effectiveRememberedLoadDirectory(scope);
 	const char *safePattern = (pattern != nullptr && *pattern != '\0') ? pattern : "*.*";
 
+	if (scope == MRDialogHistoryScope::WorkspaceLoad || scope == MRDialogHistoryScope::WorkspaceSave) {
+		std::error_code directoryError;
+		std::filesystem::create_directories(dir, directoryError);
+		if (directoryError) mrLogMessage("Workspace dialog directory could not be created: " + dir + ": " + directoryError.message());
+	}
 	if (!dir.empty()) {
 		initial = dir;
 		if (initial.back() != '/') initial += '/';

@@ -855,12 +855,17 @@ Get moves a window from another virtual desktop into the current desktop.
 
 Main workspace selects the workspace's main file. Autosave workspace and
 Autoload workspace toggle their settings. Save workspace and Load workspace
-open the corresponding file dialogs.
+open the corresponding file dialogs. With no usable history, these dialogs
+start in ~/.config/mr/workspaces/ (or $XDG_CONFIG_HOME/mr/workspaces/).
+Hidden files are always visible in both workspace dialogs; their Hidden
+button shows the fixed active state. The general file-dialog Hidden
+preference is unaffected.
 
 The slider below these buttons sets the number of workspace autosave files
 to keep: 1 through 50, default 10. The value is saved automatically. After a
-successful workspace autosave, the oldest timestamped autosave files in its
-save directory are removed to meet this limit, including existing files.
+successful workspace autosave, the oldest timestamped autosave files in
+~/.config/mr/workspaces/ are removed to meet this limit. These files are
+hidden and named .MR autosaved Workspace <timestamp>.mrmac.
 The newly saved file is always kept. Manually named workspaces are unaffected.
 Lowering the limit takes effect on the next successful workspace autosave;
 with workspace autosave off, no files are removed.
@@ -2562,9 +2567,15 @@ neighbouring buttons perform explicit Save workspace and Load workspace
 operations.
 
 With workspace autosave enabled, a successful autosave writes a named
-snapshot in the remembered Workspace Save directory:
+snapshot in ~/.config/mr/workspaces/ (or $XDG_CONFIG_HOME/mr/workspaces/):
 
-  Autosave YYYY-MM-DD HH:MM:SS.mrmac
+  .MR autosaved Workspace YYYY-MM-DD HH:MM:SS.mrmac
+
+The leading dot hides these files in ordinary directory listings. Workspace
+Load and Save always show hidden files. Their history determines the initial
+directory; with no usable history they start in this autosave directory.
+The directory is created when needed. Manual workspace saves still use the
+filename and directory selected in the Save dialog.
 
 The slider below the workspace buttons in Window > List controls how many
 of these files are kept (1 through 50, default 10). After each successful
