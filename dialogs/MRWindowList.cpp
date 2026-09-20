@@ -446,10 +446,10 @@ class WindowListDialog : public MRDialogFoundation {
 		int width = computeWidth();
 		int height = computeHeight(aMode, aCurrent);
 		int listTop = 7;
-		int listBottom = height - 9;
+		int listBottom = height - 8;
 		const int topButtonY = 2;
 		const int actionButtonY = 4;
-		const int workspaceButtonY = height - 8;
+		const int workspaceButtonY = height - 7;
 		const int autosaveLimitY = height - 5;
 		const int bottomButtonY = height - 3;
 		const int buttonGap = 2;
@@ -839,7 +839,7 @@ class WindowListDialog : public MRDialogFoundation {
 		TRect desk = TProgram::deskTop->getExtent();
 		int deskHeight = desk.b.y - desk.a.y;
 		int listHeight = std::max(1, deskHeight / 2);
-		return std::max(15, listHeight + 15);
+		return std::max(14, listHeight + 14);
 	}
 
 	std::string renderRow(const WindowListEntry &entry) const {
