@@ -40,6 +40,8 @@ namespace {
 
 enum class PendingMiKind : unsigned char {
 	None,
+	Threads,
+	Execution,
 	ToggleQuery,
 	BreakpointMutation,
 	BreakpointRefresh,
@@ -49,9 +51,7 @@ enum class PendingMiKind : unsigned char {
 	VariableChildren,
 	VariableAssign,
 	Evaluate,
-	WatchCreate,
-	WatchDelete,
-	WatchUpdate
+	WatchCreate
 };
 
 struct PendingMiCommand {
@@ -65,6 +65,11 @@ struct PendingMiCommand {
 	std::size_t rowLimit;
 	std::uint64_t refreshGeneration;
 	bool watch;
+};
+
+struct GdbWatch {
+	std::string expression;
+	std::string objectName;
 };
 
 struct GdbProcess {
@@ -87,7 +92,11 @@ struct GdbProcess {
 	bool inferiorHasRun;
 	unsigned nextToken;
 	std::map<unsigned, PendingMiCommand> pending;
-	std::map<std::string, MRGdbMiVariable> watches;
+	std::map<std::string, GdbWatch> watches;
+	std::string threadId;
+	bool stopped = false;
+	std::uint64_t stopGeneration = 0;
+	std::uint64_t contextGeneration = 0;
 	std::vector<std::string> localVariableRoots;
 	std::vector<MRGdbMiVariable> localVariables;
 	std::vector<MRGdbMiVariable> watchVariables;
@@ -132,7 +141,10 @@ bool writeAll(int fd, const std::string &text) {
 	return true;
 }
 
-void postGdbEvent(const mr::coprocessor::TaskInfo &info, std::size_t sourceId, int targetBufferId, std::uint64_t generation, MRGdbEvent event) {
+void postGdbEvent(const GdbProcess &process, const mr::coprocessor::TaskInfo &info, std::size_t sourceId, int targetBufferId, std::uint64_t generation, MRGdbEvent event) {
+	event.threadId = process.threadId;
+	event.stopGeneration = process.stopGeneration;
+	event.contextGeneration = process.contextGeneration;
 	mr::coprocessor::Result result;
 	result.task = info;
 	result.status = mr::coprocessor::TaskStatus::Completed;
@@ -170,15 +182,21 @@ void requestStoppedState(GdbProcess &process) {
 	PendingMiCommand frame;
 	frame.kind = PendingMiKind::FrameDepth;
 	frame.refreshGeneration = process.variableRefreshGeneration;
-	if (sendMi(process, "-stack-info-depth", std::move(frame)) != 0) ++process.variableOutstanding;
+	if (sendMi(process, "-stack-info-depth --thread " + process.threadId, std::move(frame)) != 0) ++process.variableOutstanding;
 	PendingMiCommand variables;
 	variables.kind = PendingMiKind::VariableNames;
 	variables.refreshGeneration = process.variableRefreshGeneration;
-	if (sendMi(process, "-stack-list-variables --no-values", std::move(variables)) != 0) ++process.variableOutstanding;
-	PendingMiCommand watches;
-	watches.kind = PendingMiKind::WatchUpdate;
-	watches.refreshGeneration = process.variableRefreshGeneration;
-	if (sendMi(process, "-var-update --all-values *", std::move(watches)) != 0) ++process.variableOutstanding;
+	if (sendMi(process, "-stack-list-variables --thread " + process.threadId + " --frame 0 --no-values", std::move(variables)) != 0) ++process.variableOutstanding;
+	for (auto &entry : process.watches) {
+		GdbWatch &watch = entry.second;
+		if (!watch.objectName.empty()) static_cast<void>(sendMi(process, "-var-delete " + watch.objectName));
+		watch.objectName.clear();
+		PendingMiCommand create;
+		create.kind = PendingMiKind::WatchCreate;
+		create.text = entry.first;
+		create.refreshGeneration = process.variableRefreshGeneration;
+		if (sendMi(process, "-var-create --thread " + process.threadId + " --frame 0 - * " + mrGdbMiQuote(watch.expression), std::move(create)) != 0) ++process.variableOutstanding;
+	}
 	requestBreakpointRefresh(process);
 }
 
@@ -189,6 +207,14 @@ void invalidateVariableRefresh(GdbProcess &process) noexcept {
 	process.variableChildrenRunning = false;
 	process.localVariables.clear();
 	process.watchVariables.clear();
+}
+
+void requestThreadSnapshot(GdbProcess &process) {
+	invalidateVariableRefresh(process);
+	PendingMiCommand pending;
+	pending.kind = PendingMiKind::Threads;
+	pending.refreshGeneration = process.variableRefreshGeneration;
+	static_cast<void>(sendMi(process, "-thread-info", std::move(pending)));
 }
 
 bool breakpointTargetsSource(const MRGdbMiBreakpoint &breakpoint, const std::string &sourcePath) {
@@ -206,7 +232,7 @@ void postBreakpointProjection(const GdbProcess &process, const mr::coprocessor::
 	event.kind = MRGdbEventKind::Breakpoints;
 	for (const MRGdbMiBreakpoint &breakpoint : breakpoints)
 		if (breakpoint.line > 0 && breakpointTargetsSource(breakpoint, process.sourcePath)) event.breakpointLines.push_back(breakpoint.line);
-	postGdbEvent(info, sourceId, targetBufferId, generation, std::move(event));
+	postGdbEvent(process, info, sourceId, targetBufferId, generation, std::move(event));
 }
 
 void handleToggleQuery(GdbProcess &process, const PendingMiCommand &pending, const std::string &raw) {
@@ -228,14 +254,14 @@ void handleToggleQuery(GdbProcess &process, const PendingMiCommand &pending, con
 }
 
 bool variableRefreshCommand(PendingMiKind kind) noexcept {
-	return kind == PendingMiKind::FrameDepth || kind == PendingMiKind::WatchUpdate || kind == PendingMiKind::VariableNames || kind == PendingMiKind::VariableCreate || kind == PendingMiKind::VariableChildren;
+	return kind == PendingMiKind::FrameDepth || kind == PendingMiKind::WatchCreate || kind == PendingMiKind::VariableNames || kind == PendingMiKind::VariableCreate || kind == PendingMiKind::VariableChildren;
 }
 
 void appendVariableTree(const std::string &parentObjectName, const std::vector<MRGdbMiVariable> &source, std::vector<MRGdbMiVariable> &target, std::set<std::string> &visited) {
 	for (const MRGdbMiVariable &variable : source) {
-		if (variable.parentObjectName != parentObjectName || !visited.insert(variable.objectName).second) continue;
+		if (variable.parentObjectName != parentObjectName || !visited.insert(variable.objectName.empty() ? variable.identity : variable.objectName).second) continue;
 		target.push_back(variable);
-		appendVariableTree(variable.objectName, source, target, visited);
+		if (!variable.objectName.empty()) appendVariableTree(variable.objectName, source, target, visited);
 	}
 }
 
@@ -247,12 +273,13 @@ void postVariableProjectionIfComplete(GdbProcess &process, const mr::coprocessor
 	event.text = process.frameIdentity + ":" + std::to_string(process.frameDepth);
 	event.variables.reserve(process.localVariables.size());
 	appendVariableTree(std::string(), process.localVariables, event.variables, visited);
-	postGdbEvent(info, sourceId, targetBufferId, generation, std::move(event));
+	postGdbEvent(process, info, sourceId, targetBufferId, generation, std::move(event));
 	MRGdbEvent watchEvent;
 	watchEvent.kind = MRGdbEventKind::Watches;
+	watchEvent.text = process.frameIdentity + ":" + std::to_string(process.frameDepth);
 	visited.clear();
 	appendVariableTree(std::string(), process.watchVariables, watchEvent.variables, visited);
-	postGdbEvent(info, sourceId, targetBufferId, generation, std::move(watchEvent));
+	postGdbEvent(process, info, sourceId, targetBufferId, generation, std::move(watchEvent));
 }
 
 void dispatchNextVariableChildren(GdbProcess &process) {
@@ -300,17 +327,18 @@ void handleMiRecord(GdbProcess &process, const MRGdbMiRecord &record, const mr::
 			MRGdbEvent event;
 			event.kind = MRGdbEventKind::DebuggerOutput;
 			event.text = record.text;
-			postGdbEvent(info, sourceId, targetBufferId, generation, std::move(event));
+			postGdbEvent(process, info, sourceId, targetBufferId, generation, std::move(event));
 		}
 		return;
 	}
 	if (record.kind == MRGdbMiRecordKind::Target) return;
 	if (record.kind == MRGdbMiRecordKind::Exec && record.resultClass == "running") {
 		process.inferiorHasRun = true;
+		process.stopped = false;
 		invalidateVariableRefresh(process);
 		MRGdbEvent event;
 		event.kind = MRGdbEventKind::Running;
-		postGdbEvent(info, sourceId, targetBufferId, generation, std::move(event));
+		postGdbEvent(process, info, sourceId, targetBufferId, generation, std::move(event));
 		return;
 	}
 	if (record.kind == MRGdbMiRecordKind::Exec && record.resultClass == "stopped") {
@@ -320,12 +348,16 @@ void handleMiRecord(GdbProcess &process, const MRGdbMiRecord &record, const mr::
 		event.file = mrGdbMiField(record.raw, "fullname");
 		if (event.file.empty()) event.file = mrGdbMiField(record.raw, "file");
 		event.line = mrGdbMiIntField(record.raw, "line", 0);
+		process.threadId = mrGdbMiField(record.raw, "thread-id");
+		++process.stopGeneration;
 		process.frameIdentity = event.file + ":" + mrGdbMiField(record.raw, "func") + ":" + mrGdbMiField(record.raw, "thread-id");
 		process.frameDepth = 0;
 		const bool inferiorExited = event.text.rfind("exited", 0) == 0;
+		process.stopped = !inferiorExited;
+		invalidateVariableRefresh(process);
 		if (inferiorExited) process.inferiorHasRun = false;
-		postGdbEvent(info, sourceId, targetBufferId, generation, std::move(event));
-		if (!inferiorExited) requestStoppedState(process);
+		postGdbEvent(process, info, sourceId, targetBufferId, generation, std::move(event));
+		if (!inferiorExited) requestThreadSnapshot(process);
 		return;
 	}
 	if (record.kind != MRGdbMiRecordKind::Result) return;
@@ -337,22 +369,74 @@ void handleMiRecord(GdbProcess &process, const MRGdbMiRecord &record, const mr::
 	}
 	if (record.resultClass == "running") {
 		process.inferiorHasRun = true;
+		process.stopped = false;
 		invalidateVariableRefresh(process);
 		MRGdbEvent event;
 		event.kind = MRGdbEventKind::Running;
-		postGdbEvent(info, sourceId, targetBufferId, generation, std::move(event));
+		postGdbEvent(process, info, sourceId, targetBufferId, generation, std::move(event));
+	}
+	if ((variableRefreshCommand(pending.kind) || pending.kind == PendingMiKind::Threads || pending.kind == PendingMiKind::Evaluate || pending.kind == PendingMiKind::VariableAssign) && pending.refreshGeneration != process.variableRefreshGeneration) {
+		if (pending.kind == PendingMiKind::VariableCreate || pending.kind == PendingMiKind::WatchCreate) {
+			const std::string objectName = mrGdbMiField(record.raw, "name");
+			if (!objectName.empty()) static_cast<void>(sendMi(process, "-var-delete " + objectName));
+		}
+		return;
 	}
 	if (record.resultClass == "error") {
 		MRGdbEvent event;
 		event.kind = MRGdbEventKind::DebuggerOutput;
-		if (pending.kind == PendingMiKind::WatchCreate)
-			event.text = "Watch '" + pending.text + "' unavailable: " + mrGdbMiField(record.raw, "msg") + ". Stop after its declaration and rebuild if the source changed.\n";
-		else event.text = "GDB: " + mrGdbMiField(record.raw, "msg") + "\n";
-		postGdbEvent(info, sourceId, targetBufferId, generation, std::move(event));
+		if (pending.kind == PendingMiKind::WatchCreate) {
+			const auto watch = process.watches.find(pending.text);
+			if (watch != process.watches.end()) {
+				MRGdbMiVariable variable;
+				variable.identity = pending.text;
+				variable.name = watch->second.expression;
+				variable.value = "<out of scope>";
+				process.watchVariables.push_back(std::move(variable));
+			}
+			finishVariableCommand(process, pending, info, sourceId, targetBufferId, generation);
+			return;
+		}
+		event.text = "GDB: " + mrGdbMiField(record.raw, "msg") + "\n";
+		postGdbEvent(process, info, sourceId, targetBufferId, generation, std::move(event));
+		if (pending.kind == PendingMiKind::Execution) {
+			process.stopped = true;
+			MRGdbEvent stopped;
+			stopped.kind = MRGdbEventKind::Stopped;
+			stopped.text = "command-error";
+			postGdbEvent(process, info, sourceId, targetBufferId, generation, std::move(stopped));
+			requestThreadSnapshot(process);
+		} else if (pending.kind == PendingMiKind::Threads) {
+			MRGdbEvent threads;
+			threads.kind = MRGdbEventKind::Threads;
+			process.threadId.clear();
+			postGdbEvent(process, info, sourceId, targetBufferId, generation, std::move(threads));
+		}
+		if (pending.kind == PendingMiKind::Evaluate || pending.kind == PendingMiKind::VariableAssign) requestStoppedState(process);
 		finishVariableCommand(process, pending, info, sourceId, targetBufferId, generation);
 		return;
 	}
 	switch (pending.kind) {
+		case PendingMiKind::Threads: {
+			MRGdbEvent event;
+			event.kind = MRGdbEventKind::Threads;
+			mrGdbMiThreads(record.raw, event.threads);
+			const MRGdbMiThread *selected = nullptr;
+			for (const MRGdbMiThread &thread : event.threads)
+				if (thread.id == process.threadId) selected = &thread;
+			if (selected == nullptr && !event.threads.empty()) selected = &event.threads.front();
+			process.threadId = selected != nullptr ? selected->id : std::string();
+			if (selected != nullptr) {
+				event.file = selected->file;
+				event.line = selected->line;
+				process.frameIdentity = selected->file + ":" + selected->function + ":" + selected->id;
+			}
+			process.frameDepth = 0;
+			postGdbEvent(process, info, sourceId, targetBufferId, generation, std::move(event));
+			if (!process.threadId.empty()) requestStoppedState(process);
+			break;
+		}
+
 		case PendingMiKind::ToggleQuery:
 			handleToggleQuery(process, pending, record.raw);
 			break;
@@ -376,7 +460,7 @@ void handleMiRecord(GdbProcess &process, const MRGdbMiRecord &record, const mr::
 					create.kind = PendingMiKind::VariableCreate;
 					create.text = variable.name;
 					create.refreshGeneration = process.variableRefreshGeneration;
-					if (sendMi(process, "-var-create - * " + mrGdbMiQuote(variable.name), std::move(create)) != 0) ++process.variableOutstanding;
+					if (sendMi(process, "-var-create --thread " + process.threadId + " --frame 0 - * " + mrGdbMiQuote(variable.name), std::move(create)) != 0) ++process.variableOutstanding;
 				}
 			}
 			finishVariableCommand(process, pending, info, sourceId, targetBufferId, generation);
@@ -422,46 +506,28 @@ void handleMiRecord(GdbProcess &process, const MRGdbMiRecord &record, const mr::
 			MRGdbEvent event;
 			event.kind = MRGdbEventKind::DebuggerOutput;
 			event.text = "Evaluate: " + pending.text + " = " + mrGdbMiField(record.raw, "value") + "\n";
-			postGdbEvent(info, sourceId, targetBufferId, generation, std::move(event));
+			postGdbEvent(process, info, sourceId, targetBufferId, generation, std::move(event));
 			requestStoppedState(process);
 			break;
 		}
 		case PendingMiKind::WatchCreate: {
-			MRGdbMiVariable watch;
-			watch.objectName = mrGdbMiField(record.raw, "name");
-			watch.name = pending.text;
-			watch.value = mrGdbMiField(record.raw, "value");
-			watch.type = mrGdbMiField(record.raw, "type");
-			watch.childCount = mrGdbMiIntField(record.raw, "numchild", 0);
-			if (!watch.objectName.empty()) process.watches[watch.objectName] = std::move(watch);
-			requestStoppedState(process);
-			break;
-		}
-		case PendingMiKind::WatchDelete:
-			process.watches.erase(pending.text);
-			requestStoppedState(process);
-			break;
-		case PendingMiKind::WatchUpdate: {
-			if (pending.refreshGeneration == process.variableRefreshGeneration) {
-				std::vector<MRGdbMiVariable> changes;
-				mrGdbMiChanges(record.raw, changes);
-				for (const MRGdbMiVariable &change : changes) {
-					const auto watch = process.watches.find(change.name);
-					if (watch == process.watches.end()) continue;
-					if (change.type == "false" || change.type == "invalid") watch->second.value = "<out of scope>";
-					else if (!change.value.empty()) watch->second.value = change.value;
-					else if (change.type == "true" && watch->second.childCount > 0) watch->second.value = "{...}";
-				}
-				for (const auto &entry : process.watches) {
-					if (process.watchVariables.size() >= kVariableMaximumRows) break;
-					const MRGdbMiVariable &watch = entry.second;
-					process.watchVariables.push_back(watch);
-					if (watch.childCount > 0 && watch.value != "<out of scope>") requestVariableChildren(process, watch.objectName, 1, true);
-				}
+			const auto watch = process.watches.find(pending.text);
+			if (watch != process.watches.end()) {
+				MRGdbMiVariable variable;
+				variable.identity = pending.text;
+				variable.name = watch->second.expression;
+				variable.objectName = mrGdbMiField(record.raw, "name");
+				variable.value = mrGdbMiField(record.raw, "value");
+				variable.type = mrGdbMiField(record.raw, "type");
+				variable.childCount = mrGdbMiIntField(record.raw, "numchild", 0);
+				watch->second.objectName = variable.objectName;
+				process.watchVariables.push_back(variable);
+				if (variable.childCount > 0) requestVariableChildren(process, variable.objectName, 1, true);
 			}
 			finishVariableCommand(process, pending, info, sourceId, targetBufferId, generation);
 			break;
 		}
+		case PendingMiKind::Execution:
 		case PendingMiKind::None:
 			break;
 	}
@@ -567,25 +633,50 @@ void terminateGdbProcess(GdbProcess &process) noexcept {
 }
 
 void dispatchControlCommand(GdbProcess &process, const MRGdbCommand &command) {
+	const bool execution = command.kind == MRGdbCommandKind::ContinueExecution || command.kind == MRGdbCommandKind::StepInto || command.kind == MRGdbCommandKind::StepOver || command.kind == MRGdbCommandKind::StepOut || command.kind == MRGdbCommandKind::RunToLocation;
+	const bool refreshesValues = command.kind == MRGdbCommandKind::SelectThread || command.kind == MRGdbCommandKind::Evaluate || command.kind == MRGdbCommandKind::AssignVariable || command.kind == MRGdbCommandKind::AddWatch || command.kind == MRGdbCommandKind::EraseWatch;
+	bool contextual = execution && process.inferiorHasRun;
 	switch (command.kind) {
+		case MRGdbCommandKind::SelectThread:
+		case MRGdbCommandKind::Evaluate:
+		case MRGdbCommandKind::AssignVariable:
+		case MRGdbCommandKind::AddWatch:
+		case MRGdbCommandKind::EraseWatch: contextual = true; break;
+		default: break;
+	}
+	if (contextual && (!process.stopped || command.stopGeneration != process.stopGeneration)) return;
+	if (contextual && command.kind != MRGdbCommandKind::SelectThread && (command.threadId != process.threadId || command.contextGeneration != process.contextGeneration + (refreshesValues ? 1 : 0))) return;
+	if (command.kind == MRGdbCommandKind::SelectThread) {
+		if (command.contextGeneration <= process.contextGeneration || command.threadId.empty() || command.threadId.find_first_not_of("0123456789") != std::string::npos) return;
+		process.contextGeneration = command.contextGeneration;
+		process.threadId = command.threadId;
+		requestThreadSnapshot(process);
+		return;
+	}
+	if (refreshesValues) process.contextGeneration = command.contextGeneration;
+	PendingMiCommand resume;
+	resume.kind = PendingMiKind::Execution;
+	switch (command.kind) {
+		case MRGdbCommandKind::SelectThread:
+			break;
 		case MRGdbCommandKind::ContinueExecution:
-			static_cast<void>(sendMi(process, process.inferiorHasRun ? "-exec-continue" : "-exec-run"));
+			static_cast<void>(sendMi(process, process.inferiorHasRun ? "-exec-continue" : "-exec-run", resume));
 			break;
 		case MRGdbCommandKind::PauseExecution:
 			static_cast<void>(sendMi(process, "-exec-interrupt --all"));
 			break;
 		case MRGdbCommandKind::RunToLocation:
 			static_cast<void>(sendMi(process, "-break-insert -t " + sourceLocation(command.file, command.line)));
-			static_cast<void>(sendMi(process, process.inferiorHasRun ? "-exec-continue" : "-exec-run"));
+			static_cast<void>(sendMi(process, process.inferiorHasRun ? "-exec-continue" : "-exec-run", resume));
 			break;
 		case MRGdbCommandKind::StepInto:
-			static_cast<void>(sendMi(process, process.inferiorHasRun ? "-exec-step" : "-exec-run --start"));
+			static_cast<void>(sendMi(process, process.inferiorHasRun ? "-exec-step --thread " + process.threadId : "-exec-run --start", resume));
 			break;
 		case MRGdbCommandKind::StepOver:
-			static_cast<void>(sendMi(process, process.inferiorHasRun ? "-exec-next" : "-exec-run --start"));
+			static_cast<void>(sendMi(process, process.inferiorHasRun ? "-exec-next --thread " + process.threadId : "-exec-run --start", resume));
 			break;
 		case MRGdbCommandKind::StepOut:
-			static_cast<void>(sendMi(process, "-exec-finish"));
+			static_cast<void>(sendMi(process, "-exec-finish --thread " + process.threadId, resume));
 			break;
 		case MRGdbCommandKind::ToggleBreakpoint: {
 			PendingMiCommand pending;
@@ -599,33 +690,41 @@ void dispatchControlCommand(GdbProcess &process, const MRGdbCommand &command) {
 			static_cast<void>(sendMi(process, "-break-insert " + sourceLocation(command.file, command.line)));
 			break;
 		case MRGdbCommandKind::AddWatch: {
-			PendingMiCommand pending;
-			pending.kind = PendingMiKind::WatchCreate;
-			pending.text = command.text;
-			static_cast<void>(sendMi(process, "-var-create - * " + mrGdbMiQuote(command.text), std::move(pending)));
+			if (command.text.empty()) break;
+			GdbWatch watch;
+			watch.expression = command.text;
+			process.watches["watch" + std::to_string(process.nextToken++)] = std::move(watch);
+			requestStoppedState(process);
 			break;
 		}
 		case MRGdbCommandKind::EraseWatch: {
-			PendingMiCommand pending;
-			pending.kind = PendingMiKind::WatchDelete;
-			std::string objectName = command.text;
-			if (process.watches.find(objectName) == process.watches.end())
-				for (const auto &watch : process.watches)
-					if (watch.second.name == command.text) { objectName = watch.first; break; }
-			pending.text = objectName;
-			static_cast<void>(sendMi(process, "-var-delete " + objectName, std::move(pending)));
+			for (auto watch = process.watches.begin(); watch != process.watches.end(); ++watch) {
+				if (watch->first != command.text && watch->second.expression != command.text && watch->second.objectName != command.text) continue;
+				if (!watch->second.objectName.empty()) static_cast<void>(sendMi(process, "-var-delete " + watch->second.objectName));
+				process.watches.erase(watch);
+				break;
+			}
+			requestStoppedState(process);
 			break;
 		}
 		case MRGdbCommandKind::Evaluate: {
+			invalidateVariableRefresh(process);
 			PendingMiCommand pending;
 			pending.kind = PendingMiKind::Evaluate;
+			pending.refreshGeneration = process.variableRefreshGeneration;
 			pending.text = command.text;
-			static_cast<void>(sendMi(process, "-data-evaluate-expression " + mrGdbMiQuote(command.text), std::move(pending)));
+			static_cast<void>(sendMi(process, "-data-evaluate-expression --thread " + process.threadId + " --frame 0 " + mrGdbMiQuote(command.text), std::move(pending)));
 			break;
 		}
 		case MRGdbCommandKind::AssignVariable: {
+			bool found = false;
+			for (const MRGdbMiVariable &variable : process.localVariables)
+				if (!variable.objectName.empty() && variable.objectName == command.objectName) found = true;
+			if (!found) { requestStoppedState(process); return; }
+			invalidateVariableRefresh(process);
 			PendingMiCommand pending;
 			pending.kind = PendingMiKind::VariableAssign;
+			pending.refreshGeneration = process.variableRefreshGeneration;
 			pending.objectName = command.objectName;
 			pending.text = command.text;
 			if (!command.objectName.empty()) static_cast<void>(sendMi(process, "-var-assign " + command.objectName + " " + mrGdbMiQuote(command.text), std::move(pending)));
@@ -648,6 +747,10 @@ void dispatchControlCommand(GdbProcess &process, const MRGdbCommand &command) {
 			process.quitRequested = true;
 			static_cast<void>(sendMi(process, "-gdb-exit"));
 			break;
+	}
+	if (execution) {
+		process.stopped = false;
+		invalidateVariableRefresh(process);
 	}
 }
 
@@ -677,7 +780,7 @@ void readMiOutput(GdbProcess &process, const mr::coprocessor::TaskInfo &info, st
 	}
 }
 
-void readTextOutput(int fd, MRGdbEventKind kind, const mr::coprocessor::TaskInfo &info, std::size_t sourceId, int targetBufferId, std::uint64_t generation, bool &open) {
+void readTextOutput(const GdbProcess &process, int fd, MRGdbEventKind kind, const mr::coprocessor::TaskInfo &info, std::size_t sourceId, int targetBufferId, std::uint64_t generation, bool &open) {
 	std::array<char, 4096> buffer{};
 	for (;;) {
 		const ssize_t count = ::read(fd, buffer.data(), buffer.size());
@@ -685,7 +788,7 @@ void readTextOutput(int fd, MRGdbEventKind kind, const mr::coprocessor::TaskInfo
 			MRGdbEvent event;
 			event.kind = kind;
 			event.text.assign(buffer.data(), static_cast<std::size_t>(count));
-			postGdbEvent(info, sourceId, targetBufferId, generation, std::move(event));
+			postGdbEvent(process, info, sourceId, targetBufferId, generation, std::move(event));
 			continue;
 		}
 		if (count == 0) open = false;
@@ -718,7 +821,7 @@ mr::coprocessor::Result runGdbSessionTask(const mr::coprocessor::TaskInfo &info,
 	MRGdbEvent started;
 	started.kind = MRGdbEventKind::Started;
 	started.text = "GDB/MI ready; inferior PTY " + process.ptySlaveName + "\n";
-	postGdbEvent(info, sourceId, targetBufferId, generation, std::move(started));
+	postGdbEvent(process, info, sourceId, targetBufferId, generation, std::move(started));
 	while (!process.childExited) {
 		std::array<struct pollfd, 4> pollFds{};
 		pollFds[0] = {channel->readFd, POLLIN, 0};
@@ -732,8 +835,8 @@ mr::coprocessor::Result runGdbSessionTask(const mr::coprocessor::TaskInfo &info,
 		}
 		if ((pollFds[0].revents & POLLIN) != 0) drainControlChannel(channel, process);
 		if (process.outputOpen && (pollFds[1].revents & (POLLIN | POLLHUP)) != 0) readMiOutput(process, info, sourceId, targetBufferId, generation);
-		if (process.errorOpen && (pollFds[2].revents & (POLLIN | POLLHUP)) != 0) readTextOutput(process.errorFd, MRGdbEventKind::DebuggerOutput, info, sourceId, targetBufferId, generation, process.errorOpen);
-		if (ptyOpen && (pollFds[3].revents & POLLIN) != 0) readTextOutput(process.ptyMasterFd, MRGdbEventKind::InferiorOutput, info, sourceId, targetBufferId, generation, ptyOpen);
+		if (process.errorOpen && (pollFds[2].revents & (POLLIN | POLLHUP)) != 0) readTextOutput(process, process.errorFd, MRGdbEventKind::DebuggerOutput, info, sourceId, targetBufferId, generation, process.errorOpen);
+		if (ptyOpen && (pollFds[3].revents & POLLIN) != 0) readTextOutput(process, process.ptyMasterFd, MRGdbEventKind::InferiorOutput, info, sourceId, targetBufferId, generation, ptyOpen);
 		if (info.cancelRequested()) {
 			errorMessage = "GDB session cancelled.";
 			break;

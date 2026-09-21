@@ -115,6 +115,11 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		flushBentoProjection();
 		return;
 	}
+	if (event.what == evCommand && event.message.command == mr::bento::cmGdbThreadAccepted) {
+		acceptGdbThreadChoice();
+		clearEvent(event);
+		return;
+	}
 	if (event.what == evCommand && event.message.command == mr::bento::cmPaneRoleAccepted) {
 		acceptPaneRoleChoice();
 		clearEvent(event);

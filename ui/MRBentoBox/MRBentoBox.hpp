@@ -471,6 +471,9 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] std::string gdbDebuggerStateText() const;
 	[[nodiscard]] std::string gdbDebuggerSourcePath() const;
 	[[nodiscard]] bool gdbDebuggerRunning() const;
+	[[nodiscard]] bool gdbDebuggerContextReady(bool values = false) const;
+	void showGdbThreadList();
+	void acceptGdbThreadChoice();
 	void refreshOutlinePanes(bool force = false);
 	bool refreshOutlinePane(MRBentoPaneRole role, bool force);
 	[[nodiscard]] bool jumpToOutlineAtCursor(MRBentoPaneRole role);
@@ -623,6 +626,7 @@ class MRBentoBox : public MREditWindow {
 	int gdbDebuggerVariablesWidth = 0;
 	int gdbDebuggerWatchesWidth = 0;
 	std::unique_ptr<MRGdbSession> gdbSession;
+	bool gdbThreadListOpen = false;
 	std::shared_ptr<const std::vector<MRCompilerDiagnostic>> compilerDiagnostics;
 	std::shared_ptr<const MRBentoDiagnosticSourceChange> compilerDiagnosticSourceChanges;
 	std::shared_ptr<const MRTextBufferModel::ReadSnapshot> compilerDiagnosticsParseSourceSnapshot;

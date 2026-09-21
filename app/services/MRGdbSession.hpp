@@ -10,6 +10,7 @@
 #include <vector>
 
 enum class MRGdbCommandKind : unsigned char {
+	SelectThread,
 	ContinueExecution,
 	PauseExecution,
 	RunToLocation,
@@ -32,6 +33,9 @@ struct MRGdbCommand {
 	explicit MRGdbCommand(MRGdbCommandKind aKind) noexcept;
 
 	MRGdbCommandKind kind;
+	std::string threadId;
+	std::uint64_t stopGeneration = 0;
+	std::uint64_t contextGeneration = 0;
 	std::string text;
 	std::string file;
 	std::string objectName;
@@ -41,6 +45,7 @@ struct MRGdbCommand {
 };
 
 enum class MRGdbEventKind : unsigned char {
+	Threads,
 	Started,
 	DebuggerOutput,
 	InferiorOutput,
@@ -56,6 +61,10 @@ struct MRGdbEvent {
 	MRGdbEvent() noexcept;
 
 	MRGdbEventKind kind;
+	std::string threadId;
+	std::uint64_t stopGeneration = 0;
+	std::uint64_t contextGeneration = 0;
+	std::vector<MRGdbMiThread> threads;
 	std::string text;
 	std::string file;
 	int line;

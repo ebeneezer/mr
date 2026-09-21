@@ -239,3 +239,28 @@ void mrGdbMiBreakpoints(const std::string &record, std::vector<MRGdbMiBreakpoint
 		position = end + 1;
 	}
 }
+
+void mrGdbMiThreads(const std::string &record, std::vector<MRGdbMiThread> &threads) {
+	std::vector<std::string> items;
+	tupleItems(record, "threads", items);
+	threads.clear();
+	for (const std::string &item : items) {
+		MRGdbMiThread thread;
+		thread.id = mrGdbMiField(item, "id");
+		if (thread.id.empty() || thread.id.find_first_not_of("0123456789") != std::string::npos) continue;
+		thread.name = mrGdbMiField(item, "name");
+		thread.state = mrGdbMiField(item, "state");
+		const std::size_t frame = item.find("frame={");
+		if (frame != std::string::npos) {
+			const std::size_t start = frame + 6;
+			const std::size_t end = matchingDelimiter(item, start, '{', '}');
+			const std::string fields = item.substr(start, end == std::string::npos ? end : end - start + 1);
+			thread.function = mrGdbMiField(fields, "func");
+			thread.address = mrGdbMiField(fields, "addr");
+			thread.file = mrGdbMiField(fields, "fullname");
+			if (thread.file.empty()) thread.file = mrGdbMiField(fields, "file");
+			thread.line = mrGdbMiIntField(fields, "line", 0);
+		}
+		threads.push_back(std::move(thread));
+	}
+}

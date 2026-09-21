@@ -11,6 +11,7 @@ namespace mr::bento {
 constexpr ushort cmPaneRoleAccepted = 0x7A20;
 constexpr ushort cmPaneActionAccepted = 0x7A21;
 constexpr ushort cmFileComparePaneActionAccepted = 0x7A22;
+constexpr ushort cmGdbThreadAccepted = 0x7A23;
 
 const char *paneRoleTitle(MRBentoPaneRole role) noexcept;
 bool paneRoleIsOutline(MRBentoPaneRole role) noexcept;

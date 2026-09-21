@@ -358,8 +358,8 @@ void MRBentoBox::refreshGdbDebuggerValues(const MRGdbEvent &event) {
 		row.start = row.end = row.valueStart = std::string::npos;
 		row.arrayOwner = parent != std::string::npos && parentArrays[depth - 1] && variable.childCount == 0 &&
 		                 !variable.value.starts_with("{") && (variable.type.empty() || variable.type.back() != ']') ? parent : std::string::npos;
-		// GDB recreates local var objects at each stop; retain the frame and value path as identity.
-		row.expression = parent == std::string::npos ? (watches ? variable.objectName : event.text + ":" + variable.name) : rows[parent].expression + "/" + variable.name;
+		// GDB objects are transient; retain the thread/frame and expression identity.
+		row.expression = parent == std::string::npos ? (event.text + ":" + (watches ? variable.identity : variable.name)) : rows[parent].expression + "/" + variable.name;
 		row.objectName = variable.objectName;
 		row.value = variable.value;
 		if (row.arrayOwner != std::string::npos) {
@@ -370,7 +370,7 @@ void MRBentoBox::refreshGdbDebuggerValues(const MRGdbEvent &event) {
 		row.changed = false;
 		if (row.arrayOwner == std::string::npos) {
 			row.label.assign(depth * 2, ' ');
-			if (watches && depth == 0) row.label += variable.objectName + ": ";
+			if (watches && depth == 0) row.label += variable.identity + ": ";
 			row.label += variable.name;
 			if (!variable.type.empty()) row.label += " [" + variable.type + "]";
 			row.label += " = ";
@@ -481,7 +481,7 @@ bool MRBentoBox::showGdbDebuggerValueInputAtCursor() {
 	MRFileEditor *variablesEditor = variablesWindow != nullptr ? variablesWindow->getEditor() : nullptr;
 	const std::size_t cursor = variablesEditor != nullptr ? variablesEditor->cursorOffset() : 0;
 
-	if (debuggerValueInput != nullptr || variablesEditor == nullptr || !gdbDebuggerActive() || gdbDebuggerRunning()) return false;
+	if (debuggerValueInput != nullptr || variablesEditor == nullptr || !gdbDebuggerContextReady(true)) return false;
 	for (const GdbDebuggerVariableRow &row : gdbDebuggerVariableRows) {
 		if (cursor < row.start || cursor >= row.end) continue;
 		variablesEditor->setCursorOffset(row.valueStart);

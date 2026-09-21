@@ -16,7 +16,18 @@ struct MRGdbMiRecord {
 	std::string raw;
 };
 
+struct MRGdbMiThread {
+	std::string id;
+	std::string name;
+	std::string state;
+	std::string function;
+	std::string address;
+	std::string file;
+	int line = 0;
+};
+
 struct MRGdbMiVariable {
+	std::string identity;
 	std::string name;
 	std::string value;
 	std::string type;
@@ -44,6 +55,7 @@ class MRGdbMiStream {
 [[nodiscard]] std::string mrGdbMiQuote(const std::string &value);
 [[nodiscard]] std::string mrGdbMiField(const std::string &record, const char *name);
 [[nodiscard]] int mrGdbMiIntField(const std::string &record, const char *name, int fallback = 0);
+void mrGdbMiThreads(const std::string &record, std::vector<MRGdbMiThread> &threads);
 void mrGdbMiVariables(const std::string &record, std::vector<MRGdbMiVariable> &variables);
 void mrGdbMiChildren(const std::string &record, const std::string &parentObjectName, int depth, std::vector<MRGdbMiVariable> &variables);
 void mrGdbMiChanges(const std::string &record, std::vector<MRGdbMiVariable> &variables);
