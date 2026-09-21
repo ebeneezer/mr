@@ -342,69 +342,132 @@ bool MRBentoBox::showMacroDebuggerValueInputAtCursor() {
 
 void MRBentoBox::refreshGdbDebuggerValues(const MRGdbEvent &event) {
 	const bool watches = event.kind == MRGdbEventKind::Watches;
+	std::vector<GdbDebuggerVariableRow> &rows = watches ? gdbDebuggerWatchRows : gdbDebuggerVariableRows;
+	std::vector<GdbDebuggerVariableRow> previous = std::move(rows);
+	std::unordered_map<std::string, std::size_t> previousPaths;
+	for (std::size_t i = 0; i < previous.size(); ++i) previousPaths.emplace(previous[i].expression, i);
+	std::vector<std::size_t> parents;
+	std::vector<bool> parentArrays;
+	rows.reserve(event.variables.size());
+	for (const MRGdbMiVariable &variable : event.variables) {
+		const std::size_t depth = static_cast<std::size_t>(std::max(0, variable.depth));
+		parents.resize(depth + 1, std::string::npos);
+		parentArrays.resize(depth + 1, false);
+		const std::size_t parent = depth > 0 ? parents[depth - 1] : std::string::npos;
+		GdbDebuggerVariableRow row;
+		row.start = row.end = row.valueStart = std::string::npos;
+		row.arrayOwner = parent != std::string::npos && parentArrays[depth - 1] && variable.childCount == 0 &&
+		                 !variable.value.starts_with("{") && (variable.type.empty() || variable.type.back() != ']') ? parent : std::string::npos;
+		// GDB recreates local var objects at each stop; retain the frame and value path as identity.
+		row.expression = parent == std::string::npos ? (watches ? variable.objectName : event.text + ":" + variable.name) : rows[parent].expression + "/" + variable.name;
+		row.objectName = variable.objectName;
+		row.value = variable.value;
+		if (row.arrayOwner != std::string::npos) {
+			const std::size_t quote = row.value.find(" '");
+			if (quote != std::string::npos && quote > 0 && row.value.find_first_not_of("-0123456789") == quote)
+				row.value.resize(quote);
+		}
+		row.changed = false;
+		if (row.arrayOwner == std::string::npos) {
+			row.label.assign(depth * 2, ' ');
+			if (watches && depth == 0) row.label += variable.objectName + ": ";
+			row.label += variable.name;
+			if (!variable.type.empty()) row.label += " [" + variable.type + "]";
+			row.label += " = ";
+		}
+		const auto found = previousPaths.find(row.expression);
+		if (found != previousPaths.end()) {
+			const GdbDebuggerVariableRow &old = previous[found->second];
+			row.start = old.start;
+			row.end = old.end;
+			row.valueStart = old.valueStart;
+			row.changed = old.value != row.value;
+		}
+		parents[depth] = rows.size();
+		parentArrays[depth] = variable.childCount > 0 && !variable.type.empty() && variable.type.back() == ']';
+		rows.push_back(std::move(row));
+	}
+	layoutGdbDebuggerValues(watches, true);
+}
+
+void MRBentoBox::layoutGdbDebuggerValues(bool watches, bool valuesChanged) {
 	MREditWindow *window = watches ? watchesPane() : variablesPane();
 	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 	if (editor == nullptr) return;
 	std::vector<GdbDebuggerVariableRow> &rows = watches ? gdbDebuggerWatchRows : gdbDebuggerVariableRows;
-	std::vector<GdbDebuggerVariableRow> previous = std::move(rows);
-	std::unordered_map<std::string, std::size_t> previousPaths;
+	int &previousWidth = watches ? gdbDebuggerWatchesWidth : gdbDebuggerVariablesWidth;
+	const TRect viewport = editor->visibleTextViewportBounds();
+	const int width = std::max(1, viewport.b.x - viewport.a.x);
+	if (!valuesChanged && (rows.empty() || previousWidth == width)) return;
+	previousWidth = width;
 	const TPoint scroll = editor->delta;
-	const int visualColumn = editor->displayedCursorColumn();
 	const std::size_t cursor = editor->cursorOffset();
+	const std::size_t topOffset = editor->bufferModel().lineStartByIndex(static_cast<std::size_t>(std::max(0, scroll.y)));
 	std::size_t cursorRow = 0;
 	std::size_t topRow = 0;
-	std::size_t column = 0;
-	for (std::size_t i = 0; i < previous.size(); ++i) {
-		previousPaths.emplace(previous[i].expression, i);
-		if (previous[i].start <= cursor) {
-			cursorRow = i;
-			column = cursor - previous[i].start;
-		}
-		if (editor->lineIndexOfOffset(previous[i].start) <= static_cast<std::size_t>(std::max(0, scroll.y))) topRow = i;
+	std::size_t cursorStart = 0;
+	std::size_t topStart = 0;
+	for (std::size_t i = 0; i < rows.size(); ++i) {
+		if (rows[i].start <= cursor && rows[i].start >= cursorStart) { cursorRow = i; cursorStart = rows[i].start; }
+		if (rows[i].start <= topOffset && rows[i].start >= topStart) { topRow = i; topStart = rows[i].start; }
 	}
-	std::size_t newCursorRow = cursorRow;
-	std::size_t newTopRow = topRow;
-	std::vector<std::string> parents;
+	const bool cursorInValue = !rows.empty() && rows[cursorRow].valueStart <= cursor;
+	const std::size_t column = rows.empty() || rows[cursorRow].start == std::string::npos ? 0 : cursor - (cursorInValue ? rows[cursorRow].valueStart : rows[cursorRow].start);
 	std::vector<std::pair<std::size_t, std::size_t>> changedRanges;
 	std::string text;
-	rows.reserve(event.variables.size());
-	for (const MRGdbMiVariable &variable : event.variables) {
-		const std::size_t depth = static_cast<std::size_t>(std::max(0, variable.depth));
-		parents.resize(depth + 1);
-		// GDB recreates local var objects at each stop; use the frame and value path for view identity.
-		parents[depth] = depth == 0 ? (watches ? variable.objectName : event.text + ":" + variable.name) : parents[depth - 1] + "/" + variable.name;
-		GdbDebuggerVariableRow row;
-		row.start = text.size();
-		row.expression = parents[depth];
-		row.objectName = variable.objectName;
-		row.value = variable.value;
-		text.append(depth * 2, ' ');
-		if (watches && depth == 0) text += variable.objectName + ": ";
-		text += variable.name;
-		if (!variable.type.empty()) text += " [" + variable.type + "]";
-		text += " = ";
-		const std::size_t valueStart = text.size();
-		text += variable.value;
-		row.end = text.size();
-		const auto found = previousPaths.find(row.expression);
-		if (found != previousPaths.end()) {
-			const std::size_t oldRow = found->second;
-			if (oldRow == cursorRow) newCursorRow = rows.size();
-			if (oldRow == topRow) newTopRow = rows.size();
-			if (previous[oldRow].value != row.value) changedRanges.emplace_back(valueStart, row.end);
+	for (std::size_t i = 0; i < rows.size();) {
+		GdbDebuggerVariableRow &row = rows[i];
+		if (row.arrayOwner == std::string::npos) {
+			row.start = text.size();
+			text += row.label;
+			row.valueStart = text.size();
+			text += row.value;
+			row.end = text.size();
+			if (row.changed) changedRanges.emplace_back(row.valueStart, row.end);
+			text += '\n';
+			++i;
+			continue;
 		}
-		rows.push_back(std::move(row));
+		const std::size_t owner = row.arrayOwner;
+		const std::size_t indent = rows[owner].label.find_first_not_of(' ') + 2;
+		const std::string firstIndex = row.expression.substr(row.expression.rfind('/') + 1);
+		std::size_t end = i;
+		int valuesWidth = 0;
+		std::string prefix;
+		while (end < rows.size() && rows[end].arrayOwner == owner) {
+			const GdbDebuggerVariableRow &candidate = rows[end];
+			const std::string index = candidate.expression.substr(candidate.expression.rfind('/') + 1);
+			const std::string nextPrefix = std::string(indent, ' ') + "[" + firstIndex + (end == i ? "" : ".." + index) + "] ";
+			const int nextWidth = valuesWidth + (end == i ? 0 : 2) + strwidth(candidate.value.c_str());
+			if (end != i && static_cast<int>(nextPrefix.size()) + nextWidth > width) break;
+			prefix = nextPrefix;
+			valuesWidth = nextWidth;
+			++end;
+		}
+		const std::size_t lineStart = text.size();
+		text += prefix;
+		for (std::size_t member = i; member < end; ++member) {
+			GdbDebuggerVariableRow &element = rows[member];
+			if (member != i) text += "  ";
+			element.start = member == i ? lineStart : text.size();
+			element.valueStart = text.size();
+			text += element.value;
+			element.end = text.size();
+			if (element.changed) changedRanges.emplace_back(element.valueStart, element.end);
+		}
 		text += '\n';
+		i = end;
 	}
 	if (rows.empty()) text = watches ? "(no watches)\n" : "(no variables in current frame)\n";
 	if (editor->snapshotText() != text) {
 		window->lock();
 		static_cast<void>(window->replaceTextBuffer(text.c_str(), watches ? "Watches" : "Variables"));
 		if (!rows.empty()) {
-			const GdbDebuggerVariableRow &row = rows[std::min(newCursorRow, rows.size() - 1)];
-			editor->setCursorOffsetAtVisualColumn(row.start + std::min(column, row.end - row.start), visualColumn, true);
-			const std::size_t top = editor->lineIndexOfOffset(rows[std::min(newTopRow, rows.size() - 1)].start);
-			editor->scrollTo(scroll.x, static_cast<int>(top));
+			const GdbDebuggerVariableRow &row = rows[cursorRow];
+			const std::size_t start = cursorInValue ? row.valueStart : row.start;
+			const std::size_t position = start + std::min(column, row.end - start);
+			editor->setCursorOffsetAtVisualColumn(position, editor->actualCursorVisualColumn(position), true);
+			editor->scrollTo(scroll.x, static_cast<int>(editor->lineIndexOfOffset(rows[topRow].start)));
 		}
 		window->unlock();
 	}
@@ -421,11 +484,7 @@ bool MRBentoBox::showGdbDebuggerValueInputAtCursor() {
 	if (debuggerValueInput != nullptr || variablesEditor == nullptr || !gdbDebuggerActive() || gdbDebuggerRunning()) return false;
 	for (const GdbDebuggerVariableRow &row : gdbDebuggerVariableRows) {
 		if (cursor < row.start || cursor >= row.end) continue;
-		const std::string text = variablesEditor->snapshotText();
-		const std::size_t valueStart = text.find("= ", row.start);
-
-		if (valueStart == std::string::npos || valueStart + 2 > row.end) return false;
-		variablesEditor->setCursorOffset(valueStart + 2);
+		variablesEditor->setCursorOffset(row.valueStart);
 		const TRect viewport = variablesEditor->visibleTextViewportBounds();
 		const int left = viewport.a.x + variablesEditor->currentViewColumn() - 1;
 		const int top = viewport.a.y + variablesEditor->currentViewRow() - 1;

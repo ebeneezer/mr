@@ -454,6 +454,7 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] bool showMacroDebuggerValueInputAtCursor();
 	[[nodiscard]] bool showGdbDebuggerValueInputAtCursor();
 	void refreshGdbDebuggerValues(const MRGdbEvent &event);
+	void layoutGdbDebuggerValues(bool watches, bool valuesChanged = false);
 	[[nodiscard]] bool debuggerValueInputContains(const TPoint &point) const noexcept;
 	void commitDebuggerValueInput();
 	void cancelDebuggerValueInput() noexcept;
@@ -603,6 +604,10 @@ class MRBentoBox : public MREditWindow {
 	struct GdbDebuggerVariableRow {
 		std::size_t start;
 		std::size_t end;
+		std::size_t valueStart;
+		std::size_t arrayOwner;
+		bool changed;
+		std::string label;
 		std::string expression;
 		std::string objectName;
 		std::string value;
@@ -615,6 +620,8 @@ class MRBentoBox : public MREditWindow {
 	std::vector<std::pair<std::size_t, std::size_t>> macroDebuggerVariableRows;
 	std::vector<GdbDebuggerVariableRow> gdbDebuggerVariableRows;
 	std::vector<GdbDebuggerVariableRow> gdbDebuggerWatchRows;
+	int gdbDebuggerVariablesWidth = 0;
+	int gdbDebuggerWatchesWidth = 0;
 	std::unique_ptr<MRGdbSession> gdbSession;
 	std::shared_ptr<const std::vector<MRCompilerDiagnostic>> compilerDiagnostics;
 	std::shared_ptr<const MRBentoDiagnosticSourceChange> compilerDiagnosticSourceChanges;

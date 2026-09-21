@@ -101,7 +101,7 @@ struct GdbProcess {
 };
 
 const int kVariableMaximumDepth = 8;
-const std::size_t kVariableMaximumRows = 1024;
+const std::size_t kVariableMaximumRows = 512 * 1024;
 
 void closeFd(int &fd) noexcept {
 	if (fd >= 0) ::close(fd);

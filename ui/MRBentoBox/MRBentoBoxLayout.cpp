@@ -155,6 +155,8 @@ void MRBentoBox::layoutSplitPanes() {
 			if (view != nullptr) view->hide();
 		}
 	}
+	layoutGdbDebuggerValues(false);
+	layoutGdbDebuggerValues(true);
 	paneLayoutChanged();
 	if (frame != nullptr) frame->drawView();
 	if (primaryEditor != nullptr && paneWindowForLeaf(0) == nullptr) {
