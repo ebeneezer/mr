@@ -484,10 +484,15 @@ void MRSidekickEditor::commitAndClose() {
 bool mrOpenReadOnlySidekickAt(MREditWindow *parent, const std::string &text, const std::string &title, int anchorViewColumn, int anchorViewRow, int preferredViewColumn, MRReadOnlySidekickPlacement placement) {
 	if (parent == nullptr || parent->getEditor() == nullptr || TProgram::deskTop == nullptr) return false;
 	ReadOnlyMarker marker = romBelow;
-	const TRect bounds = readOnlySidekickBoundsFor(parent, text, marker, anchorViewColumn, anchorViewRow, preferredViewColumn, placement);
+	int markerColumn = -1;
+	const TRect bounds = readOnlySidekickBoundsFor(parent, text, marker, anchorViewColumn, anchorViewRow, preferredViewColumn, placement, markerColumn);
+	if (bounds.b.x <= bounds.a.x || bounds.b.y <= bounds.a.y) {
+		mrDropSidekickForParent(parent);
+		return false;
+	}
 	const int contentWidth = std::max(1, bounds.b.x - bounds.a.x - 2);
 	const int visibleLineCount = std::max(1, bounds.b.y - bounds.a.y);
-	const std::string markedText = readOnlyTextWithMarker(text, marker, contentWidth, visibleLineCount);
+	const std::string markedText = readOnlyTextWithMarker(text, marker, contentWidth, visibleLineCount, markerColumn);
 	if (gActiveSidekick != nullptr && gActiveSidekick->parentBufferId() == parent->bufferId() && gActiveSidekick->isReadOnly()) {
 		gActiveSidekick->updateReadOnlyText(markedText, title, bounds);
 		gActiveSidekick->insertInto(*TProgram::deskTop);

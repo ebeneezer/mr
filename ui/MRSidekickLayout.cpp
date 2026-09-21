@@ -211,9 +211,25 @@ const char *readOnlyMarkerGlyph(ReadOnlyMarker marker) noexcept {
 	}
 }
 
-std::string readOnlyTextWithMarker(const std::string &text, ReadOnlyMarker marker, int contentWidth, int visibleLineCount) {
+std::string readOnlyTextWithMarker(const std::string &text, ReadOnlyMarker marker, int contentWidth, int visibleLineCount, int markerColumn) {
 	const std::vector<std::string> lines = wrapReadOnlySidekickLines(text, contentWidth);
 	std::string out;
+	if (markerColumn >= 0) {
+		const bool above = marker == romAbove || marker == romAboveRight;
+		const std::size_t markerLine = above ? std::min<std::size_t>(lines.size(), visibleLineCount > 0 ? visibleLineCount - 1 : lines.size()) : 0;
+		for (std::size_t index = 0; index <= lines.size(); ++index) {
+			if (index == markerLine) {
+				if (index != 0) out.push_back('\n');
+				out.append(static_cast<std::size_t>(markerColumn), ' ');
+				out += readOnlyMarkerGlyph(marker);
+			}
+			if (index < lines.size()) {
+				if (index != 0 || markerLine == 0) out.push_back('\n');
+				out += lines[index];
+			}
+		}
+		return out;
+	}
 	std::size_t markerLine = 0;
 	const bool markerAtRight = marker == romRight || marker == romBelowRight || marker == romAboveRight;
 
@@ -303,7 +319,8 @@ TRect snippetSidekickBoundsFor(MREditWindow *parent, const std::string &text, st
 	return TRect(x, y, x + wantedWidth, y + wantedHeight);
 }
 
-TRect readOnlySidekickBoundsFor(MREditWindow *parent, const std::string &text, ReadOnlyMarker &marker, int anchorViewColumn, int anchorViewRow, int preferredViewColumn, MRReadOnlySidekickPlacement placement) {
+TRect readOnlySidekickBoundsFor(MREditWindow *parent, const std::string &text, ReadOnlyMarker &marker, int anchorViewColumn, int anchorViewRow, int preferredViewColumn, MRReadOnlySidekickPlacement placement, int &markerColumn) {
+	markerColumn = -1;
 	MRFileEditor *editor = parent != nullptr ? parent->getEditor() : nullptr;
 	TRect desktop = TProgram::deskTop != nullptr ? TProgram::deskTop->getExtent() : TRect(0, 0, 80, 25);
 	if (editor == nullptr) {
@@ -369,42 +386,24 @@ TRect readOnlySidekickBoundsFor(MREditWindow *parent, const std::string &text, R
 		return TRect(x, y, x + wantedWidth, y + wantedHeight);
 	}
 
-	const int belowSpace = std::max(0, viewport.b.y - cursorY);
-	bool above = belowSpace < 3 && aboveCodeSpace > belowSpace;
-	marker = above ? romAbove : romLeft;
-	std::vector<std::string> lines = splitLines(readOnlyTextWithMarker(text, marker, maxContentWidth));
-	const int lineCount = static_cast<int>(lines.size());
-	if ((belowSpace < lineCount && aboveCodeSpace >= lineCount) || (belowSpace <= 0 && aboveCodeSpace > 0)) above = true;
-	marker = above ? romAbove : romLeft;
-	if (above) lines = splitLines(readOnlyTextWithMarker(text, marker, maxContentWidth));
 	const int viewportWidth = std::max(1, viewport.b.x - viewport.a.x);
 	const int readableWidth = std::min(maxSidekickWidth, viewportWidth);
-	const int minimumWidth = std::min(readableWidth, 12);
-	int wantedWidth = std::clamp(sidekickMaxLineLength(lines), 1, readableWidth);
-	int x = viewport.b.x - wantedWidth;
-	const int rightAvailable = std::max(0, viewport.b.x - (targetX + 1));
-	const int leftAvailable = std::max(0, targetX - viewport.a.x);
-
-	if (x <= targetX && targetX < x + wantedWidth) {
-		if (rightAvailable >= minimumWidth) {
-			wantedWidth = std::min(wantedWidth, rightAvailable);
-			x = targetX + 1;
-			marker = above ? romAbove : romLeft;
-		} else if (leftAvailable >= minimumWidth) {
-			wantedWidth = std::min(wantedWidth, leftAvailable);
-			x = targetX - wantedWidth;
-			marker = above ? romAbove : romRight;
-		} else {
-			wantedWidth = readableWidth;
-			x = viewport.b.x - wantedWidth;
-			marker = above ? romAbove : romLeft;
-		}
+	marker = romLeft;
+	const std::vector<std::string> lines = splitLines(readOnlyTextWithMarker(text, marker, maxContentWidth));
+	const int wantedWidth = std::clamp(sidekickMaxLineLength(lines), 1, readableWidth);
+	const int x = viewport.b.x - wantedWidth;
+	const bool overlapsCode = x < targetX;
+	const int firstRow = cursorY + (overlapsCode ? 1 : 0);
+	const int belowSpace = std::max(0, viewport.b.y - firstRow);
+	const int textLineCount = static_cast<int>(wrapReadOnlySidekickLines(text, std::max(1, wantedWidth - 2)).size());
+	const bool above = belowSpace < textLineCount + (overlapsCode ? 1 : 0) && aboveCodeSpace > belowSpace;
+	if (above || overlapsCode) {
+		marker = above ? romAbove : romBelow;
+		markerColumn = std::clamp(cursorX - x, 0, wantedWidth - 1);
 	}
-	lines = splitLines(readOnlyTextWithMarker(text, marker, std::max(1, wantedWidth - 2)));
-
-	const int verticalSpace = std::max(1, above ? aboveCodeSpace : belowSpace);
-	const int wantedHeight = std::clamp<int>(static_cast<int>(lines.size()), 1, verticalSpace);
-	const int y = (belowSpace == 0 && aboveCodeSpace == 0) ? cursorY : (above ? cursorY - wantedHeight : cursorY);
+	const int verticalSpace = above ? aboveCodeSpace : belowSpace;
+	const int wantedHeight = std::min(textLineCount + (markerColumn >= 0 ? 1 : 0), verticalSpace);
+	const int y = above ? cursorY - wantedHeight : firstRow;
 	return TRect(x, y, x + wantedWidth, y + wantedHeight);
 }
 

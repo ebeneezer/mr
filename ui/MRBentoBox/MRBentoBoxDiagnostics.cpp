@@ -482,12 +482,8 @@ bool MRBentoBox::jumpToProblemAtCursor() {
 
 	sourceSnapshot = buffer().readSnapshot();
 	const std::size_t sourceOffset = sourceSnapshot.clampOffset(selected->sourceOffset);
-	const std::size_t lineStart = sourceSnapshot.lineStart(sourceOffset);
-	const std::size_t sourceLineEnd = sourceEditor->lineEndOffset(sourceOffset);
-	std::size_t sourceSelectionEnd = sourceOffset < sourceLineEnd ? sourceEditor->nextCharOffset(sourceOffset) : sourceOffset;
-	if (sourceSelectionEnd == sourceOffset && lineStart < sourceLineEnd) sourceSelectionEnd = sourceLineEnd;
 	sourceEditor->setCursorOffset(sourceOffset);
-	sourceEditor->setSelectionOffsets(sourceOffset, sourceSelectionEnd);
+	sourceEditor->setSelectionOffsets(sourceOffset, sourceOffset);
 	sourceEditor->revealCursor(True);
 
 	activatePrimaryPane();

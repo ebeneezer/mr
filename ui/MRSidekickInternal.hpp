@@ -48,10 +48,10 @@ enum ReadOnlyMarker {
 [[nodiscard]] std::vector<std::string> splitLines(const std::string &text);
 [[nodiscard]] int sidekickMaxLineLength(const std::vector<std::string> &lines);
 [[nodiscard]] const char *readOnlyMarkerGlyph(ReadOnlyMarker marker) noexcept;
-[[nodiscard]] std::string readOnlyTextWithMarker(const std::string &text, ReadOnlyMarker marker, int contentWidth, int visibleLineCount = 0);
+[[nodiscard]] std::string readOnlyTextWithMarker(const std::string &text, ReadOnlyMarker marker, int contentWidth, int visibleLineCount = 0, int markerColumn = -1);
 [[nodiscard]] TRect sidekickBoundsFor(MREditWindow *parent, const std::string &text);
 [[nodiscard]] TRect snippetSidekickBoundsFor(MREditWindow *parent, const std::string &text, std::size_t replaceStart, int anchorViewColumn, int anchorViewRow);
-[[nodiscard]] TRect readOnlySidekickBoundsFor(MREditWindow *parent, const std::string &text, ReadOnlyMarker &marker, int anchorViewColumn, int anchorViewRow, int preferredViewColumn, MRReadOnlySidekickPlacement placement);
+[[nodiscard]] TRect readOnlySidekickBoundsFor(MREditWindow *parent, const std::string &text, ReadOnlyMarker &marker, int anchorViewColumn, int anchorViewRow, int preferredViewColumn, MRReadOnlySidekickPlacement placement, int &markerColumn);
 
 } // namespace mr::sidekick_internal
 
