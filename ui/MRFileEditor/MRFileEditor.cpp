@@ -17,7 +17,7 @@ MRFileEditor::MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScroll
 	: TScroller(bounds, aHScrollBar, aVScrollBar), mIndicator(aIndicator), mReadOnly(false), mForceBinarySave(false), mInsertMode(true), mLineDrawingEnabled(false), mLineDrawingDoubleLines(false), mAutoIndent(false), mSyntaxTitleHint(), mBufferModel(), mSelectionAnchor(0), mCursorVisualLine(0), mCursorVisualColumn(0), mIndicatorUpdateInProgress(false), mLineIndexWarmupState(), mLineIndexGenerationCounter(1), mSuppressLargeFileLineIndexWarmup(false), mDisplayWidthWarmupState(), mDisplayWidthGenerationCounter(1), mDisplayWidthPublishedLimit(1), mExecutionOwnerKind(executionOwnerKind), mExecutionOwnerLocalId(executionOwnerLocalId), mSyntaxWarmupState(), mSyntaxGenerationCounter(1), mSyntaxState(), mFoldCanonicalContextState(), mFoldWarmupState(), mFoldLevelOperationState(), mFoldGenerationCounter(1), mFoldState(), mFoldOutlineInputCache(), mMiniMapState(), mFileCompareLineKinds(std::make_shared<const std::vector<unsigned char>>()), mFileCompareMiniMapSlices(std::make_shared<const std::vector<MRFileCompareMiniMapSlice>>()), mSaveNormalizationCache(), mSaveNormalizationThroughputBytesPerMicro(0.0), mSaveNormalizationThroughputSamples(0), mMouseSelectionColumnsValid(false), mMouseSelectionLinesValid(false), mMouseSelectionAnchorColumn(0), mMouseSelectionCursorColumn(0), mMouseSelectionAnchorLine(0), mMouseSelectionCursorLine(0), mMouseSelectionModifiers(0), mBlockOverlayActive(false), mBlockOverlayMode(0), mBlockOverlayAnchor(0), mBlockOverlayEnd(0), mBlockOverlayTrackCursor(false), mBlockOverlayColumnAnchor(-1), mBlockOverlayColumnEnd(-1), mBlockOverlayLineRangeValid(false), mBlockOverlayLine1(0), mBlockOverlayLine2(0), mPreferredIndentColumn(1), mLastLoadTiming(), mCachedCursorLineDocumentId(0), mCachedCursorLineVersion(0), mCachedCursorLineOffset(0), mCachedCursorLineIndexValue(0), mCachedCursorLineExact(false) {
 	fileName[0] = EOS;
 	options |= ofFirstClick;
-	eventMask |= evMouse | evKeyboard | evCommand;
+	eventMask |= evMouse | evKeyboard | evCommand | evBroadcast;
 	if (!aFileName.empty()) setPersistentFileName(aFileName);
 	else
 		refreshEditorSettingsSnapshot();
@@ -25,6 +25,7 @@ MRFileEditor::MRFileEditor(const TRect &bounds, TScrollBar *aHScrollBar, TScroll
 }
 
 MRFileEditor::~MRFileEditor() {
+	if (mAutosaveTimer != nullptr && TProgram::application != nullptr) TProgram::application->killTimer(mAutosaveTimer);
 	for (const LineIndexPacketState &packet : mLineIndexWarmupState.packets) {
 		if (packet.taskId != 0) static_cast<void>(mr::coprocessor::globalCoprocessor().cancelTask(packet.taskId));
 		mBufferModel.releaseLineIndexScanReservation(packet.reservationId);
@@ -70,6 +71,7 @@ bool MRFileEditor::hasPersistentFileName() const {
 }
 
 void MRFileEditor::setPersistentFileName(TStringView name) noexcept {
+	if (!samePath(std::string(name).c_str(), mLastSavedPath.c_str())) mLastSavedPath.clear();
 	strnzcpy(fileName, name, sizeof(fileName));
 	refreshEditorSettingsSnapshot();
 	refreshSyntaxContext();
@@ -77,6 +79,7 @@ void MRFileEditor::setPersistentFileName(TStringView name) noexcept {
 }
 
 void MRFileEditor::clearPersistentFileName() noexcept {
+	mLastSavedPath.clear();
 	fileName[0] = EOS;
 	refreshEditorSettingsSnapshot();
 	refreshSyntaxContext();
@@ -89,6 +92,7 @@ bool MRFileEditor::isDocumentModified() const noexcept {
 
 void MRFileEditor::setDocumentModified(bool changed) {
 	mBufferModel.setModified(changed);
+	updateAutosaveState();
 	if (!changed) {
 		mBufferModel.clearUndoRedo();
 		clearDirtyRanges();

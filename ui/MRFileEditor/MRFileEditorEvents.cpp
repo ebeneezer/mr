@@ -123,12 +123,28 @@ bool MRFileEditor::isTextInputEvent(const TEvent &event) const {
 
 void MRFileEditor::handleTextInput(TEvent &event) {
 	if (mReadOnly) {
+		mClipboardPasteOffset = std::string::npos;
 		clearEvent(event);
 		return;
 	}
 	if ((event.keyDown.controlKeyState & kbPaste) != 0) {
 		char buf[512];
 		size_t length = 0;
+		if (hasPositionedClipboardPaste()) {
+			const std::size_t offset = mClipboardPasteOffset;
+			const bool unchanged = mClipboardPasteVersion == mBufferModel.version();
+			mClipboardPasteOffset = std::string::npos;
+			std::string pastedText;
+			while (textEvent(event, TSpan<char>(buf, sizeof(buf)), length)) pastedText.append(buf, length);
+			if (!unchanged) {
+				mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Paste cancelled: the document changed before clipboard data arrived.", mr::messageline::Kind::Warning, mr::messageline::kPriorityMedium);
+			} else if (!pastedText.empty()) {
+				if (MREditWindow *window = dynamic_cast<MREditWindow *>(owner); window != nullptr && window->isBlockMarking()) window->endBlock(false);
+				static_cast<void>(replaceRangesAndCollapse({MRTextBufferModel::Range(offset, offset)}, pastedText.data(), pastedText.size()));
+			}
+			clearEvent(event);
+			return;
+		}
 		while (textEvent(event, TSpan<char>(buf, sizeof(buf)), length)) {
 			const std::string insertedText(buf, length);
 			if (insertBufferText(insertedText) && textCanTriggerSmartDedent(insertedText)) applyLiveSmartDedentAfterTextInput(insertedText);
@@ -203,6 +219,7 @@ std::string MRFileEditor::tabKeyText() const {
 }
 
 void MRFileEditor::handleEvent(TEvent &event) {
+	if ((event.what & (evMouse | evKeyboard)) != 0 && isDocumentModified()) mAutosaveLastActivity = std::chrono::steady_clock::now();
 	if (event.what == evKeyDown) {
 		const ushort mods = event.keyDown.controlKeyState;
 		const bool shiftTabPressed = event.keyDown.keyCode == kbShiftTab || ((event.keyDown.keyCode == kbTab || event.keyDown.keyCode == kbCtrlI) && hasShiftModifier(mods));
@@ -215,6 +232,11 @@ void MRFileEditor::handleEvent(TEvent &event) {
 	TScroller::handleEvent(event);
 
 	if (event.what == evBroadcast) {
+		if (event.message.command == cmTimerExpired && mAutosaveTimer != nullptr && event.message.infoPtr == mAutosaveTimer) {
+			autosaveIfDue();
+			clearEvent(event);
+			return;
+		}
 		if (event.message.command == cmScrollBarClicked && (event.message.infoPtr == hScrollBar || event.message.infoPtr == vScrollBar)) {
 			select();
 			clearEvent(event);

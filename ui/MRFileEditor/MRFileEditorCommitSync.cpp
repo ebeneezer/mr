@@ -16,6 +16,7 @@ bool MRFileEditor::syncAfterCommittedDocument(std::size_t cursorPos, std::size_t
 	selEnd = std::min(selEnd, document.length());
 	if (selEnd < selStart) std::swap(selStart, selEnd);
 
+	if (hasPositionedClipboardPaste()) mClipboardPasteVersion = std::string::npos;
 	invalidateSaveNormalizationCache();
 	const bool retainedDisplayWidthPrefix = changeSet != nullptr && prepareDisplayWidthWarmupForAppend(*changeSet);
 	if (!retainedDisplayWidthPrefix) resetDisplayWidthWarmup();
@@ -42,6 +43,7 @@ bool MRFileEditor::syncAfterCommittedDocument(std::size_t cursorPos, std::size_t
 	mBufferModel.setCursorAndSelection(cursorPos, selStart, selEnd);
 	syncDisplayedCursorColumnFromCursor(false);
 	mBufferModel.setModified(modifiedState);
+	updateAutosaveState();
 	if (changeSet == nullptr) {
 		mFindMarkerRanges.clear();
 		mMiniMapState.setFindRanges(mFindMarkerRanges);

@@ -224,6 +224,12 @@ class MRTextBufferModel {
 		mShared->modified = changed;
 	}
 
+	void markSaved() noexcept {
+		mShared->modified = false;
+		for (CustomUndoRecord &record : mShared->undoStack) record.modifiedState = true;
+		for (CustomUndoRecord &record : mShared->redoStack) record.modifiedState = true;
+	}
+
 	std::size_t undoStackDepth() const noexcept {
 		return mShared->undoStack.size();
 	}

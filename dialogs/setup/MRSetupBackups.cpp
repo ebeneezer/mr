@@ -25,6 +25,7 @@
 #include "../../app/MRCommandRouter.hpp"
 #include "../../app/MRHelpTopics.generated.hpp"
 #include "../../config/settings/MRSettingsRuntime.hpp"
+#include "../../config/settings/MRSettingsEditConstants.hpp"
 #include "../../config/settings/MRSettingsStorage.hpp"
 #include "../../ui/MRFrame.hpp"
 #include "../../ui/MRBentoBox/MRBentoBox.hpp"
@@ -151,8 +152,6 @@ bool recordsEqual(const BackupsAutosaveDialogRecord &lhs, const BackupsAutosaveD
 		if (snapshot.method != kBackupMethodDirectory) snapshot.directory.clear();
 		if (snapshot.method == kBackupMethodOff) {
 			snapshot.frequency = kBackupFrequencyFirstSaveOnly;
-			snapshot.inactivity = "0";
-			snapshot.interval = "0";
 		}
 		return snapshot;
 	};
@@ -484,7 +483,7 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 		addLabel(TRect(2, 11, textFieldLeft - 1, 12), "Keyboard inactivity:");
 		mInactivitySecondsSlider = addNumericSlider(TRect(textFieldLeft, 11, autosaveFieldRight, 12), 0, 100, 15, 5, 10);
 		addLabel(TRect(2, 12, textFieldLeft - 1, 13), "Intervall auto save:");
-		mAbsoluteIntervalSlider = addNumericSlider(TRect(textFieldLeft, 12, autosaveFieldRight, 13), 0, 300, 180, 10, 50);
+		mAbsoluteIntervalSlider = addNumericSlider(TRect(textFieldLeft, 12, autosaveFieldRight, 13), 0, kMaxAutosaveIntervalSeconds, 180, 1, 10);
 
 		mr::dialogs::addManagedUniformButtonRow(*this, buttonLeft, buttonTop, 0, buttons);
 	}
@@ -549,7 +548,7 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 			mInactivitySecondsSlider->setData(&value);
 		}
 		if (mAbsoluteIntervalSlider != nullptr) {
-			int32_t value = parseSliderValueOrDefault(record.absoluteIntervalSeconds, 180, 100, 300);
+			int32_t value = parseSliderValueOrDefault(record.absoluteIntervalSeconds, 180, kMinAutosaveIntervalSeconds, kMaxAutosaveIntervalSeconds);
 			mAbsoluteIntervalSlider->setData(&value);
 		}
 	}
@@ -560,7 +559,7 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 		readInputLineValue(mBackupExtensionField, record.backupFileExtension, sizeof(record.backupFileExtension));
 		readInputLineValue(mBackupDirectoryField, record.backupDirectoryPath, sizeof(record.backupDirectoryPath));
 		writeSliderValue(mInactivitySecondsSlider, record.inactivitySeconds, sizeof(record.inactivitySeconds), 15, 5, 100);
-		writeSliderValue(mAbsoluteIntervalSlider, record.absoluteIntervalSeconds, sizeof(record.absoluteIntervalSeconds), 180, 100, 300);
+		writeSliderValue(mAbsoluteIntervalSlider, record.absoluteIntervalSeconds, sizeof(record.absoluteIntervalSeconds), 180, kMinAutosaveIntervalSeconds, kMaxAutosaveIntervalSeconds);
 	}
 
 	BackupsAutosaveDialogRecord collectRecordFromFields() const {
@@ -584,8 +583,6 @@ class TBackupsAutosaveSetupDialog : public MRScrollableDialog {
 		if (mBackupExtensionField != nullptr) mBackupExtensionField->setState(sfDisabled, extensionEnabled ? False : True);
 		if (mBackupDirectoryField != nullptr) mBackupDirectoryField->setState(sfDisabled, pathEnabled ? False : True);
 		if (mBackupDirectoryBrowseButton != nullptr) mBackupDirectoryBrowseButton->setState(sfDisabled, pathEnabled ? False : True);
-		if (mInactivitySecondsSlider != nullptr) mInactivitySecondsSlider->setState(sfDisabled, backupOff ? True : False);
-		if (mAbsoluteIntervalSlider != nullptr) mAbsoluteIntervalSlider->setState(sfDisabled, backupOff ? True : False);
 	}
 
 	bool mouseHitsBackupBrowseButton(TEvent &event) {

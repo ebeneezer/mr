@@ -904,7 +904,7 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	if (normalized.backupMethod != kBackupMethodBakFile) normalized.backupExtension = normalizeBackupExtension(settings.backupExtension).empty() ? defaults.backupExtension : normalizeBackupExtension(settings.backupExtension);
 	if (normalized.backupMethod != kBackupMethodDirectory && trimAscii(normalized.backupDirectory).empty()) normalized.backupDirectory.clear();
 	if (settings.autosaveInactivitySeconds != 0 && (settings.autosaveInactivitySeconds < kMinAutosaveInactivitySeconds || settings.autosaveInactivitySeconds > kMaxAutosaveInactivitySeconds)) return setError(errorMessage, "AUTOSAVE_INACTIVITY_SECONDS must be 0 or within 5..100 seconds.");
-	if (settings.autosaveIntervalSeconds != 0 && (settings.autosaveIntervalSeconds < kMinAutosaveIntervalSeconds || settings.autosaveIntervalSeconds > kMaxAutosaveIntervalSeconds)) return setError(errorMessage, "AUTOSAVE_INTERVAL_SECONDS must be 0 or within 100..300 seconds.");
+	if (settings.autosaveIntervalSeconds != 0 && (settings.autosaveIntervalSeconds < kMinAutosaveIntervalSeconds || settings.autosaveIntervalSeconds > kMaxAutosaveIntervalSeconds)) return setError(errorMessage, "AUTOSAVE_INTERVAL_SECONDS must be 0 or within 1..300 seconds.");
 	normalized.autosaveInactivitySeconds = settings.autosaveInactivitySeconds;
 	normalized.autosaveIntervalSeconds = settings.autosaveIntervalSeconds;
 	normalized.backupFiles = normalized.backupMethod != kBackupMethodOff;

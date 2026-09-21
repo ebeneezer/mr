@@ -122,6 +122,8 @@ bool MRFileEditor::justifyParagraph(int leftMargin, int rightMargin) {
 }
 
 bool MRFileEditor::prettifyBlockOrFile() {
+	if (mReadOnly) return false;
+	refreshConfiguredVisualSettings();
 	const MREditSetupSettings settings = effectiveEditSetupSettings();
 	const std::string indentStyle = upperAscii(settings.indentStyle);
 	const std::size_t length = mBufferModel.length();
@@ -130,7 +132,6 @@ bool MRFileEditor::prettifyBlockOrFile() {
 	std::size_t rangeStart = 0;
 	std::size_t rangeEnd = length;
 
-	if (mReadOnly) return false;
 	if (operationLanguage != MRSyntaxLanguage::PlainText && operationIndentStyle != "SMART") operationIndentStyle = "SMART";
 	if (operationIndentStyle != "AUTOMATIC" && operationIndentStyle != "SMART") return true;
 	if (hasTextSelection()) {
@@ -165,7 +166,7 @@ bool MRFileEditor::prettifyBlockOrFile() {
 
 	const bool wholeFile = firstLineStart == 0 && editEnd >= length;
 	const bool cFamily = operationLanguage == MRSyntaxLanguage::C || operationLanguage == MRSyntaxLanguage::Cpp;
-	const bool indentedBraces = configuredUiIndentStyle() == MRUiIndentStyle::Whitesmiths;
+	const MRUiIndentStyle uiIndentStyle = configuredUiIndentStyle();
 	std::vector<std::pair<int, int>> braceColumns;
 	int pendingBraceColumn = 0;
 	bool preprocessorContinuation = false;
@@ -188,6 +189,7 @@ bool MRFileEditor::prettifyBlockOrFile() {
 		const bool hasContent = containsNonWhitespace(lineText);
 		const bool inRange = lineStart >= firstLineStart;
 		const std::size_t leadingBytes = leadingWhitespaceBytes(lineText);
+		std::size_t bodyOffset = leadingBytes;
 		const std::size_t lineBodyEnd = std::min(lineStart + lineText.size(), nextLineStart);
 		std::string replacement;
 		std::string formattedLine;
@@ -209,7 +211,10 @@ bool MRFileEditor::prettifyBlockOrFile() {
 			int targetColumn = leadingIndentColumnForLine(lineStart);
 			std::string_view body(lineText.data() + leadingBytes, lineText.size() - leadingBytes);
 			while (!body.empty() && (body.back() == ' ' || body.back() == '\t')) body.remove_suffix(1);
-			const bool openingBraceLine = cFamily && body == "{";
+			const bool runInBrace = cFamily && uiIndentStyle == MRUiIndentStyle::Horstmann && body.size() > 1 && body.front() == '{' &&
+			                        body.find('}', 1) == std::string_view::npos && body.find('{', 1) == std::string_view::npos;
+			const bool openingBraceLine = cFamily && (body == "{" || runInBrace);
+			const bool indentedBraces = uiIndentStyle == MRUiIndentStyle::Whitesmiths || (uiIndentStyle == MRUiIndentStyle::Gnome && !braceColumns.empty());
 			const bool commentLine = cFamily && (body.starts_with("//") || body.starts_with("/*") || body.starts_with("*"));
 			int closedParentColumn = 0;
 			if (operationIndentStyle == "SMART" && inRange) {
@@ -234,6 +239,13 @@ bool MRFileEditor::prettifyBlockOrFile() {
 			}
 			if (inRange) {
 				replacement = buildEditIndentFill(settings, 1, std::max(1, targetColumn), settings.tabExpand);
+				if (runInBrace) {
+					const int bodyColumn = smartIndentTargetColumnForContext(lineStart, lineText.size(), targetColumn, operationLanguage);
+					replacement += "{";
+					replacement += buildEditIndentFill(settings, targetColumn + 1, bodyColumn, settings.tabExpand);
+					bodyOffset = leadingBytes + 1;
+					while (bodyOffset < lineText.size() && (lineText[bodyOffset] == ' ' || lineText[bodyOffset] == '\t')) ++bodyOffset;
+				}
 				formattedLineStarts.push_back(lineStart);
 				formattedColumns.push_back(std::max(1, targetColumn));
 			}
@@ -241,7 +253,7 @@ bool MRFileEditor::prettifyBlockOrFile() {
 				nextSmartColumn = smartIndentTargetColumnForContext(lineStart, lineText.size(), targetColumn, operationLanguage);
 				if (cFamily) {
 					// Only structural brace leads participate; completed declarations do not open a body.
-					const bool opensBrace = !body.empty() && body.back() == '{' && (openingBraceLine || nextSmartColumn > targetColumn);
+					const bool opensBrace = openingBraceLine || (!body.empty() && body.back() == '{' && nextSmartColumn > targetColumn);
 					if (opensBrace) {
 						const int parentColumn = openingBraceLine && pendingBraceColumn > 0 ? pendingBraceColumn : targetColumn;
 						braceColumns.emplace_back(targetColumn, parentColumn);
@@ -261,7 +273,7 @@ bool MRFileEditor::prettifyBlockOrFile() {
 			continue;
 		}
 		formattedLine = replacement;
-		formattedLine.append(lineText.data() + leadingBytes, lineText.size() - leadingBytes);
+		formattedLine.append(lineText.data() + bodyOffset, lineText.size() - bodyOffset);
 		formattedText += formattedLine;
 		for (std::size_t pos = lineBodyEnd; pos < nextLineStart && pos < editEnd; ++pos)
 			formattedText.push_back(charAtOffset(pos));

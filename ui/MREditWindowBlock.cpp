@@ -21,6 +21,7 @@ bool MREditWindow::prepareBlockForEditorInput(const TEvent &event) {
 	const ushort modifiers = event.keyDown.controlKeyState;
 	const unsigned char charCode = static_cast<unsigned char>(event.keyDown.charScan.charCode);
 	const bool pastedText = (modifiers & kbPaste) != 0;
+	if (pastedText && editor->hasPositionedClipboardPaste()) return false;
 	const bool singleByteText = charCode >= 32 && charCode < 255;
 	const bool newLine = ctrlToArrow(event.keyDown.keyCode) == kbEnter;
 	const bool plainTab = charCode == 9 && (modifiers & (kbShift | kbCtrlShift | kbAltShift)) == 0;

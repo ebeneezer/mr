@@ -711,7 +711,8 @@ StrictExpectation strictExpectationForLine(MRFileEditor &editor, std::size_t lin
 	if (trimmed.empty()) return result;
 
 	const std::string upperLine = upperAscii(std::string(trimmed));
-	const int braceTargetColumn = leadColumn + braceIndentStepColumns(uiIndentStyle);
+	const int braceTargetColumn = settings.tabExpand ? resolvedEditFormatTabDisplayColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, leadColumn)
+	                                                : leadColumn + braceIndentStepColumns(uiIndentStyle);
 	const std::size_t last = trimmed.empty() ? std::string_view::npos : trimmed.size() - 1;
 
 	if (language == MRSyntaxLanguage::Json) {

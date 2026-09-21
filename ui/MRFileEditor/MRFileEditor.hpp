@@ -92,7 +92,10 @@ class MRFileEditor : public TScroller {
 
 	void clearPersistentFileName() noexcept;
 
+	void requestSystemClipboardPaste(std::size_t offset = std::string::npos);
+	bool hasPositionedClipboardPaste() const noexcept;
 	bool isDocumentModified() const noexcept;
+	bool hasBeenSavedInSession() const noexcept;
 
 	void setDocumentModified(bool changed);
 
@@ -902,7 +905,9 @@ class MRFileEditor : public TScroller {
 
 	static void writeChunk(std::ofstream &out, const char *data, std::size_t length);
 
-	bool writeDocumentToPath(const char *targetPath);
+	bool writeDocumentToPath(const char *targetPath, bool interactive = true);
+	void updateAutosaveState();
+	void autosaveIfDue();
 
 	static bool pathIsRegularFile(const char *path) noexcept;
 
@@ -1007,7 +1012,6 @@ class MRFileEditor : public TScroller {
 
 		void cutSelection();
 
-		void requestSystemClipboardPaste();
 
 		void replaceSelectionText(const std::string &text);
 
@@ -1138,6 +1142,12 @@ class MRFileEditor : public TScroller {
 	std::string mFileCompareRightGutters;
 	bool mFileCompareGuttersConfigured = false;
 	bool mFileCompareGutterVisible = true;
+	std::size_t mClipboardPasteOffset = std::string::npos;
+	std::size_t mClipboardPasteVersion = 0;
+	TTimerId mAutosaveTimer = nullptr;
+	std::chrono::steady_clock::time_point mAutosaveDirtySince;
+	std::chrono::steady_clock::time_point mAutosaveLastActivity;
+	std::string mLastSavedPath;
 	SaveNormalizationCache mSaveNormalizationCache;
 	double mSaveNormalizationThroughputBytesPerMicro;
 	std::size_t mSaveNormalizationThroughputSamples;

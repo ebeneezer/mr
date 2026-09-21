@@ -1622,7 +1622,10 @@ int MRFileEditor::smartIndentTargetColumnForContext(std::size_t lineStart, std::
 		return uiIndentStyle == MRUiIndentStyle::KandR || uiIndentStyle == MRUiIndentStyle::KandR4 || uiIndentStyle == MRUiIndentStyle::Gnome || uiIndentStyle == MRUiIndentStyle::Whitesmiths;
 	};
 	const auto bodyAlignsWithBraceLine = [&]() noexcept { return uiIndentStyle == MRUiIndentStyle::Whitesmiths; };
-	const auto braceIndentedColumn = [&](int column) noexcept { return column + braceIndentStepColumns(); };
+	const auto braceIndentedColumn = [&](int column) noexcept {
+		if (settings.tabExpand) return resolvedEditFormatTabDisplayColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, column);
+		return column + braceIndentStepColumns();
+	};
 
 	if (lineStart > 0) {
 		const std::size_t previousLineStart = lineStartOffset(lineStart - 1);
@@ -1640,7 +1643,9 @@ int MRFileEditor::smartIndentTargetColumnForContext(std::size_t lineStart, std::
 	if (useEditorIndentGuards && neutralAutoScratchIndent) return targetColumn;
 	if (language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp) {
 		const std::size_t last = lastSignificantByte(beforeCursor);
-		if (trimmedBeforeCursor == "{")
+		const bool runInBrace = uiIndentStyle == MRUiIndentStyle::Horstmann && trimmedBeforeCursor.starts_with("{") &&
+		                        trimmedBeforeCursor.find('}', 1) == std::string_view::npos && trimmedBeforeCursor.find('{', 1) == std::string_view::npos;
+		if (trimmedBeforeCursor == "{" || runInBrace)
 			targetColumn = bodyAlignsWithBraceLine() ? baseColumn : braceIndentedColumn(baseColumn);
 		else if (last != std::string_view::npos && beforeCursor[last] == '{' &&
 		         isCLikeStructuralBraceLead(trimmedBeforeCursor, upperAscii(std::string(trimmedBeforeCursor)), previousTrimmed, previousUpperLine, trimView(previousPreviousLineText),
@@ -1923,7 +1928,10 @@ int MRFileEditor::smartDedentTargetColumnForLine(std::size_t lineStart, int base
 		if (candidateColumn > baseColumn) continue;
 
 		const std::string candidateUpperLine = upperAscii(std::string(candidateTrimmed));
-		if (!matchesSmartDedentAnchor(candidateTrimmed, candidateUpperLine, language, request)) continue;
+		const bool runInBrace = (language == MRSyntaxLanguage::C || language == MRSyntaxLanguage::Cpp) && configuredUiIndentStyle() == MRUiIndentStyle::Horstmann &&
+		                        request.kind == SmartDedentKind::Delimiter && request.closer == '}' && candidateTrimmed.starts_with("{") &&
+		                        candidateTrimmed.find('}', 1) == std::string_view::npos && candidateTrimmed.find('{', 1) == std::string_view::npos;
+		if (!runInBrace && !matchesSmartDedentAnchor(candidateTrimmed, candidateUpperLine, language, request)) continue;
 		if (request.kind == SmartDedentKind::FishCase && isFishSwitchLead(candidateUpperLine))
 			targetColumn = candidateColumn + inferredShellIndentStepColumns(lineStart, settings);
 		else

@@ -1378,6 +1378,11 @@ bool showEditorContextMenuForWindow(MREditWindow *targetWindow, TPoint where) {
 	if (targetWindow != nullptr) static_cast<void>(activateEditorTargetWindow(targetWindow));
 	if (!commandSelected) return true;
 	switch (command) {
+		case cmMrEditPasteFromBuffer:
+			if (targetWindow == nullptr || targetWindow->getEditor() == nullptr) return false;
+			if (targetWindow->isReadOnly()) postDialogWarning(kWindowReadOnlyMessage);
+			else targetWindow->getEditor()->requestSystemClipboardPaste(target.offset);
+			return true;
 		case cmMrDebuggerToggleBreakpoint:
 		case cmMrDebuggerRunHere:
 		case cmMrDebuggerAddWatch:
@@ -2232,6 +2237,7 @@ bool copyMarkedBlockToSystemClipboard(MREditWindow *targetWindow) {
 	std::string errorText;
 
 	if (targetWindow == nullptr) return false;
+	if (targetWindow->isBlockMarking()) targetWindow->endBlock(false);
 	if (!targetWindow->captureBlockPayload(text, &errorText)) {
 		postDialogWarning(errorText.empty() ? "No block marked." : errorText);
 		return true;
@@ -2244,30 +2250,19 @@ bool handleEditCopyToSystemClipboard(MREditWindow *targetWindow) {
 	MREditWindow *window = effectiveKeymapWindow(targetWindow);
 
 	if (window == nullptr) return false;
-	if (window->hasSelection()) return dispatchEditorCommandEvent(window, cmCopy);
-	if (window->hasBlock()) return copyMarkedBlockToSystemClipboard(window);
 	return dispatchEditorCommandEvent(window, cmCopy);
 }
 
 bool handleEditCutToSystemClipboard(MREditWindow *targetWindow) {
 	MREditWindow *window = effectiveKeymapWindow(targetWindow);
-	std::string text;
-	std::string errorText;
 
 	if (window == nullptr) return false;
+	if (window->isBlockMarking()) window->endBlock(false);
 	if (window->isReadOnly()) {
 		postDialogWarning(kWindowReadOnlyMessage);
 		return true;
 	}
-	if (window->hasSelection()) return dispatchEditorCommandEvent(window, cmCut);
-	if (!window->hasBlock()) return dispatchEditorCommandEvent(window, cmCut);
-	if (!window->captureBlockPayload(text, &errorText)) {
-		postDialogWarning(errorText.empty() ? "No block marked." : errorText);
-		return true;
-	}
-	TClipboard::setText(TStringView(text.data(), text.size()));
-	if (!window->deleteBlock(&errorText)) postDialogWarning(errorText.empty() ? "Unable to delete block." : errorText);
-	return true;
+	return dispatchEditorCommandEvent(window, cmCut);
 }
 
 } // namespace

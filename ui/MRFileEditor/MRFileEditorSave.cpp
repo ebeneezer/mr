@@ -5,6 +5,8 @@
 #include <cerrno>
 #include <chrono>
 #include <fstream>
+#include <filesystem>
+#include <fcntl.h>
 #include <unistd.h>
 
 bool MRFileEditor::resolveSaveOptionsForPath(const char *path, MRTextSaveOptions &options, std::size_t *optionsHash) const {
@@ -63,6 +65,7 @@ bool MRFileEditor::loadMappedFile(TStringView path, std::string &error) {
 	mLastLoadTiming.linesExact = document.exactLineCountKnown();
 	mLastLoadTiming.mappedLoadMs = mappedLoadMs;
 	mLastLoadTiming.lineCountMs = 0.0;
+	mLastSavedPath.clear();
 	setPersistentFileName(path);
 	if (!adoptCommittedDocument(document, 0, 0, 0, false)) {
 		clearPersistentFileName();
@@ -117,73 +120,118 @@ Boolean MRFileEditor::saveAsWithoutOverwritePrompt() noexcept {
 	return True;
 }
 
-bool MRFileEditor::writeDocumentToPath(const char *targetPath) {
-	char drive[MAXDRIVE];
-	char dir[MAXDIR];
-	char file[MAXFILE];
-	char ext[MAXEXT];
+bool MRFileEditor::hasBeenSavedInSession() const noexcept {
+	return !mLastSavedPath.empty();
+}
+
+void MRFileEditor::updateAutosaveState() {
+	if (!isDocumentModified()) {
+		if (mAutosaveTimer != nullptr) killTimer(mAutosaveTimer);
+		mAutosaveTimer = nullptr;
+		mAutosaveDirtySince = {};
+		return;
+	}
+	const auto now = std::chrono::steady_clock::now();
+	if (mAutosaveDirtySince == std::chrono::steady_clock::time_point()) mAutosaveDirtySince = now;
+	mAutosaveLastActivity = now;
+	if (mAutosaveTimer == nullptr) mAutosaveTimer = setTimer(1000, 1000);
+}
+
+void MRFileEditor::autosaveIfDue() {
+	if (!isDocumentModified()) {
+		updateAutosaveState();
+		return;
+	}
+	if (!canSaveInPlace()) return;
+	MREditSetupSettings settings;
+	effectiveEditSetupSettingsForPath(fileName, settings);
+	const auto now = std::chrono::steady_clock::now();
+	const bool inactivityDue = settings.autosaveInactivitySeconds > 0 && now - mAutosaveLastActivity >= std::chrono::seconds(settings.autosaveInactivitySeconds);
+	const bool intervalDue = settings.autosaveIntervalSeconds > 0 && now - mAutosaveDirtySince >= std::chrono::seconds(settings.autosaveIntervalSeconds);
+	if (!inactivityDue && !intervalDue) return;
+	if (writeDocumentToPath(fileName, false)) {
+		mBufferModel.markSaved();
+		clearDirtyRanges();
+		updateAutosaveState();
+		syncFromEditorState(false);
+	} else {
+		// Retry after a full configured period, without opening a modal dialog.
+		mAutosaveDirtySince = now;
+		mAutosaveLastActivity = now;
+	}
+}
+
+bool MRFileEditor::writeDocumentToPath(const char *targetPath, bool interactive) {
 	MRTextSaveOptions saveOptions;
+	MREditSetupSettings settings;
+	effectiveEditSetupSettingsForPath(targetPath != nullptr ? targetPath : "", settings);
 	const std::size_t pieceCount = mBufferModel.document().pieceCount();
-	const bool backupEnabled = configuredBackupFilesSetting();
+	const bool backupEnabled = settings.backupFiles && settings.backupMethod != "OFF" &&
+	                           (settings.backupFrequency == "EVERY_SAVE" || !samePath(mLastSavedPath.c_str(), targetPath));
 	const bool privilegedSave = targetPath != nullptr && mrPrivilegedFileBrokerAllowsPath(targetPath);
-	const bool mappedInPlaceSave = mBufferModel.document().hasMappedOriginal() && samePath(mBufferModel.document().mappedPath().c_str(), targetPath);
-	bool backupMovedTarget = false;
-	bool useTemporaryTarget = false;
-	int privilegedDescriptor = -1;
-	std::string brokerError;
+	const bool brokerBackup = privilegedSave && backupEnabled && settings.backupMethod == "BAK_FILE" && settings.backupExtension == "bak";
+	int outputDescriptor = -1;
+	std::string saveError;
 	std::string temporaryTargetPath;
-	std::string outputTargetPath;
-	std::ofstream out;
+	std::string temporaryBackupPath;
+	std::string outputTargetPath = targetPath != nullptr ? targetPath : "";
+	std::filesystem::path backupPath;
+	struct stat originalStatus {};
+	const bool targetExists = ::stat(outputTargetPath.c_str(), &originalStatus) == 0;
 
 	resolveSaveOptionsForPath(targetPath, saveOptions);
-
-	if (backupEnabled && !privilegedSave) {
-		fnsplit(targetPath, drive, dir, file, ext);
-		char backupName[MAXPATH];
-		fnmerge(backupName, drive, dir, file, ".bak");
-		unlink(backupName);
-		backupMovedTarget = rename(targetPath, backupName) == 0;
-	}
-	useTemporaryTarget = !privilegedSave && mappedInPlaceSave && !backupMovedTarget;
-	outputTargetPath = targetPath != nullptr ? targetPath : "";
-	if (useTemporaryTarget) {
-		temporaryTargetPath = outputTargetPath + ".mr-save-tmp-" + std::to_string(static_cast<long long>(::getpid()));
-		unlink(temporaryTargetPath.c_str());
-		outputTargetPath = temporaryTargetPath;
-	}
-
-	if (privilegedSave) {
-		if (!mrPrivilegedFileBrokerBeginSave(targetPath, backupEnabled, privilegedDescriptor, brokerError)) {
-			if (!brokerError.empty()) mrLogMessage("Privileged save could not start: " + brokerError);
-			TEditor::editorDialog(edCreateError, targetPath);
-			return false;
-		}
-	} else {
-		out.open(outputTargetPath.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
-		if (!out) {
-			TEditor::editorDialog(edCreateError, targetPath);
-			return false;
-		}
-	}
 	auto failWrite = [&]() -> bool {
-		if (privilegedSave && !brokerError.empty()) mrLogMessage("Privileged save failed: " + brokerError);
-		if (privilegedDescriptor >= 0) {
-			::close(privilegedDescriptor);
-			privilegedDescriptor = -1;
+		if (saveError.empty()) saveError = std::strerror(errno);
+		if (outputDescriptor >= 0) {
+			::close(outputDescriptor);
+			outputDescriptor = -1;
 		}
 		if (privilegedSave) mrPrivilegedFileBrokerAbortSave();
-		if (!temporaryTargetPath.empty()) unlink(temporaryTargetPath.c_str());
-		TEditor::editorDialog(edWriteError, targetPath);
+		if (!temporaryTargetPath.empty()) ::unlink(temporaryTargetPath.c_str());
+		if (!temporaryBackupPath.empty()) ::unlink(temporaryBackupPath.c_str());
+		mrLogMessage("Save failed for " + outputTargetPath + ": " + saveError);
+		if (interactive) TEditor::editorDialog(edWriteError, targetPath);
+		else mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "Autosave failed: " + outputTargetPath + ": " + saveError, mr::messageline::Kind::Warning, mr::messageline::kPriorityMedium);
 		return false;
 	};
-	auto writeBytes = [&](const char *data, std::size_t length) -> bool {
-		if (!privilegedSave) {
-			writeChunk(out, data, length);
-			return static_cast<bool>(out);
+	if (outputTargetPath.empty() || (targetExists && !S_ISREG(originalStatus.st_mode))) {
+		saveError = "Save target is not a regular file.";
+		return failWrite();
+	}
+	if (targetExists && !privilegedSave) {
+		if (::access(outputTargetPath.c_str(), W_OK) != 0) return failWrite();
+		std::error_code error;
+		outputTargetPath = std::filesystem::canonical(outputTargetPath, error).string();
+		if (error) {
+			saveError = error.message();
+			return failWrite();
 		}
+	}
+	if (backupEnabled && !brokerBackup) {
+		backupPath = outputTargetPath;
+		if (settings.backupMethod == "DIRECTORY") backupPath = std::filesystem::path(settings.backupDirectory) / backupPath.filename();
+		else backupPath.replace_extension("." + settings.backupExtension);
+		std::error_code error;
+		if (backupPath == std::filesystem::path(outputTargetPath) || std::filesystem::equivalent(backupPath, outputTargetPath, error)) {
+			saveError = "Backup path identifies the original file.";
+			return failWrite();
+		}
+	}
+	if (privilegedSave) {
+		if (!mrPrivilegedFileBrokerBeginSave(targetPath, brokerBackup, outputDescriptor, saveError)) return failWrite();
+	} else {
+		temporaryTargetPath = outputTargetPath + ".mr-save-XXXXXX";
+		outputDescriptor = ::mkstemp(temporaryTargetPath.data());
+		if (outputDescriptor < 0) {
+			temporaryTargetPath.clear();
+			return failWrite();
+		}
+		if (targetExists && ::fchmod(outputDescriptor, originalStatus.st_mode & 07777) != 0) return failWrite();
+	}
+	auto writeBytes = [&](const char *data, std::size_t length) -> bool {
 		while (length > 0) {
 			const std::size_t part = std::min<std::size_t>(length, static_cast<std::size_t>(1024) * 1024 * 1024);
-			ssize_t written = ::write(privilegedDescriptor, data, part);
+			ssize_t written = ::write(outputDescriptor, data, part);
 			if (written > 0) {
 				data += written;
 				length -= static_cast<std::size_t>(written);
@@ -195,19 +243,51 @@ bool MRFileEditor::writeDocumentToPath(const char *targetPath) {
 		return true;
 	};
 	auto finishWrite = [&]() -> bool {
-		if (privilegedSave) {
-			if (::close(privilegedDescriptor) != 0) {
-				privilegedDescriptor = -1;
+		if (::fsync(outputDescriptor) != 0) return failWrite();
+		if (::close(outputDescriptor) != 0) {
+			outputDescriptor = -1;
+			return failWrite();
+		}
+		outputDescriptor = -1;
+		if (backupEnabled && !brokerBackup && (targetExists || privilegedSave)) {
+			// Copy to a new inode: an older backup may still back a mapped document.
+			temporaryBackupPath = backupPath.string() + ".mr-backup-XXXXXX";
+			int backupDescriptor = ::mkstemp(temporaryBackupPath.data());
+			if (backupDescriptor < 0) {
+				temporaryBackupPath.clear();
 				return failWrite();
 			}
-			privilegedDescriptor = -1;
-			if (!mrPrivilegedFileBrokerCommitSave(brokerError)) return failWrite();
-			return true;
+			int sourceDescriptor = privilegedSave ? mrPrivilegedFileBrokerOpenReadOnly(targetPath, saveError) : ::open(outputTargetPath.c_str(), O_RDONLY | O_CLOEXEC);
+			bool copied = sourceDescriptor >= 0;
+			char bytes[65536];
+			while (copied) {
+				ssize_t count = ::read(sourceDescriptor, bytes, sizeof(bytes));
+				if (count == 0) break;
+				if (count < 0) {
+					if (errno == EINTR) continue;
+					copied = false;
+					break;
+				}
+				ssize_t offset = 0;
+				while (offset < count) {
+					ssize_t written = ::write(backupDescriptor, bytes + offset, static_cast<std::size_t>(count - offset));
+					if (written > 0) offset += written;
+					else if (written < 0 && errno == EINTR) continue;
+					else { copied = false; break; }
+				}
+			}
+			if (!copied) saveError = std::strerror(errno);
+			if (sourceDescriptor >= 0) ::close(sourceDescriptor);
+			if (copied && ::fsync(backupDescriptor) != 0) { saveError = std::strerror(errno); copied = false; }
+			if (::close(backupDescriptor) != 0) { saveError = std::strerror(errno); copied = false; }
+			if (!copied || ::rename(temporaryBackupPath.c_str(), backupPath.c_str()) != 0) return failWrite();
+			temporaryBackupPath.clear();
 		}
-		if (!out) return failWrite();
-		out.close();
-		if (!out) return failWrite();
-		if (!temporaryTargetPath.empty() && rename(temporaryTargetPath.c_str(), targetPath) != 0) return failWrite();
+		if (privilegedSave) {
+			if (!mrPrivilegedFileBrokerCommitSave(saveError)) return failWrite();
+		} else if (::rename(temporaryTargetPath.c_str(), outputTargetPath.c_str()) != 0) return failWrite();
+		temporaryTargetPath.clear();
+		mLastSavedPath = targetPath;
 		return true;
 	};
 

@@ -221,7 +221,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 
 	MREditWindow(const TRect &bounds, const char *title, int aNumber,
 	             mr::coprocessor::ExecutionOwnerKind executionOwnerKind = mr::coprocessor::ExecutionOwnerKind::EditorWindow)
-	    : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr), hScrollBar(nullptr), indicator(nullptr), editor(nullptr), mBufferId(allocateBufferId()), mFirstSaveDone(false), mTemporaryFileUsed(false), mTemporaryFileName(), mIndentLevel(1), mBlockOps(), mCursorGestureBlockMarking(false), mFullscreenPresentation(false), mTrackedCoprocessorTasks(), mGitStatusKnown(false), mGitChanged(false), mGitStatusGeneration(0), mGitStatusTaskId(0), mGitStatusPath(), mWindowRole(wrText), mWindowRoleDetail(), mMacroQueuedCount(0), mMacroCompletedCount(0), mMacroConflictCount(0), mMacroCancelledCount(0), mMacroFailedCount(0), mLastMacroSummaryText(), mAppliedColorThemePath(), mAppliedColorThemeUri(), mWindowPaletteData(defaultWindowPaletteData()), mWindowPalette(mWindowPaletteData.data(), static_cast<ushort>(mWindowPaletteData.size())), mCustomEofMarkerColorValid(false), mCustomEofMarkerColor(0), mClosePrepared(false), mMinimized(false), mBufferedBeforeMinimize(false), mRestoreBounds(bounds), mLastMinimizedBounds(0, 0, 0, 0) {
+	    : TWindowInit(&MREditWindow::initFrame), TWindow(bounds, 0, aNumber), vScrollBar(nullptr), hScrollBar(nullptr), indicator(nullptr), editor(nullptr), mBufferId(allocateBufferId()), mTemporaryFileUsed(false), mTemporaryFileName(), mIndentLevel(1), mBlockOps(), mCursorGestureBlockMarking(false), mFullscreenPresentation(false), mTrackedCoprocessorTasks(), mGitStatusKnown(false), mGitChanged(false), mGitStatusGeneration(0), mGitStatusTaskId(0), mGitStatusPath(), mWindowRole(wrText), mWindowRoleDetail(), mMacroQueuedCount(0), mMacroCompletedCount(0), mMacroConflictCount(0), mMacroCancelledCount(0), mMacroFailedCount(0), mLastMacroSummaryText(), mAppliedColorThemePath(), mAppliedColorThemeUri(), mWindowPaletteData(defaultWindowPaletteData()), mWindowPalette(mWindowPaletteData.data(), static_cast<ushort>(mWindowPaletteData.size())), mCustomEofMarkerColorValid(false), mCustomEofMarkerColor(0), mClosePrepared(false), mMinimized(false), mBufferedBeforeMinimize(false), mRestoreBounds(bounds), mLastMinimizedBounds(0, 0, 0, 0) {
 		options |= ofTileable;
 
 		std::strncpy(displayTitle, (title != nullptr && *title != '\0') ? title : "Untitled", sizeof(displayTitle) - 1);
@@ -470,6 +470,13 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 			const bool originalEditorDoubleClick = originalEvent == evMouseDown && editor != nullptr && (event.mouse.buttons & mbLeftButton) != 0 && (event.mouse.eventFlags & meDoubleClick) != 0 && editor->mouseInView(event.mouse.where);
 			const bool originalEditorBlockMouseGesture = originalEvent == evMouseDown && editor != nullptr && editorBlockMouseGesture(event);
 			const bool originalEditorRightClick = originalEvent == evMouseDown && editor != nullptr && plainEditorRightClick(event);
+			if (originalEvent == evMouseDown && editor != nullptr && editor->textPointInView(event.mouse.where) &&
+			    event.mouse.buttons == mbRightButton && (event.mouse.controlKeyState & kbCtrlShift) != 0 &&
+			    (event.mouse.controlKeyState & (kbShift | kbAltShift)) == 0) {
+				clearBlock();
+				clearEvent(event);
+				return;
+			}
 			if (event.what == evCommand) {
 				const ushort command = event.message.command;
 				if (keyDebugEnabled() && (command == cmMrBlockMarkLines || command == cmMrBlockMarkColumns || command == cmMrBlockMarkStream || command == cmMrBlockToggleMarking || command == cmMrBlockToggleVisibility ||
@@ -709,7 +716,6 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 
 		bool ok = editor->saveInPlace() == True;
 		if (ok) {
-			mFirstSaveDone = true;
 			mTemporaryFileUsed = false;
 			mTemporaryFileName.clear();
 			setWindowRole(wrFile);
@@ -727,7 +733,6 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 
 		bool ok = editor->saveAsWithPrompt() == True;
 		if (ok) {
-			mFirstSaveDone = true;
 			mTemporaryFileUsed = false;
 			mTemporaryFileName.clear();
 			setReadOnly(mrPathRequiresReadOnlyEditor(editor->persistentFileName()));
@@ -747,7 +752,6 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 
 		bool ok = editor->canSaveInPlace() ? editor->saveInPlace() == True : editor->saveAsWithoutOverwritePrompt() == True;
 		if (ok) {
-			mFirstSaveDone = true;
 			mTemporaryFileUsed = false;
 			mTemporaryFileName.clear();
 			setReadOnly(mrPathRequiresReadOnlyEditor(editor->persistentFileName()));
@@ -990,7 +994,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 	}
 
 	bool hasBeenSavedInSession() const {
-		return mFirstSaveDone;
+		return editor != nullptr && editor->hasBeenSavedInSession();
 	}
 
 	bool eofInMemory() const {
@@ -1597,11 +1601,11 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		return mBlockOps.setCommittedBlock(*editor, MRFEBlockMode::Line, 0, cursor);
 	}
 
-	void endBlock() {
+	void endBlock(bool finishDrawing = true) {
 		mCursorGestureBlockMarking = false;
 		if (editor == nullptr) return;
 		static_cast<void>(mBlockOps.end(*editor));
-		static_cast<void>(finishLineDrawingColumnBlock());
+		if (finishDrawing) static_cast<void>(finishLineDrawingColumnBlock());
 	}
 
 	void clearBlock() {
@@ -2194,7 +2198,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 
 	bool handleBlockTabIndentKey(TEvent &event) {
 		if (event.what != evKeyDown || editor == nullptr || !mBlockOps.hasVisibleBlock()) return false;
-		if (mBlockOps.mGeometry.mode != MRFEBlockMode::Line && mBlockOps.mGeometry.mode != MRFEBlockMode::Column && mBlockOps.mGeometry.mode != MRFEBlockMode::Stream) return false;
+		if (!blockContainsPosition(editor->cursorOffset(), editor->displayedCursorLineIndex(), editor->displayedCursorColumn())) return false;
 		const ushort keyCode = event.keyDown.keyCode;
 		const ushort mods = event.keyDown.controlKeyState;
 		const bool shift = (mods & kbShift) != 0;
@@ -2588,7 +2592,6 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 	MRIndicator *indicator;
 	MRFileEditor *editor;
 	int mBufferId;
-	bool mFirstSaveDone;
 	bool mManuallyHidden = false;
 	bool mTemporaryFileUsed;
 	std::string mTemporaryFileName;
