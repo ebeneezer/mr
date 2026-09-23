@@ -8,7 +8,11 @@
 			"program": "${workspaceFolder}/mr",
 			"args": [],
 			"cwd": "${workspaceFolder}",
-			"preLaunchTask": "Rebuild mr (Clean & Neu)"
+			"preLaunchTask": "Rebuild mr (Clean & Neu)",
+			"terminal" :  "integrated",
+			"env": {
+				"TERM": "xterm-256color"
+			}
 		}
 	]
 }
