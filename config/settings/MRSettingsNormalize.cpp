@@ -55,6 +55,7 @@ bool loadAndNormalizeSettingsSource(const std::string &settingsPath, const std::
 				continue;
 			}
 			if (parsedVersion > currentPersistenceVersion) {
+				activeReport.futureVersion = parsedVersion;
 				if (errorMessage != nullptr) *errorMessage = mrFuturePersistenceVersionMessage("Settings source", versionLiteral);
 				return false;
 			}

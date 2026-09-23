@@ -4,6 +4,7 @@
 #include "MRSettingsRuntime.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -22,6 +23,7 @@ struct MRSettingsLoadReport {
 	};
 
 	unsigned int flags = None;
+	std::uint64_t futureVersion = 0;
 	std::size_t appliedAssignmentCount = 0;
 	std::size_t ignoredAssignmentCount = 0;
 	std::size_t duplicateAssignmentCount = 0;

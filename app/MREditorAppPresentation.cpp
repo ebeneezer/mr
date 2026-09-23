@@ -383,6 +383,10 @@ void MREditorApp::applyConfiguredDisplayLayout() {
 }
 
 void MREditorApp::handleEvent(TEvent &event) {
+	if (exitPrepared) {
+		TApplication::handleEvent(event);
+		return;
+	}
 	if (event.what == evNothing) return;
 	if (event.what == evBroadcast) {
 		switch (event.message.command) {
@@ -455,7 +459,7 @@ void MREditorApp::handleEvent(TEvent &event) {
 }
 
 void MREditorApp::idle() {
-	if (!updateCheckStarted) {
+	if (!exitPrepared && !updateCheckStarted) {
 		updateCheckStarted = true;
 		mrStartAutomaticUpdateCheck();
 	}
@@ -468,6 +472,10 @@ void MREditorApp::idle() {
 		putEvent(quitEvent);
 	}
 	TApplication::idle();
+	if (exitPrepared) {
+		mr::coprocessor::globalCoprocessor().pumpFor(coprocessorPumpBudget);
+		return;
+	}
 	if (interactiveMouseCaptureDepth > 0) return;
 	updatePerformancePanel();
 	if (pumpForegroundMacroDelays()) refreshEditorContext();

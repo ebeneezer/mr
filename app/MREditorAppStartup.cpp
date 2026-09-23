@@ -214,7 +214,7 @@ ushort mrEditorDialog(int dialog, ...) {
 // This function orchestrates bootstrap staging, canonicalization and the final
 // VM apply. The runtime settings state is authoritative only after the final
 // applySettingsSourceViaVm call completes successfully.
-bool loadStartupSettingsMacro(const std::string &overridePath, std::string *errorMessage) {
+bool loadStartupSettingsMacro(const std::string &overridePath, bool &restartRequested, std::string *errorMessage) {
 	std::string settingsPath = overridePath.empty() ? defaultSettingsMacroFilePath() : overridePath;
 	std::string source;
 	MRSettingsLoadReport report;
@@ -241,13 +241,26 @@ bool loadStartupSettingsMacro(const std::string &overridePath, std::string *erro
 	}
 	logSettingsBootstrapPhase("ensure_file");
 	if (!readTextFile(settingsPath, source)) {
-		source.clear();
+		if (errorMessage != nullptr) *errorMessage = "Unable to read settings: " + settingsPath;
+		return false;
 	}
 	logSettingsBootstrapPhase("read_file");
-	if (!prepareStartupSettingsSource(settingsPath, source, &report, canonicalSource, errorMessage)) {
-		logSettingsBootstrapPhase("prepare_canonical_source");
-		mrLogMessage(errorMessage != nullptr ? errorMessage->c_str() : "Settings canonicalization failed.");
-		return false;
+	while (!prepareStartupSettingsSource(settingsPath, source, &report, canonicalSource, errorMessage)) {
+		if (report.futureVersion == 0) return false;
+		const MRSettingsVersionResolution resolution = mrResolveSettingsVersionConflict(report.futureVersion);
+		if (resolution != MRSettingsVersionResolution::Reset) {
+			restartRequested = resolution == MRSettingsVersionResolution::Updated;
+			if (errorMessage != nullptr) errorMessage->clear();
+			return false;
+		}
+		const std::string backupPath = settingsPath + ".before-reset-" + std::to_string(std::time(nullptr)) + "-" + std::to_string(::getpid()) + ".bak";
+		std::error_code backupError;
+		if (!std::filesystem::copy_file(settingsPath, backupPath, std::filesystem::copy_options::none, backupError)) {
+			if (errorMessage != nullptr) *errorMessage = "Settings reset cancelled: unable to create backup: " + backupError.message();
+			return false;
+		}
+		mrLogMessage("Settings backup before reset: " + backupPath);
+		source.clear();
 	}
 	logSettingsBootstrapPhase("prepare_canonical_source");
 	if (!applySettingsSourceViaVm(settingsPath, canonicalSource, errorMessage)) {
@@ -601,7 +614,15 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 	mr::coprocessor::globalCoprocessor().setResultHandler(handleCoprocessorResult);
 	initializePerformancePanel();
 	initializeFullscreenHint();
-	loadStartupSettingsMacro(std::string(), nullptr);
+	// Modal bootstrap must not run editor commands, autosave or shutdown persistence.
+	exitPrepared = true;
+	std::string settingsError;
+	if (!loadStartupSettingsMacro(std::string(), restartAfterExit, &settingsError)) {
+		if (!settingsError.empty()) messageBox(settingsError.c_str(), mfError | mfOKButton);
+		startupQuitPending = true;
+		return;
+	}
+	exitPrepared = false;
 	refreshConfiguredUiSettingsSnapshot();
 	redraw();
 	logStartupPhase("settings_bootstrap");

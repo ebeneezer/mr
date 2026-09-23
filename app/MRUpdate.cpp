@@ -1,3 +1,7 @@
+#define Uses_TButton
+#define Uses_TParamText
+#define Uses_TStaticText
+#define Uses_TWindowInit
 #include "MRUpdate.hpp"
 #include "MRUpdateInternal.hpp"
 
@@ -12,6 +16,7 @@
 #include "../ui/MRMenuBar.hpp"
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRWindowSupport.hpp"
+#include "../dialogs/setup/MRSetupCommon.hpp"
 
 #include <archive.h>
 #include <archive_entry.h>
@@ -229,7 +234,7 @@ std::size_t curlWrite(void *contents, std::size_t size, std::size_t count, void 
 	return length;
 }
 
-bool downloadHttps(CURL *curl, const std::string &url, std::size_t limit, long timeoutSeconds, std::vector<unsigned char> &bytes, std::string &error) {
+bool downloadHttps(CURL *curl, const std::string &url, std::size_t limit, long timeoutSeconds, std::vector<unsigned char> &bytes, std::string &error, const mr::coprocessor::TaskInfo &task) {
 	DownloadBuffer target{&bytes, limit, false};
 	char curlError[CURL_ERROR_SIZE]{};
 
@@ -242,6 +247,11 @@ bool downloadHttps(CURL *curl, const std::string &url, std::size_t limit, long t
 	curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeoutSeconds);
+	curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+	curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &task);
+	curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, +[](void *data, curl_off_t, curl_off_t, curl_off_t, curl_off_t) -> int {
+		return static_cast<const mr::coprocessor::TaskInfo *>(data)->cancelRequested() ? 1 : 0;
+	});
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, "MR-editor-update/1");
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlWrite);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &target);
@@ -261,9 +271,9 @@ bool downloadHttps(CURL *curl, const std::string &url, std::size_t limit, long t
 	return true;
 }
 
-bool downloadSignedManifest(CURL *curl, UpdateManifest &manifest, std::vector<unsigned char> &manifestBytes, std::vector<unsigned char> &signature, std::string &error) {
-	if (!downloadHttps(curl, kLatestManifestUrl, kManifestLimit, 30, manifestBytes, error)) return false;
-	if (!downloadHttps(curl, kLatestSignatureUrl, kSignatureLimit, 30, signature, error)) return false;
+bool downloadSignedManifest(CURL *curl, UpdateManifest &manifest, std::vector<unsigned char> &manifestBytes, std::vector<unsigned char> &signature, std::string &error, const mr::coprocessor::TaskInfo &task) {
+	if (!downloadHttps(curl, kLatestManifestUrl, kManifestLimit, 30, manifestBytes, error, task)) return false;
+	if (!downloadHttps(curl, kLatestSignatureUrl, kSignatureLimit, 30, signature, error, task)) return false;
 	if (!verifyManifestSignatureLocal(manifestBytes, signature, error)) return false;
 	return parseManifestLocal(manifestBytes, manifest, error);
 }
@@ -436,7 +446,7 @@ mr::coprocessor::Result runUpdateCheck(const mr::coprocessor::TaskInfo &task) {
 	}
 	if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) return failedResult("Unable to initialize HTTPS update check.");
 	CURL *curl = curl_easy_init();
-	const bool downloaded = curl != nullptr && downloadSignedManifest(curl, manifest, manifestBytes, signature, error);
+	const bool downloaded = curl != nullptr && downloadSignedManifest(curl, manifest, manifestBytes, signature, error, task);
 	if (curl != nullptr) curl_easy_cleanup(curl);
 	curl_global_cleanup();
 	if (!downloaded) return failedResult(error.empty() ? "Unable to check for updates." : error);
@@ -446,7 +456,7 @@ mr::coprocessor::Result runUpdateCheck(const mr::coprocessor::TaskInfo &task) {
 	return result;
 }
 
-mr::coprocessor::Result downloadUpdatePackage(const mr::coprocessor::TaskInfo &task, const std::string &wantedVersion) {
+mr::coprocessor::Result downloadUpdatePackage(const mr::coprocessor::TaskInfo &task, const std::string &wantedVersion, std::uint64_t minimumBuild) {
 	mr::coprocessor::Result result;
 	std::shared_ptr<UpdatePackagePayload> package = std::make_shared<UpdatePackagePayload>();
 	std::vector<unsigned char> archiveBytes;
@@ -458,14 +468,19 @@ mr::coprocessor::Result downloadUpdatePackage(const mr::coprocessor::TaskInfo &t
 	}
 	if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) return failedResult("Unable to initialize HTTPS update download.");
 	CURL *curl = curl_easy_init();
-	bool success = curl != nullptr && downloadSignedManifest(curl, package->manifest, package->manifestBytes, package->signature, error);
+	bool success = curl != nullptr && downloadSignedManifest(curl, package->manifest, package->manifestBytes, package->signature, error, task);
 	if (success && package->manifest.version != wantedVersion) {
 		error = "The available release changed during download; please retry.";
 		success = false;
 	}
+	std::uint64_t packageBuild = 0;
+	if (success && minimumBuild != 0 && (!mrParsePersistenceVersion(package->manifest.build, packageBuild) || packageBuild < minimumBuild)) {
+		error = "The available update cannot read these settings.";
+		success = false;
+	}
 	if (success) {
 		const std::string archiveUrl = std::string(kReleaseBaseUrl) + package->manifest.version + "/" + package->manifest.archiveName;
-		success = downloadHttps(curl, archiveUrl, kArchiveLimit, 300, archiveBytes, error);
+		success = downloadHttps(curl, archiveUrl, kArchiveLimit, 300, archiveBytes, error, task);
 	}
 	if (curl != nullptr) curl_easy_cleanup(curl);
 	curl_global_cleanup();
@@ -478,8 +493,86 @@ mr::coprocessor::Result downloadUpdatePackage(const mr::coprocessor::TaskInfo &t
 }
 
 void postUpdateError(const std::string &error) {
+	storeUpdateString("error", error.empty() ? "Update failed." : error);
 	mr::messageline::postAutoTimed(mr::messageline::Owner::ApplicationUpdate, error.empty() ? "Update failed." : error, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh);
 }
+
+class SettingsVersionDialog final : public MRDialogFoundation {
+  public:
+	explicit SettingsVersionDialog(std::uint64_t requiredBuild)
+	    : TWindowInit(mr::dialogs::initSetupDialogFrame), MRDialogFoundation(centeredSetupDialogRect(76, 15), "SETTINGS VERSION CONFLICT", 76, 15) {
+		insert(new TStaticText(TRect(3, 2, 73, 4), "These settings were saved by a newer build.\nReset creates a backup before restoring this build's defaults."));
+		const std::string builds = "Settings build: " + std::to_string(requiredBuild) + "   This build: " + mrCurrentPersistenceVersionString();
+		insert(new TStaticText(TRect(3, 5, 73, 6), builds.c_str()));
+		statusText = new TParamText(TRect(3, 7, 73, 10));
+		insert(statusText);
+		resetButton = new TButton(TRect(5, 11, 25, 13), "~R~eset Settings", cmYes, bfNormal);
+		updateButton = new TButton(TRect(28, 11, 48, 13), "~U~pdate", cmNo, bfNormal);
+		cancelButton = new TButton(TRect(51, 11, 71, 13), "~C~ancel", cmCancel, bfDefault);
+		insert(resetButton);
+		insert(updateButton);
+		insert(cancelButton);
+		updateButton->setState(sfDisabled, True);
+		cancelButton->select();
+		statusText->setText("Checking for a signed update...");
+	}
+
+	void handleEvent(TEvent &event) override {
+		const bool installing = readUpdateInt("busy") != 0 && readUpdateInt("startupInstall") != 0;
+		if (readUpdateInt("startupInstalled") != 0) {
+			endModal(cmNo);
+			clearEvent(event);
+			return;
+		}
+		std::string label = "~U~pdate";
+		const std::string version = mrUpdateAvailableVersion();
+		if (!version.empty()) label += " to " + version;
+		if (label != updateButton->title) {
+			delete[] updateButton->title;
+			updateButton->title = newStr(label.c_str());
+			updateButton->drawView();
+		}
+		updateButton->setState(sfDisabled, !mrUpdateAvailable() || readUpdateInt("busy") != 0);
+		resetButton->setState(sfDisabled, installing);
+		cancelButton->setState(sfDisabled, installing);
+		std::string status = readUpdateString("error");
+		if (status.empty()) {
+			if (installing) status = "Updating. Settings remain unchanged until the new build starts.";
+			else if (readUpdateInt("busy") != 0) status = "Checking for a signed update...";
+			else if (mrUpdateAvailable()) status = "A compatible update is available. Cancel leaves settings unchanged.";
+			else status = "No published update supports this settings build.\nUpdate is unavailable; this can occur after using a local test build.";
+		}
+		if (status != displayedStatus) {
+			displayedStatus = status;
+			statusText->setText("%s", status.c_str());
+		}
+		if (event.what == evCommand && event.message.command == cmNo) {
+			if (mrUpdateAvailable() && readUpdateInt("busy") == 0) {
+				storeUpdateInt("startupInstall", 1);
+				mrHandleUpdateCommand();
+			}
+			clearEvent(event);
+			return;
+		}
+		if (installing && event.what == evCommand && (event.message.command == cmYes || event.message.command == cmCancel)) {
+			clearEvent(event);
+			return;
+		}
+		MRDialogFoundation::handleEvent(event);
+	}
+
+	Boolean valid(ushort command) override {
+		if (command != 0 && readUpdateInt("startupInstall") != 0 && readUpdateInt("busy") != 0) return False;
+		return MRDialogFoundation::valid(command);
+	}
+
+  private:
+	TButton *resetButton;
+	TButton *updateButton;
+	TButton *cancelButton;
+	TParamText *statusText;
+	std::string displayedStatus;
+};
 
 } // namespace
 
@@ -524,10 +617,29 @@ MRUpdateInternalStartup mrStartInternalUpdateApply(int argc, char **argv, int &e
 }
 
 void mrStartAutomaticUpdateCheck() {
+	if (readUpdateInt("busy") != 0) return;
 	storeUpdateInt("available", 0);
+	storeUpdateString("version", "");
+	storeUpdateString("error", "");
 	storeUpdateInt("busy", 1);
 	const std::uint64_t taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Io, mr::coprocessor::TaskKind::Custom, 0, 0, mr::coprocessor::ExecutionOwnerKind::Worker, kUpdateCheckOwner, "application update check", runUpdateCheck);
-	if (taskId == 0) storeUpdateInt("busy", 0);
+	if (taskId == 0) {
+		storeUpdateInt("busy", 0);
+		postUpdateError("Unable to start the update check.");
+	}
+}
+
+MRSettingsVersionResolution mrResolveSettingsVersionConflict(std::uint64_t requiredBuild) {
+	storeUpdateString("minimumBuild", std::to_string(requiredBuild));
+	storeUpdateInt("startupInstall", 0);
+	storeUpdateInt("startupInstalled", 0);
+	mrStartAutomaticUpdateCheck();
+	const ushort result = mr::dialogs::execDialog(new SettingsVersionDialog(requiredBuild));
+	storeUpdateString("minimumBuild", "");
+	storeUpdateInt("startupInstall", 0);
+	if (result == cmYes) return MRSettingsVersionResolution::Reset;
+	if (result == cmNo) return MRSettingsVersionResolution::Updated;
+	return MRSettingsVersionResolution::Cancel;
 }
 
 bool mrAdoptUpdateCoprocessorResult(const mr::coprocessor::Result &result) {
@@ -535,11 +647,16 @@ bool mrAdoptUpdateCoprocessorResult(const mr::coprocessor::Result &result) {
 	if (result.task.executionOwnerLocalId == kUpdateCheckOwner) {
 		storeUpdateInt("busy", 0);
 		const UpdateCheckPayload *payload = dynamic_cast<const UpdateCheckPayload *>(result.payload.get());
-		if (result.completed() && payload != nullptr && payload->updateAvailable) {
-			storeUpdateInt("available", 1);
+		if (result.completed() && payload != nullptr) {
+			std::uint64_t minimumBuild = 0;
+			std::uint64_t candidateBuild = 0;
+			mrParsePersistenceVersion(readUpdateString("minimumBuild"), minimumBuild);
+			mrParsePersistenceVersion(payload->manifest.build, candidateBuild);
+			const bool available = minimumBuild != 0 ? candidateBuild >= minimumBuild : payload->updateAvailable;
+			storeUpdateInt("available", available ? 1 : 0);
 			storeUpdateString("version", payload->manifest.version);
-			mr::messageline::postTimed(mr::messageline::Owner::ApplicationUpdate, "Update V" + payload->manifest.version + " available — see Help.", mr::messageline::Kind::Warning, std::chrono::seconds(7), mr::messageline::kPriorityHigh);
-		}
+			if (available && minimumBuild == 0) mr::messageline::postTimed(mr::messageline::Owner::ApplicationUpdate, "Update V" + payload->manifest.version + " available — see Help.", mr::messageline::Kind::Warning, std::chrono::seconds(7), mr::messageline::kPriorityHigh);
+		} else storeUpdateString("error", result.error.empty() ? "Unable to verify an update. Settings remain unchanged." : result.error);
 		mr::coprocessor::globalCoprocessor().noteResultAdoption(result, true);
 		return true;
 	}
@@ -554,6 +671,7 @@ bool mrAdoptUpdateCoprocessorResult(const mr::coprocessor::Result &result) {
 		std::shared_ptr<const UpdatePackagePayload> payload = std::dynamic_pointer_cast<const UpdatePackagePayload>(result.payload);
 		std::shared_ptr<mr::update_internal::UpdateAuthorization> authorization = mr::update_internal::ensureUpdatePrivileges();
 		if (authorization == nullptr) {
+			storeUpdateString("error", "Update cancelled. Settings remain unchanged.");
 			mr::coprocessor::globalCoprocessor().noteResultAdoption(result, true);
 			return true;
 		}
@@ -576,7 +694,8 @@ bool mrAdoptUpdateCoprocessorResult(const mr::coprocessor::Result &result) {
 			storeUpdateInt("available", 0);
 			mr::messageline::clearOwner(mr::messageline::Owner::ApplicationUpdate);
 			if (!payload->warning.empty()) mr::messageline::postTimed(mr::messageline::Owner::ApplicationUpdate, payload->warning, mr::messageline::Kind::Warning, std::chrono::seconds(7), mr::messageline::kPriorityHigh);
-			static_cast<void>(mr::update_internal::showChangedAndRestart(*payload));
+			if (readUpdateInt("startupInstall") != 0) storeUpdateInt("startupInstalled", 1);
+			else static_cast<void>(mr::update_internal::showChangedAndRestart(*payload));
 		}
 		mr::coprocessor::globalCoprocessor().noteResultAdoption(result, true);
 		return true;
@@ -588,10 +707,13 @@ bool mrHandleUpdateCommand() {
 	if (!mrUpdateAvailable() || readUpdateInt("busy") != 0) return true;
 	const std::string version = mrUpdateAvailableVersion();
 	if (version.empty()) return true;
+	std::uint64_t minimumBuild = 0;
+	mrParsePersistenceVersion(readUpdateString("minimumBuild"), minimumBuild);
+	storeUpdateString("error", "");
 	storeUpdateInt("busy", 1);
 	mr::messageline::postSticky(mr::messageline::Owner::ApplicationUpdate, "Updating to V" + version + " - one moment please.", mr::messageline::Kind::Warning, mr::messageline::kPriorityHigh);
 	const std::uint64_t taskId = mr::coprocessor::globalCoprocessor().submit(mr::coprocessor::Lane::Io, mr::coprocessor::TaskKind::Custom, 0, 0, mr::coprocessor::ExecutionOwnerKind::Worker, kUpdatePackageOwner, "application update download",
-	                                                                        [version](const mr::coprocessor::TaskInfo &task) { return downloadUpdatePackage(task, version); });
+	                                                                        [version, minimumBuild](const mr::coprocessor::TaskInfo &task) { return downloadUpdatePackage(task, version, minimumBuild); });
 	if (taskId == 0) {
 		storeUpdateInt("busy", 0);
 		postUpdateError("Unable to start the update download worker.");
