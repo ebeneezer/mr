@@ -44,6 +44,24 @@ and is not a second settings authority.
   carries the current build epoch.
 - The final VM apply receives only canonical current-source settings.
 
+### Future-build startup decision
+
+Future input opens a modal startup dialog before settings VM application,
+AUTOEXEC, workspace restoration or autosave. Cancel is selected by default.
+Cancel aborts startup without running normal shutdown persistence. Other
+bootstrap failures also abort startup instead of saving runtime defaults.
+
+Reset Settings first creates a non-overwriting, complete backup next to the
+settings file. A backup failure aborts the reset. Defaults then follow the
+existing canonicalization and VM startup-apply path.
+
+Update to the verified release is enabled only when its signed manifest build
+is at least the rejected settings build. This also permits a compatible newer
+build of the same release version. Package download verifies the minimum build
+again. Update failure preserves settings; successful installation restarts the
+installed editor without persisting the rejected startup state. When no suitable
+published build exists, the dialog explains why Update is disabled.
+
 ## Bootstrap sequence
 
 1. Ensure the settings file exists.

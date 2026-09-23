@@ -1681,6 +1681,14 @@ settings context. The runtime model becomes authoritative only after that
 succeeds. This is why settings.mrmac is readable MRMAC source but is not
 an ordinary startup script to extend casually.
 
+When settings come from a newer build, a startup dialog offers Reset
+Settings, Update to the verified release, and Cancel. Cancel is selected
+by default and exits without changing settings. Reset first saves a full
+backup beside settings.mrmac, then restores this build's defaults. Update
+is enabled only if the signed release build can read the settings; it may
+be unavailable for settings written by a newer local test build. A failed
+update leaves settings unchanged.
+
 Most accepted setup changes are written through the central runtime
 snapshot to settings.mrmac. A normal exit also persists remaining dirty
 settings. Some domain dialogs additionally have direct Load, Save, or Save
@@ -2114,8 +2122,7 @@ Save As in that directory. MRDefaultKeymaps.mrmac is the complete recovery
 import: it resets the keymap draft, installs the WordStar, Emacs, and Nano
 profiles, and selects WordStar. emacs.mrmac and nano.mrmac reset to and
 select the respective single profile. wordstar.mrmac supplies the
-three-profile set with WordStar selected and adds Smart Backspace through
-wordstar-extensions.mrmac. Loading a file remains an explicit action;
+three-profile set with WordStar selected. Loading a file remains an explicit action;
 installation alone does not silently replace the active profile.
 
 The current factory WordStar, Emacs, and Nano files all bind Ctrl+A to
@@ -2745,9 +2752,10 @@ join lines. UTF-8 sequences are treated as editor characters rather than a
 request to delete one arbitrary byte.
 
 With a visible marked block, Delete removes the block only when the cursor
-is inside it. Backspace also removes it when the cursor is immediately at
-its right boundary. Outside those positions, these keys delete a single
-character in their usual direction and preserve the block marking.
+is inside it. Outside the block, Delete removes a single character and
+preserves the block marking. Backspace deletes the preceding character
+without deleting the marked block. Custom block deletion on Backspace can
+be assigned through an MRMAC macro binding.
 
 Read-only windows reject mutation. If a delete command appears inert,
 inspect the read-only marker, current window role, active block, and
@@ -4337,7 +4345,7 @@ whose name or ID contains Debug. Check its debug-information flags.
 3. Save and build the file with that profile. The expected output must
 exist, be executable, and be at least as recent as the source.
 
-4. Choose Debug > Debug current file, or press Alt+F9. The command is
+4. Choose Debug > Debug current file, or press F5. The command is
 enabled only while an editor with a recognized source language is focused.
 Starting the session also checks the source, profile, and build artifact. An unavailable command is a reason to check the profile,
 unsaved source, and build output first.
@@ -4357,7 +4365,12 @@ F6: Run to the source location at the cursor.
 
 F7 / Shift+F7: Add a watch / remove a watch by object or expression.
 
-F8: Stop the GDB session.
+F8: Stop the GDB session, keeping its panes available for inspection.
+
+Shift+F5: End debug session, close all auxiliary panes, and return to the
+standard source editor. This also works after F8 or program exit.
+
+Shift+F9: Clear current output when that command is available.
 
 F9: Toggle a breakpoint at the cursor's source line.
 

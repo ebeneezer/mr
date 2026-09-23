@@ -419,6 +419,13 @@ resulting complete current-version source is then executed in the settings
 context. The runtime model becomes authoritative only after that succeeds.
 This is why \texttt{settings.mrmac} is readable MRMAC source but is not an
 ordinary startup script to extend casually.
+When settings come from a newer build, a startup dialog offers
+\textsf{Reset Settings}, \textsf{Update to} the verified release, and
+\textsf{Cancel}. Cancel is selected by default and exits without changing
+settings. Reset first saves a full backup beside \texttt{settings.mrmac},
+then restores this build's defaults. Update is enabled only if the signed
+release build can read the settings; it may be unavailable for settings
+written by a newer local test build. A failed update leaves settings unchanged.
 \index{settings!hardcoded defaults}\index{settings!runtime state}
 
 Most accepted setup changes are written through the central runtime snapshot
@@ -765,8 +772,7 @@ directory. \texttt{MRDefaultKeymaps.mrmac} is the complete recovery import: it
 resets the keymap draft, installs the WordStar, Emacs, and Nano profiles, and
 selects WordStar. \texttt{emacs.mrmac} and \texttt{nano.mrmac} reset to and
 select the respective single profile. \texttt{wordstar.mrmac} supplies the
-three-profile set with WordStar selected and adds Smart Backspace through
-\texttt{wordstar-extensions.mrmac}. Loading a file remains an explicit action;
+three-profile set with WordStar selected. Loading a file remains an explicit action;
 installation alone does not silently replace the active profile.
 
 The current factory WordStar, Emacs, and Nano files all bind \key{Ctrl+A} to
@@ -1261,6 +1267,12 @@ Backspace removes the logical character before the cursor; Delete removes the
 eligible character at the cursor. At line boundaries the operation may join
 lines. UTF-8 sequences are treated as editor characters rather than a request
 to delete one arbitrary byte.
+
+With a visible marked block, Delete removes the block only when the cursor
+is inside it. Outside the block, Delete removes a single character and
+preserves the block marking. Backspace deletes the preceding character
+without deleting the marked block. Custom block deletion on Backspace can
+be assigned through an MRMAC macro binding.
 
 Read-only windows reject mutation. If a delete command appears inert, inspect
 the read-only marker, current window role, active block, and command state
@@ -2425,7 +2437,7 @@ To start a session:
 whose name or ID contains \texttt{Debug}. Check its debug-information flags.
 \item Save and build the file with that profile. The expected output must
 exist, be executable, and be at least as recent as the source.
-\item Choose \menu{Debug > Debug current file}, or press \key{Alt+F9}.
+\item Choose \menu{Debug > Debug current file}, or press \key{F5}.
 The command is enabled only when the current source and artifact satisfy the
 start conditions. An unavailable command is a reason to check the profile,
 unsaved source, and build output first.
@@ -2442,7 +2454,10 @@ While a GDB debugger is active, the function keys have these meanings:
 \item[\key{F5}] Continue a stopped program, or request a pause while running.
 \item[\key{F6}] Run to the source location at the cursor.
 \item[\key{F7} / \key{Shift+F7}] Add a watch / remove a watch by object or expression.
-\item[\key{F8}] Stop the GDB session.
+\item[\key{F8}] Stop the GDB session, keeping its panes available for inspection.
+\item[\key{Shift+F5}] End debug session, close all auxiliary panes, and return to
+ the standard source editor. This also works after F8 or program exit.
+\item[\key{Shift+F9}] Clear current output when that command is available.
 \item[\key{F9}] Toggle a breakpoint at the cursor's source line.
 \item[\key{F10}] Step into; \key{F11} steps over; \key{Shift+F11} steps out.
 \end{description}

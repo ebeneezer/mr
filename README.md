@@ -51,7 +51,8 @@
   - line drawing inside your documents with boxes and single and double line auto connecting drawing
   - acquire files from the output of shell commands or pipes
   - compiler profiles with automatic setup and error tracking in code
-  - GDB integration for many languages with visual debugging inside mr including stepping, variable mutation, watches, integrated ANSI/VT terminal and more
+  - GDB integration for many languages with visual debugging inside mr including stepping, variable mutation, watches, integrated ANSI/VT terminal and many more
+  - MULTI-THREADED DEBUGGING: follow the execution path into threads, use scope aware variable and watches panes, context switching, threaded breakpoints and multiple side-by-side pane based synchronized source view for selected threads
   - coding snippets
   - hex editors with synchonous hex, dec, oct, strings and binary view plus additional data inspector
   - a vast range of configuration options for your UX

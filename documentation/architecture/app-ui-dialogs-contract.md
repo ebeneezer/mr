@@ -43,6 +43,86 @@ The established branches include:
 | `APPLICATIONUI/log` | Runtime log buffer and persistence cursor |
 | `APPLICATIONUI/indicators` | Recording and Macro Brain marker state |
 | `APPLICATIONUI/performance` | Runtime performance events |
+| `APPLICATIONUI/debugger` | GDB session state and debugger pane projections |
+
+## GDB debugger state ownership
+
+GDB debugger administration is central K/V state. `APPLICATIONUI/debugger` owns:
+
+- `sessions/<bufferId>`: GDB backend identity, generation, source, program and
+  the context adopted by the UI;
+- `sessions/<bufferId>/worker`: the backend's confirmed execution context,
+  MI request tokens, pending requests, expansion queue, refresh counters,
+  the active value-refresh thread and its remaining pane target;
+- `sessions/<bufferId>/threads/<threadId>`: thread metadata, `watches` with
+  expressions and GDB object identities, and `localVariableRoots`;
+- `sessions/<bufferId>/breakpoints/<gdbNumber>`: confirmed GDB breakpoint
+  source, line and condition for the current session;
+- `sessions/<bufferId>/threads/<threadId>/frames/0/localVariables` and
+  `watchVariables`: variable trees for the selected stopped frame;
+- `breakpoints/bySource/<source>/lines` and `asserts`: source breakpoint
+  definitions and optional assertion text, keyed by source line and retained
+  across debugger shutdown and rebuild;
+- `sessions/<bufferId>/variablesThreadId` and `watchesThreadId`: independently
+  confirmed pane contexts. Worker selections remain separate from UI adoption;
+- `views/<bufferId>`: GDB variable/watch row projections and `valueInput`
+  target (thread and GDB object). These are UI adoption state.
+
+Backend progress and UI adoption are distinct versions in the same store.
+Only generation-checked events may replace an adopted projection. Temporary
+command, result and rendering objects may carry immutable values across these
+boundaries; they must not be retained as class-level semantic stores.
+
+The backend session node exists before its worker starts. A thread snapshot
+updates metadata without replacing live frame subtrees. Resume/context changes
+invalidate the current value tree. Worker exit releases backend requests,
+watch definitions, object roots and frame trees; closing/restarting the debugger
+detaches its session node. A still-running worker retains that same node under
+`retiring/<generation>` until its destructor releases the tree. Detachment
+transfers the owning K/V reference without copying or deleting its children;
+it never waits for a worker while holding the VM mutex. Destroying a Bento
+removes its view node. Runtime
+thread identities and these subtrees are never serialized.
+
+C++ retains process/pipe/PTY handles, parser buffers, bounded transport
+messages, live views and their geometry. GDB watch and breakpoint definitions,
+retained results and refresh administration belong to the central K/V store.
+All central K/V access uses the VM execution mutex. GDB pipe I/O, worker joins
+and waits must not hold that mutex.
+
+Selecting a thread in Variables or Watches pins that pane independently of
+Source for the current stop. Every new execution stop resets both panes to
+the stopped Source thread and frame zero. Until explicitly selected again,
+a value pane follows Source. F7/Shift-F7
+operate on the Watches context; value editing uses Variables, while stepping,
+run-to-cursor use Source; breakpoint toggling uses the source location without
+binding it to the selected thread. Selection changes invalidate
+outstanding value replies using stop and context generations. Each value event
+also carries its thread, and adoption checks the destination pane's context.
+
+GDB character arrays display their individual byte values and an additional
+ASCII line, with non-printable bytes shown as dots. Scalar array values are
+right-aligned to a common width within each array; index ranges align across
+wrapped lines. These are view projections of the existing GDB values.
+
+Source breakpoints apply to all threads. An optional assertion is evaluated
+by GDB at the breakpoint in the hitting thread's context. Assertions are
+passed unchanged to GDB and use its automatic inferior-language selection.
+MR reserves no assertion identifiers and supplies no thread-name predicate.
+GDB convenience variables such as `$_thread` are available through ordinary
+GDB expression syntax. False conditions continue through GDB's native
+breakpoint machinery, without a stop/resume cycle in MR.
+
+Right-clicking a source breakpoint line opens the existing text input dialog
+with its assertion. Empty input removes the condition; cancellation preserves
+it. Only successful GDB mutations update definitions in the central K/V.
+Breakpoint snapshots are runtime projections and never replace those
+definitions. Rapid toggles and assertion changes share the K/V mutation queue.
+Execution waits for pending breakpoint mutations and restoration replies;
+failed mutations cancel that deferred execution. Rebuild restores definitions
+and assertions before execution. No runtime
+thread identity is rebound. Thread exit releases its runtime subtree and an
+orphaned pane selection falls back to Source at the next thread snapshot.
 
 ## Data flow
 
