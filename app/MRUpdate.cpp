@@ -500,15 +500,15 @@ void postUpdateError(const std::string &error) {
 class SettingsVersionDialog final : public MRDialogFoundation {
   public:
 	explicit SettingsVersionDialog(std::uint64_t requiredBuild)
-	    : TWindowInit(mr::dialogs::initSetupDialogFrame), MRDialogFoundation(centeredSetupDialogRect(76, 15), "SETTINGS VERSION CONFLICT", 76, 15) {
+	    : TWindowInit(mr::dialogs::initSetupDialogFrame), MRDialogFoundation(centeredSetupDialogRect(76, 14), "SETTINGS VERSION CONFLICT", 76, 14) {
 		insert(new TStaticText(TRect(3, 2, 73, 4), "These settings were saved by a newer build.\nReset creates a backup before restoring this build's defaults."));
 		const std::string builds = "Settings build: " + std::to_string(requiredBuild) + "   This build: " + mrCurrentPersistenceVersionString();
 		insert(new TStaticText(TRect(3, 5, 73, 6), builds.c_str()));
-		statusText = new TParamText(TRect(3, 7, 73, 10));
+		statusText = new TParamText(TRect(3, 7, 73, 9));
 		insert(statusText);
-		resetButton = new TButton(TRect(5, 11, 25, 13), "~R~eset Settings", cmYes, bfNormal);
-		updateButton = new TButton(TRect(28, 11, 48, 13), "~U~pdate", cmNo, bfNormal);
-		cancelButton = new TButton(TRect(51, 11, 71, 13), "~C~ancel", cmCancel, bfDefault);
+		resetButton = new TButton(TRect(5, 10, 25, 12), "~R~eset Settings", cmYes, bfNormal);
+		updateButton = new TButton(TRect(28, 10, 48, 12), "~U~pdate", cmNo, bfNormal);
+		cancelButton = new TButton(TRect(51, 10, 71, 12), "~C~ancel", cmCancel, bfDefault);
 		insert(resetButton);
 		insert(updateButton);
 		insert(cancelButton);
@@ -532,15 +532,18 @@ class SettingsVersionDialog final : public MRDialogFoundation {
 			updateButton->title = newStr(label.c_str());
 			updateButton->drawView();
 		}
-		updateButton->setState(sfDisabled, !mrUpdateAvailable() || readUpdateInt("busy") != 0);
+		const bool disableUpdate = !mrUpdateAvailable() || readUpdateInt("busy") != 0;
+		if (disableUpdate != ((updateButton->state & sfDisabled) != 0)) {
+			updateButton->setState(sfDisabled, disableUpdate);
+			updateButton->drawView();
+		}
 		resetButton->setState(sfDisabled, installing);
 		cancelButton->setState(sfDisabled, installing);
 		std::string status = readUpdateString("error");
 		if (status.empty()) {
 			if (installing) status = "Updating. Settings remain unchanged until the new build starts.";
 			else if (readUpdateInt("busy") != 0) status = "Checking for a signed update...";
-			else if (mrUpdateAvailable()) status = "A compatible update is available. Cancel leaves settings unchanged.";
-			else status = "No published update supports this settings build.\nUpdate is unavailable; this can occur after using a local test build.";
+			else if (!mrUpdateAvailable()) status = "No published update supports this settings build.\nUpdate is unavailable; this can occur after using a local test build.";
 		}
 		if (status != displayedStatus) {
 			displayedStatus = status;
