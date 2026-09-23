@@ -39,16 +39,7 @@ bool MREditWindow::deleteBlockForEditorInput(bool backward) {
 	const std::size_t cursor = editor->cursorOffset();
 	const std::size_t line = editor->displayedCursorLineIndex();
 	const int column = editor->displayedCursorColumn();
-	const MRFEBlockGeometry &block = mBlockOps.mGeometry;
-	bool deleteMarkedBlock = blockContainsPosition(cursor, line, column);
-	if (backward && !deleteMarkedBlock) {
-		if (block.mode == MRFEBlockMode::Column)
-			deleteMarkedBlock = block.line1 <= line && line <= block.line2 && column == block.col2;
-		else
-			deleteMarkedBlock = cursor == block.rangeEnd && line == editor->lineIndexOfOffset(cursor) &&
-			                    column == editor->charColumn(editor->lineStartOffset(cursor), cursor);
-	}
-	if (deleteMarkedBlock) {
+	if (!backward && blockContainsPosition(cursor, line, column)) {
 		std::string error;
 		if (!deleteBlock(&error) && !error.empty()) mrLogMessage(error.c_str());
 		return true;

@@ -2239,11 +2239,6 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 			clearEvent(event);
 			return true;
 		}
-		if (keyCode == kbF9 && shift && !ctrl) {
-			static_cast<void>(toggleBlockVisibility());
-			clearEvent(event);
-			return true;
-		}
 		if (keyCode == kbF9 && ctrl && !shift) {
 			clearBlock();
 			clearEvent(event);

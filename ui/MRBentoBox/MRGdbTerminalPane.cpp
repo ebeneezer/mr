@@ -89,7 +89,7 @@ void MRGdbTerminalPane::resetTerminal() {
 }
 
 void MRGdbTerminalPane::changeBounds(const TRect &bounds) {
-	MRPaneEditWindow::changeBounds(bounds);
+	TWindow::changeBounds(bounds);
 	resizeTerminal(std::max<int>(1, size.x), std::max<int>(1, size.y));
 	if (MRBentoBox *bento = dynamic_cast<MRBentoBox *>(owner)) bento->resizeGdbTerminal(columns, rows);
 }

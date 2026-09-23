@@ -111,7 +111,9 @@ void MRBentoBox::handleEvent(TEvent &event) {
 				static_cast<void>(refreshCompilerProblemsPane());
 		}
 		refreshOutlinePanes(false);
-		bentoProjectionDirty |= bpdContent | bpdChrome;
+		// Task-state title notifications can arrive during source drawing.
+		// Document commits request content redraws through their own event.
+		bentoProjectionDirty |= bpdChrome;
 		flushBentoProjection();
 		return;
 	}
@@ -212,6 +214,12 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		}
 	}
 	if (event.what == evMouseDown) {
+		if (gdbDebuggerActive() && (event.mouse.buttons & mbRightButton) != 0 &&
+		    roleForLeaf(leafAt(localMouse)) == bprSource && getEditor() != nullptr && getEditor()->containsMouse(event) &&
+		    editGdbBreakpointAssert(getEditor()->offsetForGlobalPoint(event.mouse.where))) {
+			clearEvent(event);
+			return;
+		}
 		if (handleDividerChromeMouse(event)) {
 			clearEvent(event);
 			bentoProjectionDirty |= bpdChrome;

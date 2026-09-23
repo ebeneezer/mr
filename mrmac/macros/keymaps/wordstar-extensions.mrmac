@@ -6,10 +6,6 @@ $MACRO clone_line_above;
 	TEXT(CurrentCh);
 END_MACRO;
 
-$MACRO smart_backspace;
-	IF BLOCK_STAT <> 0 THEN
-	    DELETE_BLOCK;
-	ELSE
-	    BACK_SPACE;
-	END;
+$MACRO SmartDel TO <DEL> FROM EDIT;
+	DEL_CHAR_OR_BLOCK;
 END_MACRO;

@@ -6,6 +6,7 @@
 
 #include "../../app/MRCommands.hpp"
 #include "../../app/MRCommandRouter.hpp"
+#include "../../app/router/MRCommandRouterSearchMultiFileSession.hpp"
 #include "../../app/services/MRGdbSession.hpp"
 #include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../dialogs/setup/MRSetupCommon.hpp"
@@ -69,16 +70,14 @@ std::vector<int> readGdbBreakpointLines(const std::string &sourcePath) {
 	return result;
 }
 
-void writeGdbBreakpointLines(const std::string &sourcePath, const std::vector<int> &breakpointLines) {
-	if (sourcePath.empty()) return;
+std::string readGdbBreakpointAssert(const std::string &sourcePath, int line) {
 	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
-	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
-	VirtualMachine::Value sources = gdbBreakpointSourcesRoot(runtimeKv);
-	VirtualMachine::Value source = runtimeKv.ensureChild(sources, normalizeConfiguredPathInput(sourcePath));
-	VirtualMachine::Value lines = runtimeKv.replaceChild(source, "lines");
-
-	for (const int line : breakpointLines)
-		if (line > 0) writeGdbInt(runtimeKv, lines, std::to_string(line).c_str(), 1);
+	MRVMRuntimeKv &kv = mrvmRuntimeKv();
+	VirtualMachine::Value source, assertions;
+	const VirtualMachine::Value sources = gdbBreakpointSourcesRoot(kv);
+	if (!kv.findChild(sources, normalizeConfiguredPathInput(sourcePath), source) || !kv.findChild(source, "asserts", assertions)) return std::string();
+	if (!kv.globalStore().contains(assertions.hashHandle, std::to_string(line))) return std::string();
+	return kv.globalStore().read(assertions.hashHandle, std::to_string(line)).s;
 }
 
 bool findGdbSessionRoot(MRVMRuntimeKv &runtimeKv, int bufferId, VirtualMachine::Value &session) {
@@ -158,8 +157,8 @@ bool MRBentoBox::startGdbDebugger(const std::string &programPath, const std::str
 	MRGdbTerminalPane *terminalWindow = nullptr;
 
 	stopGdbDebugger();
-	gdbDebuggerVariableRows.clear();
-	gdbDebuggerWatchRows.clear();
+	writeGdbDebuggerRows(false, {});
+	writeGdbDebuggerRows(true, {});
 	if (!ensureGdbDebuggerPanes(outputWindow, variablesWindow, watchesWindow, terminalWindow)) {
 		errorMessage = "Unable to establish GDB debugger panes.";
 		return false;
@@ -184,7 +183,7 @@ bool MRBentoBox::startGdbDebugger(const std::string &programPath, const std::str
 		std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
 		MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
 		VirtualMachine::Value sessions = gdbSessionsRoot(runtimeKv);
-		VirtualMachine::Value session = runtimeKv.replaceChild(sessions, std::to_string(bufferId()));
+		VirtualMachine::Value session = runtimeKv.ensureChild(sessions, std::to_string(bufferId()));
 		writeGdbString(runtimeKv, session, "backend", "gdb");
 		writeGdbString(runtimeKv, session, "source", normalizeConfiguredPathInput(sourcePath));
 		writeGdbString(runtimeKv, session, "program", normalizeConfiguredPathInput(programPath));
@@ -201,6 +200,7 @@ bool MRBentoBox::startGdbDebugger(const std::string &programPath, const std::str
 
 		command.file = normalizeConfiguredPathInput(sourcePath);
 		command.line = line;
+		command.text = readGdbBreakpointAssert(sourcePath, line);
 		static_cast<void>(gdbSession->send(std::move(command)));
 	}
 	resizeGdbTerminal(terminalWindow->size.x, terminalWindow->size.y);
@@ -212,23 +212,48 @@ bool MRBentoBox::startGdbDebugger(const std::string &programPath, const std::str
 }
 
 void MRBentoBox::stopGdbDebugger() noexcept {
+	const std::string sourcePath = gdbDebuggerSourcePath();
 	if (gdbThreadListOpen) paneActionDropList.hide();
 	cancelDebuggerValueInput();
 	if (gdbSession != nullptr) gdbSession->stop();
 	gdbSession.reset();
-	gdbDebuggerVariableRows.clear();
-	gdbDebuggerWatchRows.clear();
+	writeGdbDebuggerRows(false, {});
+	writeGdbDebuggerRows(true, {});
 	clearGdbDebuggerState();
+	clearDebuggerUiState();
 	if (getEditor() != nullptr) getEditor()->clearDebuggerInstructionLine();
 	if (macroDebuggerActive) refreshMacroDebuggerBreakpointRanges();
+	else if (!sourcePath.empty()) projectGdbBreakpointLines(getEditor(), readGdbBreakpointLines(sourcePath));
+}
+
+bool MRBentoBox::gdbDebuggerCanEnd() const noexcept {
+	return gdbSession != nullptr || (!macroDebuggerActive && programTerminalPane() != nullptr);
+}
+
+bool MRBentoBox::endGdbDebugger() {
+	if (!gdbDebuggerCanEnd()) return false;
+	stopGdbDebuggerForRebuild();
+	if (getEditor() != nullptr) getEditor()->clearDebuggerBreakpointRanges();
+	paneRoleDropList.hide();
+	paneActionDropList.hide();
+	gdbThreadListOpen = false;
+	updatePaneRoleListChrome();
+	setActivePane(0);
+	for (const BentoLeaf &leaf : leaves)
+		if (leaf.id != 0 && nodeIndexForLeaf(leaf.id) >= 0) closePane(leaf.id);
+	bentoMode = bbmDocumentViewports;
+	for (BentoLeaf &leaf : leaves)
+		if (leaf.id == 0) {
+			leaf.spec = paneSpecForRole(bprSource);
+			leaf.title.clear();
+			break;
+		}
+	layoutSplitPanes();
+	mrMarkWorkspaceAutosaveDirty("debugger return to editor", this);
+	return true;
 }
 
 void MRBentoBox::stopGdbDebuggerForRebuild() noexcept {
-	try {
-		const std::string sourcePath = gdbDebuggerSourcePath();
-		if (!sourcePath.empty() && getEditor() != nullptr) writeGdbBreakpointLines(sourcePath, getEditor()->debuggerBreakpointLineNumbers());
-	} catch (...) {
-	}
 	stopGdbDebugger();
 }
 
@@ -240,7 +265,7 @@ bool MRBentoBox::acceptGdbEvent(const mr::coprocessor::GdbEventPayload &payload)
 		    event.contextGeneration != std::strtoull(readGdbString(bufferId(), "contextGeneration").c_str(), nullptr, 10)) return false;
 		const std::string state = readGdbString(bufferId(), "state");
 		if (state != "stopped" && !(event.kind == MRGdbEventKind::Threads && state == "selecting")) return false;
-		if (event.kind != MRGdbEventKind::Threads && event.threadId != readGdbString(bufferId(), "threadId")) return false;
+		if (event.kind != MRGdbEventKind::Threads && event.threadId != gdbThreadForRole(event.kind == MRGdbEventKind::Variables ? bprVariables : bprWatches)) return false;
 	}
 	MREditWindow *outputWindow = debuggerOutputPane();
 	MREditWindow *variablesWindow = variablesPane();
@@ -268,6 +293,7 @@ bool MRBentoBox::acceptGdbEvent(const mr::coprocessor::GdbEventPayload &payload)
 			if (gdbThreadListOpen) paneActionDropList.hide();
 			const bool exited = event.kind == MRGdbEventKind::Stopped && event.text.rfind("exited", 0) == 0;
 			const bool differentThread = event.threadId != readGdbString(bufferId(), "threadId");
+			const bool projectSource = event.kind == MRGdbEventKind::Stopped || readGdbInt(bufferId(), "sourceProjectionPending") != 0;
 			{
 				std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
 				MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
@@ -277,11 +303,20 @@ bool MRBentoBox::acceptGdbEvent(const mr::coprocessor::GdbEventPayload &payload)
 				writeGdbString(runtimeKv, session, "contextGeneration", std::to_string(event.contextGeneration));
 				writeGdbString(runtimeKv, session, "threadId", exited ? std::string() : event.threadId);
 				writeGdbInt(runtimeKv, session, "contextReady", event.kind == MRGdbEventKind::Threads ? 1 : 0);
+				writeGdbInt(runtimeKv, session, "sourceProjectionPending", event.kind == MRGdbEventKind::Stopped ? 1 : 0);
 				writeGdbInt(runtimeKv, session, "valuesReady", 0);
-				if (event.kind == MRGdbEventKind::Threads || exited) {
-					VirtualMachine::Value threads = runtimeKv.replaceChild(session, "threads");
+				if (event.kind == MRGdbEventKind::Threads) {
+					writeGdbString(runtimeKv, session, "variablesThreadId", event.variablesThreadId);
+					writeGdbString(runtimeKv, session, "watchesThreadId", event.watchesThreadId);
+				} else {
+					writeGdbString(runtimeKv, session, "variablesThreadId", exited ? std::string() : event.threadId);
+					writeGdbString(runtimeKv, session, "watchesThreadId", exited ? std::string() : event.threadId);
+				}
+				if (event.kind == MRGdbEventKind::Threads) {
+					VirtualMachine::Value threads = runtimeKv.ensureChild(session, "threads");
 					for (const MRGdbMiThread &thread : event.threads) {
-						VirtualMachine::Value item = runtimeKv.ensureChild(threads, thread.id);
+						VirtualMachine::Value item;
+						if (!runtimeKv.findChild(threads, thread.id, item)) continue;
 						writeGdbString(runtimeKv, item, "name", thread.name);
 						writeGdbString(runtimeKv, item, "function", thread.function);
 						writeGdbString(runtimeKv, item, "address", thread.address);
@@ -295,9 +330,9 @@ bool MRBentoBox::acceptGdbEvent(const mr::coprocessor::GdbEventPayload &payload)
 					}
 				}
 			}
-			if (differentThread || exited) {
-				gdbDebuggerVariableRows.clear();
-				gdbDebuggerWatchRows.clear();
+			if (differentThread || exited || event.kind == MRGdbEventKind::Stopped) {
+				writeGdbDebuggerRows(false, {});
+				writeGdbDebuggerRows(true, {});
 				for (MREditWindow *window : {variablesWindow, watchesPane()}) {
 					if (window == nullptr) continue;
 					static_cast<void>(window->replaceTextBuffer(exited ? "(inferior exited)\n" : "(loading thread values)\n", window == variablesWindow ? "Variables" : "Watches"));
@@ -307,8 +342,8 @@ bool MRBentoBox::acceptGdbEvent(const mr::coprocessor::GdbEventPayload &payload)
 			}
 			publishGdbDebuggerState(exited ? "exited" : "stopped", event.file, event.line);
 			MRFileEditor *sourceEditor = getEditor();
-			if (sourceEditor != nullptr) sourceEditor->clearDebuggerInstructionLine();
-			if (event.kind == MRGdbEventKind::Threads && sourceEditor != nullptr && event.line > 0 &&
+			if (projectSource && sourceEditor != nullptr) sourceEditor->clearDebuggerInstructionLine();
+			if (projectSource && event.kind == MRGdbEventKind::Threads && sourceEditor != nullptr && event.line > 0 &&
 			    !event.file.empty() && normalizeConfiguredPathInput(event.file) == gdbDebuggerSourcePath()) {
 				const std::size_t line = static_cast<std::size_t>(event.line - 1);
 				if (line >= sourceEditor->bufferModel().lineCount()) break;
@@ -332,8 +367,7 @@ bool MRBentoBox::acceptGdbEvent(const mr::coprocessor::GdbEventPayload &payload)
 			}
 			break;
 		case MRGdbEventKind::Breakpoints:
-			writeGdbBreakpointLines(gdbDebuggerSourcePath(), payload.event.breakpointLines);
-			projectGdbBreakpointLines(getEditor(), payload.event.breakpointLines);
+			projectGdbBreakpointLines(getEditor(), readGdbBreakpointLines(gdbDebuggerSourcePath()));
 			break;
 		case MRGdbEventKind::Finished:
 			if (gdbThreadListOpen) paneActionDropList.hide();
@@ -370,6 +404,26 @@ bool MRBentoBox::clearGdbProgramTerminal() {
 	if (!gdbDebuggerActive() || terminalWindow == nullptr) return false;
 	terminalWindow->clearTerminal();
 	bentoProjectionDirty |= bpdContent;
+	return true;
+}
+
+bool MRBentoBox::editGdbBreakpointAssert(std::size_t sourceOffset) {
+	MRFileEditor *editor = getEditor();
+	if (!gdbDebuggerActive() || editor == nullptr) return false;
+	const int line = static_cast<int>(editor->bufferModel().lineIndex(sourceOffset)) + 1;
+	const std::vector<int> lines = readGdbBreakpointLines(gdbDebuggerSourcePath());
+	if (std::find(lines.begin(), lines.end(), line) == lines.end()) return false;
+	if (gdbDebuggerRunning()) {
+		postDialogWarning("Pause the program before editing a breakpoint assert.");
+		return true;
+	}
+	activatePrimaryPane();
+	editor->setCursorOffset(sourceOffset);
+	const std::string previous = readGdbBreakpointAssert(gdbDebuggerSourcePath(), line);
+	char assertion[256] = {};
+	std::copy_n(previous.data(), std::min(previous.size(), sizeof(assertion) - 1), assertion);
+	if (mr::dialogs::execTextInputDialog("BREAKPOINT ASSERT", "Assert (empty = all threads)", assertion, sizeof(assertion) - 1) == cmCancel) return true;
+	if (previous != assertion) static_cast<void>(sendGdbCommand(MRGdbCommandKind::SetBreakpointAssert, assertion));
 	return true;
 }
 
@@ -503,35 +557,49 @@ bool MRBentoBox::sendGdbCommand(MRGdbCommandKind commandKind, const std::string 
 		}
 	}
 	const bool execution = commandKind == MRGdbCommandKind::ContinueExecution || commandKind == MRGdbCommandKind::StepInto || commandKind == MRGdbCommandKind::StepOver || commandKind == MRGdbCommandKind::StepOut || commandKind == MRGdbCommandKind::RunToLocation;
-	const bool contextual = execution || commandKind == MRGdbCommandKind::SelectThread || commandKind == MRGdbCommandKind::Evaluate || commandKind == MRGdbCommandKind::AssignVariable || commandKind == MRGdbCommandKind::AddWatch || commandKind == MRGdbCommandKind::EraseWatch;
-	const bool loaded = readGdbString(bufferId(), "state") == "loaded";
+	const bool selection = commandKind == MRGdbCommandKind::SelectThread || commandKind == MRGdbCommandKind::SelectVariablesThread || commandKind == MRGdbCommandKind::SelectWatchesThread;
+	const bool contextual = execution || selection || commandKind == MRGdbCommandKind::Evaluate || commandKind == MRGdbCommandKind::AssignVariable || commandKind == MRGdbCommandKind::AddWatch || commandKind == MRGdbCommandKind::EraseWatch;
+	const std::string state = readGdbString(bufferId(), "state");
+	const bool loaded = state == "loaded" || state == "starting";
 	if (contextual && !gdbDebuggerContextReady() && !(loaded && execution && commandKind != MRGdbCommandKind::StepOut)) return false;
+	if (commandKind == MRGdbCommandKind::ToggleBreakpoint && !loaded && !gdbDebuggerContextReady()) return false;
+	if (commandKind == MRGdbCommandKind::SetBreakpointAssert && gdbDebuggerRunning()) return false;
 	if (commandKind == MRGdbCommandKind::AssignVariable && readGdbInt(bufferId(), "valuesReady") != 3) return false;
 	MRGdbCommand command(commandKind);
 	command.text = text;
 	command.objectName = objectName;
-	command.threadId = readGdbString(bufferId(), "threadId");
+	command.threadId = gdbThreadForRole(bprSource);
+	if (commandKind == MRGdbCommandKind::AssignVariable) command.threadId = gdbThreadForRole(bprVariables);
+	else if (commandKind == MRGdbCommandKind::AddWatch || commandKind == MRGdbCommandKind::EraseWatch) command.threadId = gdbThreadForRole(bprWatches);
+	else if (commandKind == MRGdbCommandKind::Evaluate) command.threadId = gdbThreadForRole(roleForLeaf(activeLeafId));
 	command.stopGeneration = std::strtoull(readGdbString(bufferId(), "stopGeneration").c_str(), nullptr, 10);
 	command.contextGeneration = std::strtoull(readGdbString(bufferId(), "contextGeneration").c_str(), nullptr, 10);
-	if (commandKind == MRGdbCommandKind::ToggleBreakpoint || commandKind == MRGdbCommandKind::RunToLocation) {
+	if (commandKind == MRGdbCommandKind::ToggleBreakpoint || commandKind == MRGdbCommandKind::SetBreakpointAssert || commandKind == MRGdbCommandKind::RunToLocation) {
 		command.file = gdbDebuggerSourcePath();
 		command.line = getEditor() != nullptr ? getEditor()->currentLineNumber() : 0;
 		if (command.file.empty() || command.line <= 0) return false;
 	}
-	const bool refreshesValues = commandKind == MRGdbCommandKind::SelectThread || commandKind == MRGdbCommandKind::Evaluate || commandKind == MRGdbCommandKind::AssignVariable || commandKind == MRGdbCommandKind::AddWatch || commandKind == MRGdbCommandKind::EraseWatch;
-	if (commandKind == MRGdbCommandKind::SelectThread) command.threadId = text;
+	const bool refreshesValues = selection || commandKind == MRGdbCommandKind::Evaluate || commandKind == MRGdbCommandKind::AssignVariable || commandKind == MRGdbCommandKind::AddWatch || commandKind == MRGdbCommandKind::EraseWatch;
+	if (selection) command.threadId = text;
 	if (refreshesValues) ++command.contextGeneration;
 	const std::uint64_t requestedContext = command.contextGeneration;
 	if (!gdbSession->send(std::move(command))) return false;
 	if (refreshesValues) {
-		if (commandKind == MRGdbCommandKind::SelectThread) cancelDebuggerValueInput();
+		if (selection) {
+			cancelDebuggerValueInput();
+			writeGdbDebuggerRows(false, {});
+			writeGdbDebuggerRows(true, {});
+			layoutGdbDebuggerValues(false, true);
+			layoutGdbDebuggerValues(true, true);
+		}
 		std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
 		MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
 		VirtualMachine::Value session;
 		if (findGdbSessionRoot(runtimeKv, bufferId(), session)) {
 			writeGdbString(runtimeKv, session, "contextGeneration", std::to_string(requestedContext));
-			if (commandKind == MRGdbCommandKind::SelectThread) {
+			if (selection) {
 				writeGdbString(runtimeKv, session, "state", "selecting");
+				writeGdbInt(runtimeKv, session, "sourceProjectionPending", commandKind == MRGdbCommandKind::SelectThread ? 1 : 0);
 				writeGdbInt(runtimeKv, session, "contextReady", 0);
 			}
 			writeGdbInt(runtimeKv, session, "valuesReady", 0);
@@ -559,31 +627,29 @@ void MRBentoBox::publishGdbDebuggerState(const char *state, const std::string &f
 
 void MRBentoBox::clearGdbDebuggerState() noexcept {
 	try {
-		std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
-		MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
-		VirtualMachine::Value applicationUi;
-		VirtualMachine::Value debugger;
-		VirtualMachine::Value sessions;
-		if (runtimeKv.findRoot("APPLICATIONUI", applicationUi) && runtimeKv.findChild(applicationUi, "debugger", debugger) && runtimeKv.findChild(debugger, "sessions", sessions))
-			static_cast<void>(runtimeKv.eraseChild(sessions, std::to_string(bufferId())));
+		MRGdbSession::releaseRuntimeState(bufferId());
 	} catch (...) {
 	}
 }
 
-std::string MRBentoBox::gdbDebuggerStateText() const {
+std::string MRBentoBox::gdbDebuggerStateText(MRBentoPaneRole role) const {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
 	const std::string state = readGdbString(bufferId(), "state");
+	const std::string thread = gdbThreadForRole(role);
+	std::string threadLabel;
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	VirtualMachine::Value session, threads;
+	if (!thread.empty() && findGdbSessionRoot(runtimeKv, bufferId(), session) && runtimeKv.findChild(session, "threads", threads) &&
+	    runtimeKv.globalStore().keys(threads.hashHandle).size() > 1) threadLabel = "THREAD " + thread;
 	if (state == "starting") return "GDB STARTING";
 	if (state == "loaded") return "INFERIOR READY";
-	if (state == "running") return "THREAD " + readGdbString(bufferId(), "threadId") + " RUNNING";
-	if (state == "resuming") return "THREAD " + readGdbString(bufferId(), "threadId") + " RESUMING";
+	if (state == "running") return threadLabel.empty() ? "RUNNING" : threadLabel + " RUNNING";
+	if (state == "resuming") return threadLabel.empty() ? "RESUMING" : threadLabel + " RESUMING";
 	if (state == "selecting") return "SWITCHING THREAD";
 	if (state == "stopped") {
-		const std::string thread = readGdbString(bufferId(), "threadId");
-		const int line = readGdbInt(bufferId(), "stopLine");
 		if (readGdbInt(bufferId(), "contextReady") == 0) return "READING THREADS";
 		if (thread.empty()) return "NO THREAD CONTEXT";
-		const std::string position = line > 0 ? " L" + std::to_string(line) : " " + readGdbString(bufferId(), "threadAddress");
-		return "THREAD " + thread + " " + readGdbString(bufferId(), "threadFunction") + position;
+		return threadLabel;
 	}
 	if (state == "exited") return "INFERIOR EXITED";
 	if (state == "stale") return "SOURCE CHANGED - REBUILD";
@@ -603,16 +669,35 @@ bool MRBentoBox::gdbDebuggerContextReady(bool values) const {
 	return gdbDebuggerActive() && readGdbString(bufferId(), "state") == "stopped" && readGdbInt(bufferId(), "contextReady") != 0 && !readGdbString(bufferId(), "threadId").empty() && (!values || readGdbInt(bufferId(), "valuesReady") == 3);
 }
 
+std::string MRBentoBox::gdbThreadForRole(MRBentoPaneRole role) const {
+	const char *key = role == bprVariables ? "variablesThreadId" : role == bprWatches ? "watchesThreadId" : "threadId";
+	const std::string selected = readGdbString(bufferId(), key);
+	return selected.empty() ? readGdbString(bufferId(), "threadId") : selected;
+}
+
+bool MRBentoBox::gdbThreadSelectionAvailable(int leafId) const {
+	const MRBentoPaneRole role = roleForLeaf(leafId);
+	if (role != bprSource && role != bprVariables && role != bprWatches) return false;
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	if (!gdbDebuggerContextReady()) return false;
+	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
+	VirtualMachine::Value session, threads;
+	return findGdbSessionRoot(runtimeKv, bufferId(), session) && runtimeKv.findChild(session, "threads", threads) &&
+	       runtimeKv.globalStore().keys(threads.hashHandle).size() > 1;
+}
+
 void MRBentoBox::showGdbThreadList() {
-	if (pendingPaneRoleTargetLeafId != 0 || !gdbDebuggerContextReady()) return;
+	if (!gdbThreadSelectionAvailable(pendingPaneRoleTargetLeafId)) return;
 	std::vector<std::string> choices;
 	std::string current;
+	int textWidth = 0;
 	{
 		std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
 		MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
 		MRVMHashStore &store = runtimeKv.globalStore();
 		VirtualMachine::Value session, threads;
 		if (!findGdbSessionRoot(runtimeKv, bufferId(), session) || !runtimeKv.findChild(session, "threads", threads)) return;
+		const std::string currentThread = gdbThreadForRole(roleForLeaf(pendingPaneRoleTargetLeafId));
 		for (const std::string &id : store.keys(threads.hashHandle)) {
 			VirtualMachine::Value thread;
 			if (!runtimeKv.findChild(threads, id, thread)) continue;
@@ -622,20 +707,29 @@ void MRBentoBox::showGdbThreadList() {
 			const std::string file = mrvmHashReadValue(store, store, thread, "file").s;
 			const std::string address = mrvmHashReadValue(store, store, thread, "address").s;
 			const int line = mrvmHashReadValue(store, store, thread, "line").i;
-			std::string label = id + "  " + name + "  " + state + "  " + function + "  ";
-			label += file.empty() ? address : std::filesystem::path(file).filename().string() + ":" + std::to_string(line);
-			if (id == readGdbString(bufferId(), "threadId")) { label += "  *"; current = label; }
+			std::string label = id;
+			if (!name.empty()) label += " " + name;
+			if (!state.empty()) label += " " + state;
+			if (!function.empty()) label += " " + function;
+			if (!file.empty()) {
+				label += " " + std::filesystem::path(file).filename().string();
+				if (line > 0) label += ":" + std::to_string(line);
+			} else if (!address.empty()) label += " " + address;
+			if (id == currentThread) current = label;
+			textWidth = std::max(textWidth, strwidth(label.c_str()));
 			choices.push_back(std::move(label));
 		}
 	}
-	if (choices.empty()) return;
-	std::sort(choices.begin(), choices.end(), [](const std::string &a, const std::string &b) { return std::strtoull(a.c_str(), nullptr, 10) < std::strtoull(b.c_str(), nullptr, 10); });
-	const int width = std::min(72, size.x - 2);
-	const int height = std::min(10, size.y - 2);
-	if (width < 12 || height < 1) return;
-	const int left = std::clamp<int>(paneRoleListAnchor.a.x, 1, size.x - width - 1);
-	const int top = std::clamp<int>(paneRoleListAnchor.a.y, 1, size.y - height - 1);
 	dismissPaneMenus();
+	if (choices.size() <= 1) return;
+	std::sort(choices.begin(), choices.end(), [](const std::string &a, const std::string &b) { return std::strtoull(a.c_str(), nullptr, 10) < std::strtoull(b.c_str(), nullptr, 10); });
+	TRect content = paneBoundsForLeaf(pendingPaneRoleTargetLeafId);
+	content.grow(-1, -1);
+	const int width = std::min(textWidth + 2, content.b.x - content.a.x);
+	const int height = std::min({10, static_cast<int>(choices.size()), content.b.y - content.a.y});
+	if (width < 3 || height < 1) return;
+	const int left = std::clamp<int>(paneRoleListAnchor.a.x, content.a.x, content.b.x - width);
+	const int top = std::clamp<int>(paneRoleListAnchor.a.y, content.a.y, content.b.y - height);
 	gdbThreadListOpen = true;
 	paneActionDropList.toggle(*this, TRect(left, top, left + width, top), choices, current, this, mr::bento::cmGdbThreadAccepted, height);
 }
@@ -644,6 +738,8 @@ void MRBentoBox::acceptGdbThreadChoice() {
 	std::string label;
 	if (!paneActionDropList.acceptSelection(label)) return;
 	const std::string threadId = label.substr(0, label.find(' '));
-	if (threadId != readGdbString(bufferId(), "threadId")) static_cast<void>(sendGdbCommand(MRGdbCommandKind::SelectThread, threadId));
-	activatePrimaryPane();
+	const MRBentoPaneRole role = roleForLeaf(pendingPaneRoleTargetLeafId);
+	const MRGdbCommandKind kind = role == bprVariables ? MRGdbCommandKind::SelectVariablesThread : role == bprWatches ? MRGdbCommandKind::SelectWatchesThread : MRGdbCommandKind::SelectThread;
+	if (role != bprSource || threadId != gdbThreadForRole(role)) static_cast<void>(sendGdbCommand(kind, threadId));
+	setActivePane(pendingPaneRoleTargetLeafId);
 }

@@ -245,11 +245,14 @@ class MRBentoBox : public MREditWindow {
 		[[nodiscard]] bool ensureGdbDebuggerPanes(MREditWindow *&outputWindow, MREditWindow *&variablesWindow, MREditWindow *&watchesWindow, MRGdbTerminalPane *&terminalWindow);
 		[[nodiscard]] bool startGdbDebugger(const std::string &programPath, const std::string &sourcePath, std::string &errorMessage);
 		void stopGdbDebugger() noexcept;
+		[[nodiscard]] bool gdbDebuggerCanEnd() const noexcept;
+		[[nodiscard]] bool endGdbDebugger();
 		void stopGdbDebuggerForRebuild() noexcept;
 		[[nodiscard]] bool startGdbAtFirstCodeLine();
 		[[nodiscard]] bool acceptGdbEvent(const mr::coprocessor::GdbEventPayload &payload);
 		[[nodiscard]] bool sendGdbTerminalInput(const std::string &text);
 		[[nodiscard]] bool clearGdbProgramTerminal();
+		[[nodiscard]] bool editGdbBreakpointAssert(std::size_t sourceOffset);
 		[[nodiscard]] bool executeGdbSourceContextCommand(ushort command, std::size_t sourceOffset, const std::string &identifier);
 		void resizeGdbTerminal(int columns, int rows);
 		void setMacroDebuggerTarget(const std::string &macroKey, const std::string &macroName);
@@ -468,10 +471,11 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] bool sendGdbCommand(MRGdbCommandKind commandKind, const std::string &text = std::string(), const std::string &objectName = std::string());
 	void publishGdbDebuggerState(const char *state, const std::string &file = std::string(), int line = 0);
 	void clearGdbDebuggerState() noexcept;
-	[[nodiscard]] std::string gdbDebuggerStateText() const;
+	[[nodiscard]] std::string gdbDebuggerStateText(MRBentoPaneRole role = bprSource) const;
 	[[nodiscard]] std::string gdbDebuggerSourcePath() const;
 	[[nodiscard]] bool gdbDebuggerRunning() const;
 	[[nodiscard]] bool gdbDebuggerContextReady(bool values = false) const;
+	[[nodiscard]] bool gdbThreadSelectionAvailable(int leafId = 0) const;
 	void showGdbThreadList();
 	void acceptGdbThreadChoice();
 	void refreshOutlinePanes(bool force = false);
@@ -609,6 +613,7 @@ class MRBentoBox : public MREditWindow {
 		std::size_t end;
 		std::size_t valueStart;
 		std::size_t arrayOwner;
+		bool byteArray;
 		bool changed;
 		std::string label;
 		std::string expression;
@@ -618,11 +623,13 @@ class MRBentoBox : public MREditWindow {
 
 	MRDebuggerValueInput *debuggerValueInput;
 	MRPaneEditWindow *debuggerValueInputPane;
-	std::string gdbDebuggerValueInputObjectName;
+	std::string gdbThreadForRole(MRBentoPaneRole role) const;
+	int debuggerUiState(bool create = false) const;
+	void clearDebuggerUiState() noexcept;
+	std::vector<GdbDebuggerVariableRow> readGdbDebuggerRows(bool watches) const;
+	void writeGdbDebuggerRows(bool watches, const std::vector<GdbDebuggerVariableRow> &rows, bool positionsOnly = false);
 	std::vector<MRMacroDebugVariableSnapshot> macroDebuggerVariables;
 	std::vector<std::pair<std::size_t, std::size_t>> macroDebuggerVariableRows;
-	std::vector<GdbDebuggerVariableRow> gdbDebuggerVariableRows;
-	std::vector<GdbDebuggerVariableRow> gdbDebuggerWatchRows;
 	int gdbDebuggerVariablesWidth = 0;
 	int gdbDebuggerWatchesWidth = 0;
 	std::unique_ptr<MRGdbSession> gdbSession;

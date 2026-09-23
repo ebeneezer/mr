@@ -212,6 +212,8 @@ void updateAppCommandState(int desktopCount, bool cyclicVirtualDesktops) {
 	setCommandEnabled(cmMrTextFileCompare, hasEditor && hasMultipleWindows);
 	setCommandEnabled(cmMrDebugBuildCurrentFile, hasEditor && state.hasBuildSourceFile);
 	setCommandEnabled(cmMrDebuggerStart, state.canDebugCurrentFile && !state.hasGdbDebugger);
+	const MRBentoBox *debuggerBento = dynamic_cast<MRBentoBox *>(state.window);
+	setCommandEnabled(cmMrDebuggerEndSession, debuggerBento != nullptr && debuggerBento->gdbDebuggerCanEnd());
 	setCommandEnabled(cmMrDebugGitChanges, hasEditor && state.hasPersistentFileName);
 	setCommandEnabled(cmMrDebugStopProgram, hasWindow && state.hasExternalIoTasks);
 	setCommandEnabled(cmMrDebugRestartProgram, state.hasGdbDebugger || (hasWindow && state.isCommunicationCommandWindow && !state.hasExternalIoTasks && state.hasExternalCommandDetail));

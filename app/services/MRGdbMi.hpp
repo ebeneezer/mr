@@ -39,6 +39,10 @@ struct MRGdbMiVariable {
 
 struct MRGdbMiBreakpoint {
 	std::string number;
+	std::string threadId;
+	bool temporary = false;
+	std::string originalLocation;
+	std::string condition;
 	std::string file;
 	int line;
 };

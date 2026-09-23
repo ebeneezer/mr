@@ -11,6 +11,8 @@
 
 enum class MRGdbCommandKind : unsigned char {
 	SelectThread,
+	SelectVariablesThread,
+	SelectWatchesThread,
 	ContinueExecution,
 	PauseExecution,
 	RunToLocation,
@@ -19,6 +21,7 @@ enum class MRGdbCommandKind : unsigned char {
 	StepOut,
 	ToggleBreakpoint,
 	AddBreakpoint,
+	SetBreakpointAssert,
 	AddWatch,
 	EraseWatch,
 	Evaluate,
@@ -65,6 +68,9 @@ struct MRGdbEvent {
 	std::uint64_t stopGeneration = 0;
 	std::uint64_t contextGeneration = 0;
 	std::vector<MRGdbMiThread> threads;
+	std::string variablesThreadId;
+	std::string watchesThreadId;
+	std::vector<MRGdbMiBreakpoint> breakpoints;
 	std::string text;
 	std::string file;
 	int line;
@@ -107,6 +113,7 @@ class MRGdbSession {
 	[[nodiscard]] bool start(const std::string &programPath, const std::string &sourcePath, int targetBufferId, std::string &errorMessage);
 	[[nodiscard]] bool send(MRGdbCommand command);
 	void stop() noexcept;
+	static void releaseRuntimeState(int targetBufferId);
 	void markFinished(std::uint64_t eventGeneration) noexcept;
 	[[nodiscard]] bool active() const noexcept;
 	[[nodiscard]] std::uint64_t currentGeneration() const noexcept;

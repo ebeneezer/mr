@@ -122,7 +122,12 @@ MRBentoPaneFrameView::Layout MRBentoPaneFrameView::paneChromeLayout(bool include
 	const int boundedTitleRightX = std::min(titleRightX, std::max(left, right - kPaneChromeFrameRest));
 	const int titleAvailable = std::max(0, boundedTitleRightX - leftContentX);
 
-	layout.titleWidth = std::min(static_cast<int>(layout.title.size()), titleAvailable);
+	if (static_cast<int>(layout.title.size()) > titleAvailable) {
+		layout.title.resize(static_cast<std::size_t>(titleAvailable));
+		if (titleAvailable >= 2) layout.title.back() = ']';
+		else layout.title.clear();
+	}
+	layout.titleWidth = static_cast<int>(layout.title.size());
 	layout.titleX = boundedTitleRightX - layout.titleWidth;
 	if (withControls && includeRoleListSpan && roleListTitleOpen) {
 		layout.titleX = std::clamp(roleListTitleX, leftContentX, std::max(leftContentX, titleRightX - 2));

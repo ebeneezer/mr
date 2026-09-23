@@ -15,6 +15,13 @@
 #include "../../mrmac/mrmac.h"
 #include "../../mrmac/vm/MRVMMacroSpecRuntime.hpp"
 #include "../../mrmac/vm/MRVMRuntimeDebugger.hpp"
+#include "../../mrmac/vm/MRVMRuntimeKv.hpp"
+#include "../../mrmac/vm/MRVMValue.hpp"
+#include <mutex>
+#include <cstdlib>
+
+MRVMRuntimeKv &mrvmRuntimeKv() noexcept;
+std::recursive_mutex &mrvmExecutionMutex() noexcept;
 
 #include <array>
 #include <cstring>
@@ -327,7 +334,6 @@ bool MRBentoBox::showMacroDebuggerValueInputAtCursor() {
 		if (left >= viewport.b.x || top < viewport.a.y || top >= viewport.b.y) return false;
 		debuggerValueInput = new MRDebuggerValueInput(TRect(left, top, viewport.b.x, top + 1), this);
 		debuggerValueInputPane = variablesWindow;
-		gdbDebuggerValueInputObjectName.clear();
 		std::array<char, 255> value{};
 
 		if (variable.type != TYPE_HASH && !macroDebuggerVariableIsArray(variable.type)) std::strncpy(value.data(), variable.valueText.c_str(), value.size() - 1);
@@ -340,10 +346,88 @@ bool MRBentoBox::showMacroDebuggerValueInputAtCursor() {
 	return false;
 }
 
+int MRBentoBox::debuggerUiState(bool create) const {
+	// The caller holds the VM execution mutex while using this handle.
+	MRVMRuntimeKv &kv = mrvmRuntimeKv();
+	VirtualMachine::Value app, debugger, views, view;
+	if (!create) {
+		if (!kv.findRoot("APPLICATIONUI", app) || !kv.findChild(app, "debugger", debugger) ||
+		    !kv.findChild(debugger, "views", views) || !kv.findChild(views, std::to_string(bufferId()), view)) return 0;
+		return view.hashHandle;
+	}
+	app = kv.ensureRoot("APPLICATIONUI");
+	debugger = kv.ensureChild(app, "debugger");
+	views = kv.ensureChild(debugger, "views");
+	return kv.ensureChild(views, std::to_string(bufferId())).hashHandle;
+}
+
+void MRBentoBox::clearDebuggerUiState() noexcept {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &kv = mrvmRuntimeKv();
+	VirtualMachine::Value app, debugger, views;
+	if (kv.findRoot("APPLICATIONUI", app) && kv.findChild(app, "debugger", debugger) && kv.findChild(debugger, "views", views))
+		kv.eraseChild(views, std::to_string(bufferId()));
+}
+
+std::vector<MRBentoBox::GdbDebuggerVariableRow> MRBentoBox::readGdbDebuggerRows(bool watches) const {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &kv = mrvmRuntimeKv();
+	MRVMHashStore &store = kv.globalStore();
+	VirtualMachine::Value entries;
+	std::vector<GdbDebuggerVariableRow> rows;
+	const int state = debuggerUiState();
+	if (state == 0 || !kv.findChild(mrvmMakeHash(state, true), watches ? "gdbWatches" : "gdbVariables", entries)) return rows;
+	const int count = store.read(entries.hashHandle, "count").i;
+	rows.reserve(count);
+	for (int index = 0; index < count; ++index) {
+		VirtualMachine::Value item;
+		if (!kv.findChild(entries, std::to_string(index), item)) continue;
+		GdbDebuggerVariableRow row;
+		row.start = std::strtoull(store.read(item.hashHandle, "start").s.c_str(), nullptr, 10);
+		row.end = std::strtoull(store.read(item.hashHandle, "end").s.c_str(), nullptr, 10);
+		row.valueStart = std::strtoull(store.read(item.hashHandle, "valueStart").s.c_str(), nullptr, 10);
+		row.arrayOwner = std::strtoull(store.read(item.hashHandle, "arrayOwner").s.c_str(), nullptr, 10);
+		row.byteArray = store.contains(item.hashHandle, "byteArray") && store.read(item.hashHandle, "byteArray").i != 0;
+		row.label = store.read(item.hashHandle, "label").s;
+		row.expression = store.read(item.hashHandle, "expression").s;
+		row.objectName = store.read(item.hashHandle, "objectName").s;
+		row.value = store.read(item.hashHandle, "value").s;
+		row.changed = store.read(item.hashHandle, "changed").i != 0;
+		rows.push_back(std::move(row));
+	}
+	return rows;
+}
+
+void MRBentoBox::writeGdbDebuggerRows(bool watches, const std::vector<GdbDebuggerVariableRow> &rows, bool positionsOnly) {
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	MRVMRuntimeKv &kv = mrvmRuntimeKv();
+	MRVMHashStore &store = kv.globalStore();
+	if (rows.empty() && debuggerUiState() == 0) return;
+	const VirtualMachine::Value root = mrvmMakeHash(debuggerUiState(true), true);
+	const char *branch = watches ? "gdbWatches" : "gdbVariables";
+	const VirtualMachine::Value entries = positionsOnly ? kv.ensureChild(root, branch) : kv.replaceChild(root, branch);
+	store.write(entries.hashHandle, "count", mrvmMakeInt(static_cast<int>(rows.size())));
+	for (std::size_t index = 0; index < rows.size(); ++index) {
+		const VirtualMachine::Value item = kv.ensureChild(entries, std::to_string(index));
+		const GdbDebuggerVariableRow &row = rows[index];
+		store.write(item.hashHandle, "start", mrvmMakeString(std::to_string(row.start)));
+		store.write(item.hashHandle, "end", mrvmMakeString(std::to_string(row.end)));
+		store.write(item.hashHandle, "valueStart", mrvmMakeString(std::to_string(row.valueStart)));
+		if (positionsOnly) continue;
+		store.write(item.hashHandle, "arrayOwner", mrvmMakeString(std::to_string(row.arrayOwner)));
+		if (row.byteArray) store.write(item.hashHandle, "byteArray", mrvmMakeInt(true));
+		store.write(item.hashHandle, "label", mrvmMakeString(row.label));
+		store.write(item.hashHandle, "expression", mrvmMakeString(row.expression));
+		store.write(item.hashHandle, "objectName", mrvmMakeString(row.objectName));
+		store.write(item.hashHandle, "value", mrvmMakeString(row.value));
+		store.write(item.hashHandle, "changed", mrvmMakeInt(row.changed));
+	}
+}
+
 void MRBentoBox::refreshGdbDebuggerValues(const MRGdbEvent &event) {
 	const bool watches = event.kind == MRGdbEventKind::Watches;
-	std::vector<GdbDebuggerVariableRow> &rows = watches ? gdbDebuggerWatchRows : gdbDebuggerVariableRows;
-	std::vector<GdbDebuggerVariableRow> previous = std::move(rows);
+	std::vector<GdbDebuggerVariableRow> rows;
+	const std::vector<GdbDebuggerVariableRow> previous = readGdbDebuggerRows(watches);
 	std::unordered_map<std::string, std::size_t> previousPaths;
 	for (std::size_t i = 0; i < previous.size(); ++i) previousPaths.emplace(previous[i].expression, i);
 	std::vector<std::size_t> parents;
@@ -356,6 +440,10 @@ void MRBentoBox::refreshGdbDebuggerValues(const MRGdbEvent &event) {
 		const std::size_t parent = depth > 0 ? parents[depth - 1] : std::string::npos;
 		GdbDebuggerVariableRow row;
 		row.start = row.end = row.valueStart = std::string::npos;
+		row.byteArray = variable.childCount > 0 &&
+		                (variable.type.starts_with("char [") || variable.type.starts_with("signed char [") ||
+		                 variable.type.starts_with("unsigned char [") || variable.type.starts_with("const char [") ||
+		                 variable.type.starts_with("const signed char [") || variable.type.starts_with("const unsigned char ["));
 		row.arrayOwner = parent != std::string::npos && parentArrays[depth - 1] && variable.childCount == 0 &&
 		                 !variable.value.starts_with("{") && (variable.type.empty() || variable.type.back() != ']') ? parent : std::string::npos;
 		// GDB objects are transient; retain the thread/frame and expression identity.
@@ -387,6 +475,7 @@ void MRBentoBox::refreshGdbDebuggerValues(const MRGdbEvent &event) {
 		parentArrays[depth] = variable.childCount > 0 && !variable.type.empty() && variable.type.back() == ']';
 		rows.push_back(std::move(row));
 	}
+	writeGdbDebuggerRows(watches, rows);
 	layoutGdbDebuggerValues(watches, true);
 }
 
@@ -394,12 +483,23 @@ void MRBentoBox::layoutGdbDebuggerValues(bool watches, bool valuesChanged) {
 	MREditWindow *window = watches ? watchesPane() : variablesPane();
 	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
 	if (editor == nullptr) return;
-	std::vector<GdbDebuggerVariableRow> &rows = watches ? gdbDebuggerWatchRows : gdbDebuggerVariableRows;
 	int &previousWidth = watches ? gdbDebuggerWatchesWidth : gdbDebuggerVariablesWidth;
 	const TRect viewport = editor->visibleTextViewportBounds();
 	const int width = std::max(1, viewport.b.x - viewport.a.x);
-	if (!valuesChanged && (rows.empty() || previousWidth == width)) return;
+	if (!valuesChanged && previousWidth == width) return;
+	std::vector<GdbDebuggerVariableRow> rows = readGdbDebuggerRows(watches);
+	if (!valuesChanged && rows.empty()) return;
 	previousWidth = width;
+	std::vector<int> arrayValueWidths(rows.size(), 0);
+	std::vector<std::size_t> arrayIndexWidths(rows.size(), 0);
+	for (const GdbDebuggerVariableRow &row : rows) {
+		if (row.arrayOwner == std::string::npos) continue;
+		arrayValueWidths[row.arrayOwner] = std::max(arrayValueWidths[row.arrayOwner], strwidth(row.value.c_str()));
+		const std::size_t index = row.expression.rfind('/');
+		arrayIndexWidths[row.arrayOwner] = std::max(arrayIndexWidths[row.arrayOwner], row.expression.size() - index - 1);
+	}
+	for (std::size_t &indexWidth : arrayIndexWidths)
+		if (indexWidth != 0) indexWidth = indexWidth * 2 + 5;
 	const TPoint scroll = editor->delta;
 	const std::size_t cursor = editor->cursorOffset();
 	const std::size_t topOffset = editor->bufferModel().lineStartByIndex(static_cast<std::size_t>(std::max(0, scroll.y)));
@@ -425,6 +525,16 @@ void MRBentoBox::layoutGdbDebuggerValues(bool watches, bool valuesChanged) {
 			row.end = text.size();
 			if (row.changed) changedRanges.emplace_back(row.valueStart, row.end);
 			text += '\n';
+			if (row.byteArray) {
+				text += std::string(row.label.find_first_not_of(' ') + 2, ' ') + "Text: ";
+				for (std::size_t member = i + 1; member < rows.size() && rows[member].arrayOwner == i; ++member) {
+					const std::string &value = rows[member].value;
+					char *end = nullptr;
+					const long byte = std::strtol(value.c_str(), &end, 10);
+					text += end != value.c_str() && *end == '\0' && byte >= 32 && byte <= 126 ? static_cast<char>(byte) : '.';
+				}
+				text += '\n';
+			}
 			++i;
 			continue;
 		}
@@ -433,23 +543,22 @@ void MRBentoBox::layoutGdbDebuggerValues(bool watches, bool valuesChanged) {
 		const std::string firstIndex = row.expression.substr(row.expression.rfind('/') + 1);
 		std::size_t end = i;
 		int valuesWidth = 0;
-		std::string prefix;
 		while (end < rows.size() && rows[end].arrayOwner == owner) {
-			const GdbDebuggerVariableRow &candidate = rows[end];
-			const std::string index = candidate.expression.substr(candidate.expression.rfind('/') + 1);
-			const std::string nextPrefix = std::string(indent, ' ') + "[" + firstIndex + (end == i ? "" : ".." + index) + "] ";
-			const int nextWidth = valuesWidth + (end == i ? 0 : 2) + strwidth(candidate.value.c_str());
-			if (end != i && static_cast<int>(nextPrefix.size()) + nextWidth > width) break;
-			prefix = nextPrefix;
+			const int nextWidth = valuesWidth + (end == i ? 0 : 2) + arrayValueWidths[owner];
+			if (end != i && indent + arrayIndexWidths[owner] + nextWidth > static_cast<std::size_t>(width)) break;
 			valuesWidth = nextWidth;
 			++end;
 		}
 		const std::size_t lineStart = text.size();
-		text += prefix;
+		const std::string lastIndex = rows[end - 1].expression.substr(rows[end - 1].expression.rfind('/') + 1);
+		const std::string range = "[" + firstIndex + (end == i + 1 ? "" : ".." + lastIndex) + "] ";
+		text += std::string(indent, ' ') + range;
+		text.append(arrayIndexWidths[owner] - range.size(), ' ');
 		for (std::size_t member = i; member < end; ++member) {
 			GdbDebuggerVariableRow &element = rows[member];
 			if (member != i) text += "  ";
 			element.start = member == i ? lineStart : text.size();
+			text.append(arrayValueWidths[owner] - strwidth(element.value.c_str()), ' ');
 			element.valueStart = text.size();
 			text += element.value;
 			element.end = text.size();
@@ -474,6 +583,7 @@ void MRBentoBox::layoutGdbDebuggerValues(bool watches, bool valuesChanged) {
 	window->setReadOnly(true);
 	window->setFileChanged(false);
 	editor->setDebuggerVariableChangedRanges(changedRanges);
+	writeGdbDebuggerRows(watches, rows, true);
 }
 
 bool MRBentoBox::showGdbDebuggerValueInputAtCursor() {
@@ -482,7 +592,7 @@ bool MRBentoBox::showGdbDebuggerValueInputAtCursor() {
 	const std::size_t cursor = variablesEditor != nullptr ? variablesEditor->cursorOffset() : 0;
 
 	if (debuggerValueInput != nullptr || variablesEditor == nullptr || !gdbDebuggerContextReady(true)) return false;
-	for (const GdbDebuggerVariableRow &row : gdbDebuggerVariableRows) {
+	for (const GdbDebuggerVariableRow &row : readGdbDebuggerRows(false)) {
 		if (cursor < row.start || cursor >= row.end) continue;
 		variablesEditor->setCursorOffset(row.valueStart);
 		const TRect viewport = variablesEditor->visibleTextViewportBounds();
@@ -492,7 +602,13 @@ bool MRBentoBox::showGdbDebuggerValueInputAtCursor() {
 		if (left >= viewport.b.x || top < viewport.a.y || top >= viewport.b.y) return false;
 		debuggerValueInput = new MRDebuggerValueInput(TRect(left, top, viewport.b.x, top + 1), this);
 		debuggerValueInputPane = variablesWindow;
-		gdbDebuggerValueInputObjectName = row.objectName;
+		{
+			std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+			MRVMRuntimeKv &kv = mrvmRuntimeKv();
+			const VirtualMachine::Value input = kv.replaceChild(mrvmMakeHash(debuggerUiState(true), true), "valueInput");
+			kv.globalStore().write(input.hashHandle, "objectName", mrvmMakeString(row.objectName));
+			kv.globalStore().write(input.hashHandle, "threadId", mrvmMakeString(gdbThreadForRole(bprVariables)));
+		}
 		std::array<char, 255> value{};
 
 		std::strncpy(value.data(), row.value.c_str(), value.size() - 1);
@@ -522,8 +638,19 @@ void MRBentoBox::commitDebuggerValueInput() {
 
 	if (debuggerValueInput == nullptr) return;
 	debuggerValueInput->getData(value.data());
-	if (!gdbDebuggerValueInputObjectName.empty()) {
-		if (!sendGdbCommand(MRGdbCommandKind::AssignVariable, value.data(), gdbDebuggerValueInputObjectName)) {
+	if (gdbDebuggerActive()) {
+		std::string objectName, threadId;
+		{
+			std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+			MRVMRuntimeKv &kv = mrvmRuntimeKv();
+			VirtualMachine::Value input;
+			const int state = debuggerUiState();
+			if (state != 0 && kv.findChild(mrvmMakeHash(state, true), "valueInput", input)) {
+				objectName = kv.globalStore().read(input.hashHandle, "objectName").s;
+				threadId = kv.globalStore().read(input.hashHandle, "threadId").s;
+			}
+		}
+		if (objectName.empty() || threadId != gdbThreadForRole(bprVariables) || !sendGdbCommand(MRGdbCommandKind::AssignVariable, value.data(), objectName)) {
 			debuggerValueInput->setError(true);
 			return;
 		}
@@ -563,7 +690,9 @@ void MRBentoBox::cancelDebuggerValueInput() noexcept {
 	}
 	debuggerValueInput = nullptr;
 	debuggerValueInputPane = nullptr;
-	gdbDebuggerValueInputObjectName.clear();
+	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+	const int state = debuggerUiState();
+	if (state != 0) mrvmRuntimeKv().eraseChild(mrvmMakeHash(state, true), "valueInput");
 }
 
 void MRBentoBox::refreshMacroDebuggerWatches() {

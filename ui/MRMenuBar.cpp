@@ -295,6 +295,10 @@ MRMenuBar::~MRMenuBar() {
 }
 
 void MRMenuBar::handleEvent(TEvent &event) {
+	if (event.what == evBroadcast && event.message.command == cmCommandSetChanged) {
+		applyFunctionKeyMenuShortcuts(mBaseMenu);
+		applyFunctionKeyMenuShortcuts(menu);
+	}
 	if (event.what == evBroadcast && event.message.command == cmTimerExpired && mMessageExpiryTimer != nullptr && event.message.infoPtr == mMessageExpiryTimer) {
 		refreshMessageLine();
 		clearEvent(event);
@@ -647,7 +651,7 @@ void MRMenuBar::applyFunctionKeyMenuShortcuts(TMenu *targetMenu) const {
 	    {cmMrFileSave, TKey(kbNoKey), nullptr, TKey(kbF2), "F2", TKey(kbF2), "F2"},
 	    {cmMrBlockLoadFromDisk, TKey(kbNoKey), nullptr, TKey(kbF3), "F3", TKey(kbNoKey), nullptr},
 	    {cmMrBlockSaveToDisk, TKey(kbNoKey), nullptr, TKey(kbF4), "F4", TKey(kbShiftF2), "ShiftF2"},
-	    {cmMrWindowCascade, TKey(kbNoKey), nullptr, TKey(kbF5), "F5", TKey(kbNoKey), nullptr},
+	    {cmMrDebuggerStart, TKey(kbNoKey), nullptr, TKey(kbF5), "F5", TKey(kbNoKey), nullptr},
 	    {cmMrWindowTile, TKey(kbNoKey), nullptr, TKey(kbF6), "F6", TKey(kbNoKey), nullptr},
 	    {cmMrWindowSplitVertical, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr},
 	    {cmMrWindowSplitHorizontal, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr},
@@ -664,13 +668,19 @@ void MRMenuBar::applyFunctionKeyMenuShortcuts(TMenu *targetMenu) const {
 	    {cmMrBlockEndMarking, TKey(kbNoKey), nullptr, TKey(kbF7), "F7", TKey(kbF7), "F7"},
 	    {cmMrBlockCopy, TKey(kbNoKey), nullptr, TKey(kbF8), "F8", TKey(kbF8), "F8"},
 	    {cmMrDebugBuildCurrentFile, TKey(kbNoKey), nullptr, TKey(kbF9), "F9", TKey(kbF9), "F9"},
-	    {cmMrDebugClearOutput, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr, TKey(kbNoKey), nullptr},
+	    {cmMrDebugClearOutput, TKey(kbNoKey), nullptr, TKey(kbF9, kbShift), "ShiftF9", TKey(kbF9, kbShift), "ShiftF9"},
 	};
 
 	for (const MenuShortcutSpec &spec : specs)
 		applyMenuShortcutSpec(targetMenu, spec, mStartupFunctionKeysActive, mEditorFunctionKeysActive);
 	if (TMenuItem *debugItem = findMenuItemByCommand(targetMenu, cmMrDebuggerStart); debugItem != nullptr)
 		debugItem->disabled = mDebuggerFunctionKeysActive || !commandEnabled(cmMrDebuggerStart);
+	const MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(currentEditWindow());
+	if (bentoBox != nullptr && bentoBox->macroDebuggerFunctionKeysActive())
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrDebugClearOutput), TKey(kbNoKey), nullptr);
+	const bool canEndGdb = commandEnabled(cmMrDebuggerEndSession);
+	setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrDebuggerEndSession), canEndGdb ? TKey(kbF5, kbShift) : TKey(kbNoKey), canEndGdb ? "ShiftF5" : nullptr);
+	setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrSearchReplace), canEndGdb ? TKey(kbNoKey) : TKey(kbF5, kbShift), canEndGdb ? nullptr : "ShiftF5");
 	if (mDebuggerFunctionKeysActive)
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrDebugBuildCurrentFile), TKey(kbNoKey), nullptr);
 	if (diagnosticsActive) {
@@ -682,7 +692,6 @@ void MRMenuBar::applyFunctionKeyMenuShortcuts(TMenu *targetMenu) const {
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrWindowSplitHorizontal), TKey(kbF3), "F3");
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrWindowSplitVertical), TKey(kbF4), "F4");
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrWindowCascade), TKey(kbNoKey), nullptr);
-		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrDebugClearOutput), TKey(kbF5), "F5");
 	}
 	if (bentoToolPaneActive) {
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockLoadFromDisk), TKey(kbNoKey), nullptr);
@@ -690,7 +699,6 @@ void MRMenuBar::applyFunctionKeyMenuShortcuts(TMenu *targetMenu) const {
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrWindowCascade), TKey(kbNoKey), nullptr);
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrWindowSplitHorizontal), TKey(kbF3), "F3");
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrWindowSplitVertical), TKey(kbF4), "F4");
-		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrDebugClearOutput), TKey(kbF5), "F5");
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockMarkLines), TKey(kbNoKey), nullptr);
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockEndMarking), TKey(kbNoKey), nullptr);
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrBlockCopy), TKey(kbNoKey), nullptr);
@@ -715,6 +723,7 @@ void MRMenuBar::applyFunctionKeyMenuShortcuts(TMenu *targetMenu) const {
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrFileSaveAs), TKey(kbF3), "F3");
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrSearchFindText), TKey(kbF4), "F4");
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrWindowCascade), TKey(kbNoKey), nullptr);
+		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrDebuggerStart), TKey(kbNoKey), nullptr);
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrSearchMultiFileSearch), TKey(kbF5), "F5");
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrSearchGotoLineNumber), TKey(kbF7), "F7");
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrSearchRepeatPrevious), TKey(kbF8), "F8");

@@ -76,7 +76,7 @@ void MRBentoBox::showPaneRoleList(TPoint, int targetLeafId) {
 	const int listHeight = 6;
 	const bool openingRoleList = !paneRoleDropList.visible();
 	std::vector<std::string> choices = paneRoleChoices();
-	if (targetLeafId == 0 && gdbDebuggerContextReady()) choices.push_back("Threads...");
+	if (gdbThreadSelectionAvailable(targetLeafId)) choices.push_back("Threads \x10");
 	TRect paneRect = paneBoundsForLeaf(targetLeafId);
 	MRBentoPaneFrameView *chromeView = nullptr;
 
@@ -141,7 +141,7 @@ void MRBentoBox::showFileCompareActionList(TPoint globalMouse, int targetLeafId)
 void MRBentoBox::acceptPaneRoleChoice() {
 	std::string roleTitle;
 	if (!paneRoleDropList.selectedValue(roleTitle)) return;
-	if (roleTitle == "Threads...") { showGdbThreadList(); return; }
+	if (roleTitle == "Threads \x10") { showGdbThreadList(); return; }
 	pendingPaneRole = mr::bento::paneRoleForTitle(roleTitle);
 	showPaneActionList();
 }
@@ -271,7 +271,7 @@ void MRBentoBox::updatePaneRoleListChrome() noexcept {
 short MRBentoBox::paneRoleIndexAt(TPoint globalMouse) {
 	const TPoint localMouse = makeLocal(globalMouse);
 	const std::vector<std::string> roles = paneRoleChoices();
-	const int maxIndex = std::max(0, static_cast<int>(roles.size()) - 1 + (pendingPaneRoleTargetLeafId == 0 && gdbDebuggerContextReady() ? 1 : 0));
+	const int maxIndex = std::max(0, static_cast<int>(roles.size()) - 1 + (gdbThreadSelectionAvailable(pendingPaneRoleTargetLeafId) ? 1 : 0));
 	return static_cast<short>(std::clamp(localMouse.y - paneRoleListAnchor.a.y, 0, maxIndex));
 }
 
@@ -742,8 +742,10 @@ std::string MRBentoBox::paneTitleForLeaf(const BentoLeaf &leaf) const {
 	if (leaf.role == bprProblems && !compilerProblemsStatus.empty()) return std::string(mr::bento::paneRoleTitle(leaf.role)) + " [" + compilerProblemsStatus + "]";
 	if (leaf.role == bprStructure && !structureOutlineStatus.empty()) return std::string(mr::bento::paneRoleTitle(leaf.role)) + " [" + structureOutlineStatus + "]";
 	if (leaf.role == bprFunctions && !functionsOutlineStatus.empty()) return std::string(mr::bento::paneRoleTitle(leaf.role)) + " [" + functionsOutlineStatus + "]";
-	if ((leaf.role == bprSource || leaf.role == bprVariables || leaf.role == bprWatches || leaf.role == bprDebuggerOutput || leaf.role == bprProgramTerminal) && gdbSession != nullptr)
-		return std::string(mr::bento::paneRoleTitle(leaf.role)) + " [" + gdbDebuggerStateText() + "]";
+	if ((leaf.role == bprSource || leaf.role == bprVariables || leaf.role == bprWatches || leaf.role == bprDebuggerOutput || leaf.role == bprProgramTerminal) && gdbSession != nullptr) {
+		const std::string stateText = gdbDebuggerStateText(leaf.role);
+		return std::string(mr::bento::paneRoleTitle(leaf.role)) + (stateText.empty() ? "" : " " + stateText);
+	}
 	if (leaf.role == bprDebuggerOutput && !macroDebuggerStatus.empty()) return std::string(mr::bento::paneRoleTitle(leaf.role)) + " [" + macroDebuggerStatus + "]";
 	if (!leaf.title.empty()) return leaf.title;
 	return mr::bento::paneRoleTitle(leaf.role);
@@ -838,6 +840,8 @@ void MRBentoBox::collapseLeafNode(int leafId) {
 	if (closingPane != nullptr) cancelBentoProjectionForPane(closingPane->bufferId());
 	int survivor = layoutTree[parent].firstChild == leafNode ? layoutTree[parent].secondChild : layoutTree[parent].firstChild;
 	layoutTree[parent] = layoutTree[survivor];
+	layoutTree[leafNode] = BentoLayoutNode();
+	layoutTree[survivor] = BentoLayoutNode();
 	for (BentoLeaf &leaf : leaves) {
 		if (leaf.id == leafId) {
 			leaf.visible = false;

@@ -231,6 +231,10 @@ void mrGdbMiBreakpoints(const std::string &record, std::vector<MRGdbMiBreakpoint
 		const std::string item = "{" + record.substr(position, end == std::string::npos ? std::string::npos : end - position + 1);
 		MRGdbMiBreakpoint breakpoint;
 		breakpoint.number = mrGdbMiField(item, "number");
+		breakpoint.threadId = mrGdbMiField(item, "thread");
+		breakpoint.temporary = mrGdbMiField(item, "disp") == "del";
+		breakpoint.originalLocation = mrGdbMiField(item, "original-location");
+		breakpoint.condition = mrGdbMiField(item, "cond");
 		breakpoint.file = mrGdbMiField(item, "fullname");
 		if (breakpoint.file.empty()) breakpoint.file = mrGdbMiField(item, "file");
 		breakpoint.line = mrGdbMiIntField(item, "line", 0);
