@@ -76,8 +76,10 @@ workflow.
 A **Repo Run** is the explicitly requested repository publication workflow:
 
 1. Bump the project version consistently across its existing version sources.
-2. Commit the accepted changes and push directly to `main`. Commit messages
-   and all other publication text must be in English.
+2. Review and commit every local dirty repository change, including untracked
+   files, and push directly to `main`. Do not leave a dirty worktree behind.
+   Use cleanly structured English commit messages that list the changes;
+   all other publication text must also be in English.
 3. Build and verify the Debian 12 compatibility package with `make release-zip`
    from the exact version and commit pushed to `main`.
 4. Update the GitHub release for that version and commit, including the release

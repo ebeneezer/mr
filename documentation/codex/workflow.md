@@ -124,8 +124,9 @@ approval workflow.
 The canonical definition and authorization scope of **Repo Run** are in root
 [`AGENTS.md`](../../AGENTS.md#repo-run).
 
-Execute the requested sequence completely: bump the version, commit and push
-the accepted changes directly to `main` using English publication text, build
+Execute the requested sequence completely: bump the version, review and commit
+every local dirty repository change with a structured English change list, and
+push directly to `main` using English publication text. Build
 the Debian 12 compatibility package from that exact pushed commit, and update
 the corresponding GitHub release and signed update artifacts.
 
