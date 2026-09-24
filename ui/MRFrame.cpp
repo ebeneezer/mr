@@ -682,16 +682,14 @@ void MRFrame::setState(ushort aState, Boolean enable) {
 	if ((aState & (sfActive | sfFocused | sfDragging)) != 0) drawView();
 }
 
-void MRFrame::showMarkerHint(const std::string &text, int markerColumn) {
+void MRFrame::showMarkerHint(const std::string &text, TPoint anchor) {
 	TGroup *group = owner != nullptr ? owner->owner : nullptr;
 	std::string displayText = text;
 
 	if (group == nullptr || displayText.empty()) return;
 	displayText.push_back(' ');
-	if (mMarkerHintPopup != nullptr && mMarkerHintText == displayText && mMarkerHintColumn == markerColumn) return;
-
-	const int width = std::max(1, strwidth(displayText.c_str()));
-	TPoint topLeft = makeGlobal(TPoint(markerColumn, 1));
+	const int width = std::min(std::max(1, strwidth(displayText.c_str())), std::max(1, group->size.x - 1));
+	TPoint topLeft = makeGlobal(anchor);
 	topLeft = group->makeLocal(topLeft);
 	int left = topLeft.x;
 	int top = topLeft.y;
@@ -700,13 +698,15 @@ void MRFrame::showMarkerHint(const std::string &text, int markerColumn) {
 	if (left < 0) left = 0;
 	if (top >= group->size.y) top = std::max(0, group->size.y - 1);
 	if (top < 0) top = 0;
+	if (mMarkerHintPopup != nullptr && mMarkerHintText == displayText && mMarkerHintColumn == anchor.x &&
+	    mMarkerHintPopup->getBounds().a.x == left && mMarkerHintPopup->getBounds().a.y == top) return;
 
 	hideMarkerHint();
 	mMarkerHintPopup = new MRFrameMarkerHintView(TRect(left, top, left + width, top + 1), this, displayText);
 	group->insert(mMarkerHintPopup);
 	mMarkerHintPopupOwner = group;
 	mMarkerHintText = displayText;
-	mMarkerHintColumn = markerColumn;
+	mMarkerHintColumn = anchor.x;
 	mMarkerHintPopup->makeFirst();
 	mMarkerHintPopup->setState(sfActive, False);
 	mMarkerHintPopup->drawView();
@@ -810,11 +810,20 @@ void MRFrame::updateTaskHover(TPoint globalMouse, bool forceHide) {
 	}
 	if (markerHintAt(local, state, hintText, hintColumn)) {
 		hideTaskOverview();
-		showMarkerHint(hintText, hintColumn);
+		showMarkerHint(hintText, TPoint(hintColumn, 1));
 		return;
 	}
 	hideMarkerHint();
 	hideTaskOverview();
+}
+
+void MRFrame::showTransientHint(const std::string &text, TPoint globalMouse) {
+	if (!isFrameFocused(this)) {
+		hideMarkerHint();
+		return;
+	}
+	hideTaskOverview();
+	showMarkerHint(text, makeLocal(TPoint(globalMouse.x + 1, globalMouse.y + 1)));
 }
 
 void MRFrame::tickTaskOverviewAnimation() {

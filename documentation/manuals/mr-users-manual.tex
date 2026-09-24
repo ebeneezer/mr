@@ -290,7 +290,7 @@ Setup dialogs use a draft. Moving through controls changes the draft, not the
 application. \textsf{OK}, or \textsf{Save} in the unsaved-changes question,
 validates the draft, applies it to the running application, and persists the
 accepted settings through the normal settings path. \textsf{Discard} abandons
-the draft; \textsf{Cancel} in that question returns to the dialog. This makes
+the draft; closing that question returns to the dialog. This makes
 experimentation reversible until the last confirmation.
 \index{settings!draft}\index{settings!dirty gating}
 
@@ -727,8 +727,9 @@ the reliable fallback over remote or restricted terminal connections.
 opens the configuration areas for colors, keymaps, filename extensions,
 compiler profiles, paths, backups, interface behavior, search defaults, and
 live logs. Each dialog edits a working draft. Accepting the dialog applies
-validated settings. Closing a dirty dialog can request Save, Discard, or
-Cancel; explicit load/save operations may already have applied their changes.
+validated settings. Closing a dirty dialog offers Save or Discard; closing
+that question returns to the dialog. Explicit load/save operations may already
+have applied their changes.
 \index{settings!draft}\index{settings!validation}
 
 Persisted settings are represented in \texttt{settings.mrmac}. Users should
@@ -796,11 +797,11 @@ experimenting with stateful or multi-key emulations.
 Each item-list row begins with a three-column \texttt{Aa } sample rendered in
 the role's foreground and background colors. Selection highlighting affects
 only the following description, leaving the sample exact and readable.
-Foreground and background each have red, green, and blue numeric sliders with
-the range 0--255. The centered \texttt{RRGGBB/RRGGBB} value shows the exact
-24-bit pair for the selected role. Both the readout and its Aa sample update
-immediately while clicking, dragging, or using the keyboard. Changing roles
-retains the component edits already made in the dialog draft. Theme
+The Color Management selection in User Interface Settings selects one of two
+Color setup dialogs. Palette mode displays separate foreground and background
+grids of 16 classic colors. RGB mode displays six numeric component sliders
+and an exact \texttt{RRGGBB/RRGGBB} readout. Both dialogs update the sample
+and preview while editing. Changing roles retains edits in the dialog draft. Theme
 files can be loaded or saved for reuse. Invalid or
 missing groups retain their hardcoded defaults.\index{color setup}\index{theme}
 
@@ -817,30 +818,38 @@ representation and one color draft; there is no duplicate palette
 configuration.\index{color!output
 mode}\index{terminal palette}
 
-\subsection{Editing an RGB colour pair}
+\subsection{Editing colors}
 
 Select a group at the top of Color setup, then select a role in its item list.
-The six sliders edit the red, green, and blue components of foreground and
-background independently. Drag a slider or focus it and use the arrow keys
-for steps of one; Page Up/Down changes by 16 and Home/End selects 0/255.
-The centred hexadecimal pair is a readout, not an editable hexadecimal field.
-The \texttt{Aa} sample uses the current output mode, so a palette-mode preview
-can quantize a colour even though the readout retains its exact RGB value.
+In palette mode, use the mouse or arrow keys to choose foreground and
+background swatches. The 16 classic choices map to exact VGA RGB values in
+the theme and return to the same ANSI indices when loaded again. Opening the
+dialog without changing a swatch leaves other RGB theme colors untouched.
+
+\manualscreenshot{mr-users-color-palette.png}{fig:users-color-palette}{PTY
+capture of Color setup in palette mode. Separate foreground and background
+grids select the classic colors for the current role.}
+
+In RGB mode, the six sliders edit the red, green, and blue components of
+foreground and background independently. Drag a slider or focus it and use
+the arrow keys for steps of one; Page Up/Down changes by 16 and Home/End
+selects 0/255. The centred hexadecimal pair is a readout, not an editable
+hexadecimal field.
 
 \manualscreenshot{mr-users-color-rgb.png}{fig:users-color-rgb}{PTY capture of
 Color setup with 24-bit RGB output selected. Foreground and background have
-separate RGB sliders. The displayed 60D0FF/101020 pair and the text-role
-sample update immediately, including while a slider is being dragged.}
+separate RGB sliders. The hexadecimal readout and text-role sample update
+immediately, including while a slider is being dragged.}
 
 
 
-Choose OK to apply and persist the colour draft. Closing or cancelling a
-changed draft asks whether to Save, Discard, or Cancel closing. Load Theme
+Choose OK to write changed colors to the active theme and save the settings.
+Closing a changed draft offers Save or Discard; closing that question returns
+to Color setup. Load Theme
 activates the selected theme immediately and persists its selection; Save Theme
 applies the current draft and writes the chosen theme file. These explicit
 load/save operations are not undone by later cancelling the reopened dialog.
-Changing the output mode itself belongs to User Interface Settings, under
-\field{Color Management}; the RGB sliders remain available in either mode.
+User Interface Settings selects the dialog under \field{Color Management}.
 \index{color!RGB sliders}\index{color!hexadecimal readout}
 
 Filename-extension profiles may select a theme automatically. This allows a
@@ -1043,8 +1052,8 @@ cancelled or fails.\index{Save command}\index{Save As command}
 
 \key{Alt-X} exits through the dirty gate when changed documents exist.
 \menu{Save All} is the primary choice, so a plain \key{Enter} saves all
-eligible documents and continues the exit. \menu{Discard All} and
-\menu{Cancel} require an explicit selection.
+eligible documents and continues the exit. \menu{Discard All} requires an
+explicit selection; closing the question leaves \mr{} open.
 
 \menu{File > Revert} reloads the saved file and discards unsaved document
 changes after confirmation. It requires a persistent file. A read-only window
@@ -1053,8 +1062,9 @@ offer their own snapshot save path.
 
 \begin{usersafety}
 Revert, closing a dirty window, loading a workspace over active state, and
-exiting are dirty-gated operations. Read the confirmation detail: Save,
-Discard, and Cancel are intentionally different lifecycle decisions.
+exiting are dirty-gated operations. Read the confirmation detail: Save and
+Discard have different effects. Closing the question leaves the pending
+operation unchanged.
 \end{usersafety}
 
 \section{Right-click context menus}
@@ -1136,8 +1146,9 @@ Autoload restores the workspace embedded in \texttt{settings.mrmac} at startup,
 after settings and AUTOEXEC macros and before additional command-line files
 and startup automation. It does not select the newest timestamped file from a
 directory. With Autoload off and a saved workspace available, MR normally asks
-whether to Restore workspace, Discard workspace, or Cancel. Cancel preserves
-the stored workspace for later; Discard removes its embedded restoration data.
+whether to Restore workspace or Discard workspace. Closing the question
+preserves the stored workspace for later; Discard removes its embedded
+restoration data.
 A matching command-line file can restore a saved single-file workspace
 directly, and restart after an update can also force restoration.
 
@@ -2474,11 +2485,42 @@ document lines. Breakpoint acceptance still depends on the debugger: GDB
 resolves compiled source locations, while MRMAC requires a debuggable span.
 \index{breakpoint!gutter double-click}\index{line-number gutter!breakpoints}
 
+A GDB source breakpoint applies to every thread unless it has an assertion.
+Right-click a breakpoint line in the Source pane to open \menu{Breakpoint
+Assert}. Enter an expression in the inferior's language and choose
+\field{OK}. GDB evaluates it in the thread that reaches the breakpoint: a
+true result stops that thread, while a false result continues execution.
+The expression may use variables in scope at that source location. For
+example, \texttt{data->workerid[6] == '0'} selects a worker whose identifier
+ends in zero; \texttt{\$\_thread} is GDB's convenience variable for its
+current thread number, not an MR-defined identifier. A thread number is a
+runtime value and should not be treated as a persistent thread identity.
+
+Choose \field{All Threads} to remove the assertion and make the breakpoint
+unconditional again. Closing the dialog or pressing Escape keeps the previous
+assertion. Hovering over a breakpoint line shows its assertion, or prompts
+for a right-click if none is set. Successful assertion changes are retained
+for the source breakpoint across a rebuild.
+An asserted breakpoint uses the configurable \field{asserted breakpoint} color
+in Color Setup's \field{Debugger Colors} group; an unconditional breakpoint
+keeps the active breakpoint color.
+\index{breakpoint!assertion}\index{GDB debugger!thread condition}
+
+\manualscreenshot{mr-users-gdb-assert-dialog.png}{fig:users-gdb-assert-dialog}{The
+Breakpoint Assert dialog for a source breakpoint. All Threads removes the
+condition; closing the dialog leaves it unchanged.}
+
+\manualscreenshot{mr-users-gdb-assert-hover.png}{fig:users-gdb-assert-hover}{The
+Source pane shows the assertion of the breakpoint under the pointer using the
+same transient hint style as the frame markers.}
+
 \subsection{Source-pane context menu}
 \label{sec:users-gdb-context}
 \index{context menu!GDB source}\index{GDB debugger!context menu}
 
-Right-click the source text while GDB is active. Alongside Edit, Outline,
+Right-click source text without a breakpoint while GDB is active. On an
+existing breakpoint line, right-click opens the Breakpoint Assert dialog.
+Alongside Edit, Outline,
 References, and Rename, the menu offers:
 \begin{description}
 \item[Toggle breakpoint] Sets or removes the breakpoint at the clicked source

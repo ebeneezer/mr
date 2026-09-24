@@ -136,6 +136,7 @@ const TPalette &extendedAppBasePalette() {
 		data[kMrPaletteDebuggerBreakpointActive - 1] = 0x4E;
 		data[kMrPaletteDebuggerBreakpointInactive - 1] = 0x18;
 		data[kMrPaletteDebuggerBreakpointUnbound - 1] = 0x4C;
+		data[kMrPaletteDebuggerBreakpointAsserted - 1] = 0x5E;
 		data[kMrPaletteDebuggerWatchpointActive - 1] = 0x3E;
 		data[kMrPaletteDebuggerWatchpointInactive - 1] = 0x38;
 		data[kMrPaletteDebuggerWatchpointError - 1] = 0x4F;

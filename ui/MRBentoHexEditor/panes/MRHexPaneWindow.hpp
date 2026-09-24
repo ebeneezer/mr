@@ -30,7 +30,6 @@ class MRHexPaneWindow final : public MRPaneEditWindow {
   private:
 	void layoutHexScrollBars() noexcept;
 	void synchronizeHexScrollBars() noexcept;
-	void drawHexScrollBars() noexcept;
 	[[nodiscard]] bool handlesHexScrollBar(const TEvent &event) const noexcept;
 	void acceptHexScrollBarChange(TScrollBar *scrollBar) noexcept;
 

@@ -116,7 +116,7 @@ class TDirtyItemDialog : public MRDialogFoundation {
 	TDirtyItemDialog(const char *dialogTitle, const char *headline, const char *itemsLabel, const char *joinedItems, const char *primaryLabel, const char *discardLabel) : TWindowInit(initMrDialogFrame), MRDialogFoundation(centeredSetupDialogRect(74, 11), dialogTitle != nullptr ? dialogTitle : "UNSAVED CHANGES", 74, 11, initMrDialogFrame) {
 		const std::string primaryButtonLabel = addMnemonic(primaryLabel != nullptr ? primaryLabel : "Save", 's');
 		const std::string discardButtonLabel = addMnemonic(discardLabel != nullptr ? discardLabel : "Discard", 'd');
-		const std::array buttons{mr::dialogs::DialogButtonSpec{primaryButtonLabel.c_str(), cmYes, bfDefault}, mr::dialogs::DialogButtonSpec{discardButtonLabel.c_str(), cmNo, bfNormal}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+		const std::array buttons{mr::dialogs::DialogButtonSpec{primaryButtonLabel.c_str(), cmYes, bfDefault}, mr::dialogs::DialogButtonSpec{discardButtonLabel.c_str(), cmNo, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 3);
 		const int buttonLeft = (74 - metrics.rowWidth) / 2;
 
@@ -140,7 +140,6 @@ UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const ch
 	std::string discardLabelText = discardLabel != nullptr && *discardLabel != '\0' ? discardLabel : "Discard";
 	std::string primaryButtonLabel = addMnemonic(label, 's');
 	std::string discardButtonLabel = addMnemonic(discardLabelText, 'd');
-	std::string cancelButtonLabel = addMnemonic("Cancel", 'c');
 	const int gap = 2;
 	const int desktopWidth = TProgram::deskTop != nullptr ? TProgram::deskTop->size.x : 80;
 	const int maxTextWidth = std::max(32, desktopWidth - 12);
@@ -151,7 +150,7 @@ UnsavedChangesChoice showUnsavedChangesDialog(const char *primaryLabel, const ch
 		textLines.insert(textLines.end(), detailLines.begin(), detailLines.end());
 	}
 
-	const std::array buttons{mr::dialogs::DialogButtonSpec{primaryButtonLabel.c_str(), cmYes, bfDefault}, mr::dialogs::DialogButtonSpec{discardButtonLabel.c_str(), cmNo, bfNormal}, mr::dialogs::DialogButtonSpec{cancelButtonLabel.c_str(), cmCancel, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
+	const std::array buttons{mr::dialogs::DialogButtonSpec{primaryButtonLabel.c_str(), cmYes, bfDefault}, mr::dialogs::DialogButtonSpec{discardButtonLabel.c_str(), cmNo, bfNormal}, mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 	const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, gap);
 	const int textWidth = std::max(widestLineWidth(textLines), metrics.rowWidth);
 	const int width = std::min(std::max(46, textWidth + 6), std::max(46, desktopWidth - 4));

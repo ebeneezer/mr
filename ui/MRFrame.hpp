@@ -87,6 +87,7 @@ class MRFrame : public TFrame {
 	void setMarkerStateProvider(MarkerStateProvider provider);
 	void setTaskOverviewProvider(TaskOverviewProvider provider);
 	void updateTaskHover(TPoint globalMouse, bool forceHide = false);
+	void showTransientHint(const std::string &text, TPoint globalMouse);
 	void tickTaskOverviewAnimation();
 	void closeTaskOverview();
 
@@ -101,7 +102,7 @@ class MRFrame : public TFrame {
 	bool gitMarkerHit(TPoint localMouse, const MarkerState &state) const noexcept;
 	bool taskMarkerHit(TPoint localMouse, const MarkerState &state) const noexcept;
 	bool markerHintAt(TPoint localMouse, const MarkerState &state, std::string &text, int &column) const;
-	void showMarkerHint(const std::string &text, int markerColumn);
+	void showMarkerHint(const std::string &text, TPoint anchor);
 	void hideMarkerHint();
 	void showTaskOverview();
 	void hideTaskOverview();

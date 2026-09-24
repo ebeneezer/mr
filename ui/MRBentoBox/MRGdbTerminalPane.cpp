@@ -36,7 +36,7 @@ MRGdbTerminalPane::MRGdbTerminalPane(const TRect &bounds, const char *title, int
 	if (verticalEditorScrollBar() != nullptr) verticalEditorScrollBar()->hide();
 	if (editorIndicator() != nullptr) editorIndicator()->hide();
 	if (frame != nullptr) frame->hide();
-	resizeTerminal(std::max<int>(1, size.x), std::max<int>(1, size.y));
+	resizeTerminal(std::max<int>(1, size.x - 2), std::max<int>(1, size.y - 2));
 	appendTerminalOutput("No active inferior.\r\n");
 }
 
@@ -90,7 +90,7 @@ void MRGdbTerminalPane::resetTerminal() {
 
 void MRGdbTerminalPane::changeBounds(const TRect &bounds) {
 	TWindow::changeBounds(bounds);
-	resizeTerminal(std::max<int>(1, size.x), std::max<int>(1, size.y));
+	resizeTerminal(std::max<int>(1, size.x - 2), std::max<int>(1, size.y - 2));
 	if (MRBentoBox *bento = dynamic_cast<MRBentoBox *>(owner)) bento->resizeGdbTerminal(columns, rows);
 }
 
@@ -113,7 +113,7 @@ void MRGdbTerminalPane::draw() {
 			if (scrollOffset == 0 && cursorVisible && row == cursorRow && column == cursorColumn) attribute = static_cast<std::uint8_t>(((attribute & 0x0F) << 4) | ((attribute & 0xF0) >> 4));
 			buffer.moveChar(static_cast<ushort>(column), cell.character, TAttrPair(TColorAttr(attribute)), 1);
 		}
-		writeLine(0, static_cast<short>(row), static_cast<short>(columns), 1, buffer);
+		writeLine(1, static_cast<short>(row + 1), static_cast<short>(columns), 1, buffer);
 	}
 }
 

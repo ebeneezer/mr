@@ -316,6 +316,14 @@ bool parseWorkspaceEntry(const std::string &line, WorkspaceEntry &entry, bool lo
 		entry.macroDebuggerConfiguration = MRMacroDebuggerWorkspaceConfiguration();
 		bootstrapLogMessages.push_back("Workspace bootstrap dropped debugger configuration without Bento layout.");
 	}
+	if (entry.hasBentoSnapshot && !entry.hasMacroDebuggerConfiguration)
+		for (const MRBentoWorkspaceLeaf &leaf : entry.bentoSnapshot.leaves)
+			if (leaf.role == bprProgramTerminal) {
+				entry.hasBentoSnapshot = false;
+				entry.bentoSnapshot = MRBentoWorkspaceSnapshot();
+				bootstrapLogMessages.push_back("Workspace bootstrap restored GDB source as editor.");
+				break;
+			}
 	if (!fileCompareOriginalToken.empty() || !fileCompareCompareToken.empty()) {
 		entry.hasFileCompareSources = !fileCompareOriginalToken.empty() && !fileCompareCompareToken.empty() &&
 		                              workspaceHexDecode(fileCompareOriginalToken, entry.fileCompareOriginalUrl) &&
@@ -521,10 +529,10 @@ std::string buildSettingsMacroSourceWithWorkspace(const MRSetupPaths &paths) {
 			continue;
 		}
 		if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(win)) {
-			bentoPayload = mr::workspace::encodeBentoSnapshot(bentoBox->workspaceSnapshot());
 			MRMacroDebuggerWorkspaceConfiguration macroDebuggerConfiguration;
 
 			if (bentoBox->macroDebuggerWorkspaceConfiguration(macroDebuggerConfiguration)) macroDebuggerPayload = " debug=" + mr::workspace::encodeMacroDebuggerConfiguration(macroDebuggerConfiguration);
+			if (!macroDebuggerPayload.empty() || !bentoBox->gdbDebuggerCanEnd()) bentoPayload = mr::workspace::encodeBentoSnapshot(bentoBox->workspaceSnapshot());
 			if (bentoBox->isFileCompareBox()) {
 				if (!bentoBox->fileCompareWorkspaceSourcePaths(fileCompareOriginalUrl, fileCompareCompareUrl)) {
 					mrLogMessage("Workspace serialize skipped file-compare Bento without source paths.");

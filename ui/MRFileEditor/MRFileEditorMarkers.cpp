@@ -50,7 +50,7 @@ void MRFileEditor::clearCompilerDiagnosticRanges() {
 }
 
 void MRFileEditor::setDebuggerBreakpointRanges(const std::vector<std::pair<std::size_t, std::size_t>> &activeRanges, const std::vector<std::pair<std::size_t, std::size_t>> &inactiveRanges, const std::vector<std::pair<std::size_t, std::size_t>> &unboundRanges,
-                                              const std::vector<std::size_t> &explicitUnboundLines) {
+                                              const std::vector<std::size_t> &explicitUnboundLines, const std::vector<std::size_t> &assertedLines) {
 	std::vector<DebuggerBreakpointLineMarker> activeLines;
 	std::vector<DebuggerBreakpointLineMarker> inactiveLines;
 	std::vector<DebuggerBreakpointLineMarker> unboundLines;
@@ -81,6 +81,10 @@ void MRFileEditor::setDebuggerBreakpointRanges(const std::vector<std::pair<std::
 		appendLine(lineStart, unboundLines);
 	}
 	normalizeLines(activeLines);
+	std::vector<std::size_t> sortedAssertedLines(assertedLines);
+	std::sort(sortedAssertedLines.begin(), sortedAssertedLines.end());
+	for (DebuggerBreakpointLineMarker &marker : activeLines)
+		marker.asserted = std::binary_search(sortedAssertedLines.begin(), sortedAssertedLines.end(), marker.lineIndex);
 	mDebuggerBreakpointLines.swap(activeLines);
 	normalizeLines(inactiveLines);
 	mDebuggerBreakpointInactiveLines.swap(inactiveLines);
@@ -273,7 +277,7 @@ void MRFileEditor::remapDebuggerBreakpointLinesForAppliedChange(const MRTextBuff
 			const std::size_t offset = static_cast<std::size_t>(std::max<long long>(0, std::min<long long>(mappedOffset, static_cast<long long>(newLength))));
 			const std::size_t lineIndex = mBufferModel.lineIndex(offset);
 			const std::size_t lineStart = mBufferModel.lineStart(offset);
-			mapped.push_back(DebuggerBreakpointLineMarker{lineIndex, lineStart, mBufferModel.nextLine(lineStart)});
+			mapped.push_back(DebuggerBreakpointLineMarker{lineIndex, lineStart, mBufferModel.nextLine(lineStart), marker.asserted});
 		}
 		std::sort(mapped.begin(), mapped.end(), [](const DebuggerBreakpointLineMarker &left, const DebuggerBreakpointLineMarker &right) { return left.lineIndex < right.lineIndex; });
 		mapped.erase(std::unique(mapped.begin(), mapped.end(), [](const DebuggerBreakpointLineMarker &left, const DebuggerBreakpointLineMarker &right) { return left.lineIndex == right.lineIndex; }), mapped.end());

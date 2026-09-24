@@ -211,7 +211,12 @@ void runColorSetupDialogFlow() {
 		return true;
 	};
 	auto applyAndPersistColors = [&](const MRColorSetupSettings &settings, std::string &errorText) -> bool {
+		const std::string activeThemeUri = configuredColorThemeFilePath();
+		const std::string activeThemeDisplayName = configuredColorThemeDisplayName();
+
 		if (!applyColorSetupSettingsToConfigured(settings, errorText)) return false;
+		if (!setConfiguredColorThemeDisplayName(activeThemeDisplayName, &errorText)) return false;
+		if (!writeColorThemeFile(activeThemeUri, &errorText)) return false;
 		if (!persistSettingsFileOnly(errorText)) return false;
 		TProgram::application->redraw();
 		mrUpdateAllWindowsColorTheme();

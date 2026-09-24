@@ -73,6 +73,10 @@ MRBentoPaneFrameView::HitKind MRBentoPaneFrameView::hitTest(TPoint local) const 
 }
 
 void MRBentoPaneFrameView::draw() {
+	drawOn(*this);
+}
+
+void MRBentoPaneFrameView::drawOn(TView &target) {
 	TDrawBuffer buffer;
 	const TAttrPair frameColor = TAttrPair(borderColor);
 	const Layout layout = paneChromeLayout();
@@ -84,13 +88,13 @@ void MRBentoPaneFrameView::draw() {
 			buffer.putChar(0, y == 0 ? '\xDA' : '\xC0');
 			if (size.x > 1) buffer.putChar(static_cast<ushort>(size.x - 1), y == 0 ? '\xBF' : '\xD9');
 			if (y == 0) drawPaneChrome(buffer, layout, frameColor, frameColor, focused, maximized);
-			writeBuf(0, y, size.x, 1, buffer);
+			target.writeBuf(0, y, size.x, 1, buffer);
 		} else {
 			buffer.moveChar(0, kFrameGlyphs.singleVertical, frameColor, 1);
-			writeBuf(0, y, 1, 1, buffer);
+			target.writeBuf(0, y, 1, 1, buffer);
 			if (size.x > 1) {
 				buffer.moveChar(0, kFrameGlyphs.singleVertical, frameColor, 1);
-				writeBuf(size.x - 1, y, 1, 1, buffer);
+				target.writeBuf(size.x - 1, y, 1, 1, buffer);
 			}
 		}
 	}

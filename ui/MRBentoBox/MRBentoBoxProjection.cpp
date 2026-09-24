@@ -144,14 +144,6 @@ TColorAttr MRBentoBox::mapColor(uchar index) {
 
 		if (configuredColorSlotOverride(kMrPaletteFileCompareFocusedPaneBorder, value)) return value;
 	}
-	if (sourceScrollBarPaletteActive && (index == 4 || index == 5)) {
-		if (bentoMode == bbmFileCompare) {
-			MRFileEditor *sourceEditor = getEditor();
-
-			if (sourceEditor != nullptr) return sourceEditor->editorTextFillColor();
-		}
-		return MREditWindow::mapColor(activeLeafId == 0 ? 13 : 1);
-	}
 	return MREditWindow::mapColor(index);
 }
 
@@ -470,7 +462,6 @@ bool MRBentoBox::restoreWorkspaceSnapshot(const MRBentoWorkspaceSnapshot &snapsh
 	nextLeafId = nextId;
 	activeLeafId = nodeIndexForLeaf(snapshot.activeLeafId) >= 0 ? snapshot.activeLeafId : 0;
 	maximizedLeafId = nodeIndexForLeaf(snapshot.maximizedLeafId) >= 0 ? snapshot.maximizedLeafId : -1;
-	sourceScrollBarPaletteActive = false;
 	secondaryPaneVisible = firstToolLeafId() >= 0;
 	paneRoleDropList.hide();
 	paneActionDropList.hide();
@@ -504,7 +495,6 @@ void MRBentoBox::draw() {
 	refreshEditorTaskMarkers();
 	MREditWindow::draw();
 	if (hasPaneSplit()) {
-		if (paneWindowForLeaf(0) == nullptr) drawSourcePaneScrollBars();
 		drawPaneFrames();
 	}
 }

@@ -23,6 +23,7 @@ class MRBentoPaneFrameView final : public TView {
 	[[nodiscard]] TRect paneRoleListAnchor(int listWidth) const noexcept;
 	void setPaneRoleListTitleOpen(bool open, const TRect &listAnchor) noexcept;
 	[[nodiscard]] HitKind hitTest(TPoint local) const;
+	void drawOn(TView &target);
 
 	virtual void draw() override;
 	virtual TPalette &getPalette() const override;

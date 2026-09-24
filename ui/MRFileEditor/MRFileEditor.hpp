@@ -284,7 +284,7 @@ class MRFileEditor : public TScroller {
 
 	void clearCompilerDiagnosticRanges();
 	void setDebuggerBreakpointRanges(const std::vector<std::pair<std::size_t, std::size_t>> &activeRanges, const std::vector<std::pair<std::size_t, std::size_t>> &inactiveRanges, const std::vector<std::pair<std::size_t, std::size_t>> &unboundRanges,
-	                                 const std::vector<std::size_t> &unboundLines);
+	                                 const std::vector<std::size_t> &unboundLines, const std::vector<std::size_t> &assertedLines = {});
 	void clearDebuggerBreakpointRanges();
 	std::vector<int> debuggerBreakpointLineNumbers() const;
 	void setDebuggerWatchpointRanges(const std::vector<std::pair<std::size_t, std::size_t>> &activeRanges, const std::vector<std::pair<std::size_t, std::size_t>> &inactiveRanges, const std::vector<std::pair<std::size_t, std::size_t>> &errorRanges);
@@ -888,7 +888,7 @@ class MRFileEditor : public TScroller {
 	bool debuggerWatchpointInactiveContainsOffset(std::size_t offset) const noexcept;
 	bool debuggerWatchpointErrorContainsOffset(std::size_t offset) const noexcept;
 	bool debuggerVariableChangedContainsOffset(std::size_t offset) const noexcept;
-	bool debuggerBreakpointLineAt(std::size_t lineIndex) const noexcept;
+	bool debuggerBreakpointLineAt(std::size_t lineIndex, bool *asserted = nullptr) const noexcept;
 	bool debuggerBreakpointInactiveLineAt(std::size_t lineIndex) const noexcept;
 	bool debuggerBreakpointUnboundLineAt(std::size_t lineIndex) const noexcept;
 	unsigned char fileCompareLineKindAt(std::size_t lineIndex) const noexcept;
@@ -1177,6 +1177,7 @@ class MRFileEditor : public TScroller {
 		std::size_t lineIndex = 0;
 		std::size_t lineStart = 0;
 		std::size_t lineEnd = 0;
+		bool asserted = false;
 	};
 	std::vector<DebuggerBreakpointLineMarker> mDebuggerBreakpointLines;
 	std::vector<DebuggerBreakpointLineMarker> mDebuggerBreakpointInactiveLines;

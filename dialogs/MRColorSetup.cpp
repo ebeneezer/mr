@@ -1,4 +1,6 @@
 #define Uses_TButton
+#define Uses_TColorDisplay
+#define Uses_TColorSelector
 #define Uses_TDialog
 #define Uses_TDrawBuffer
 #define Uses_TEvent
@@ -75,6 +77,7 @@ class TCenteredTextField : public TView {
 class TRgbColorItemList : public TListViewer {
   public:
 	TRgbColorItemList(const TRect &bounds, TScrollBar *scrollBar, TView *relay) noexcept : TListViewer(bounds, 1, nullptr, scrollBar), mRelay(relay) {
+		eventMask |= evBroadcast;
 	}
 
 	void setItems(const MRColorSetupItem *items, MRRgbColorAttribute *colors, std::size_t count, short focusedItem, MRColorOutputMode outputMode) {
@@ -98,6 +101,28 @@ class TRgbColorItemList : public TListViewer {
 	void focusItem(short item) override {
 		TListViewer::focusItem(item);
 		if (mRelay != nullptr) message(mRelay, evBroadcast, cmMrColorItemFocused, reinterpret_cast<void *>(static_cast<std::size_t>(focused)));
+	}
+
+	void handleEvent(TEvent &event) override {
+		if (mOutputMode == MRColorOutputMode::TerminalPalette && event.what == evBroadcast &&
+		    (event.message.command == cmColorForegroundChanged || event.message.command == cmColorBackgroundChanged)) {
+			if (mColors != nullptr && focused >= 0 && static_cast<std::size_t>(focused) < mCount) {
+				const unsigned char previousBios = projectColorAttribute(mColors[focused], mOutputMode).toBIOS();
+				unsigned char bios = previousBios;
+
+				if (event.message.command == cmColorForegroundChanged) bios = static_cast<unsigned char>((bios & 0xF0u) | (event.message.infoByte & 0x0Fu));
+				else bios = static_cast<unsigned char>((bios & 0x0Fu) | ((event.message.infoByte & 0x0Fu) << 4u));
+				if (bios != previousBios) {
+					const MRRgbColorAttribute selected = rgbColorAttributeFromBios(bios);
+
+					if (event.message.command == cmColorForegroundChanged) mColors[focused].foregroundRgb = selected.foregroundRgb;
+					else mColors[focused].backgroundRgb = selected.backgroundRgb;
+					drawView();
+				}
+			}
+			return;
+		}
+		TListViewer::handleEvent(event);
 	}
 
 	void getText(char *dest, short item, short maxLen) override {
@@ -155,6 +180,83 @@ class TRgbColorItemList : public TListViewer {
 	MRColorOutputMode mOutputMode = MRColorOutputMode::RgbAutomatic;
 };
 
+class TAnsi16BackgroundSelector : public TColorSelector {
+  public:
+	TAnsi16BackgroundSelector(const TRect &bounds) noexcept : TColorSelector(bounds, TColorSelector::csBackground) {
+	}
+
+	void draw() override {
+		TDrawBuffer buffer;
+
+		for (int row = 0; row < size.y; ++row) {
+			buffer.moveChar(0, ' ', 0x70, size.x);
+			for (int column = 0; column < 4; ++column) {
+				const int swatch = row * 4 + column;
+
+				buffer.moveChar(column * 3, '\xDB', static_cast<uchar>(swatch), 3);
+				if (swatch == color) {
+					buffer.putChar(column * 3 + 1, 8);
+					if (swatch == 0) buffer.putAttribute(column * 3 + 1, 0x70);
+				}
+			}
+			writeLine(0, row, size.x, 1, buffer);
+		}
+	}
+
+	void handleEvent(TEvent &event) override {
+		const uchar oldColor = color;
+
+		TView::handleEvent(event);
+		switch (event.what) {
+			case evMouseDown:
+				do {
+					if (mouseInView(event.mouse.where)) {
+						const TPoint mouse = makeLocal(event.mouse.where);
+
+						color = static_cast<uchar>(mouse.y * 4 + mouse.x / 3);
+					} else {
+						color = oldColor;
+					}
+					message(owner, evBroadcast, cmColorBackgroundChanged, reinterpret_cast<void *>(static_cast<std::size_t>(color)));
+					drawView();
+				} while (mouseEvent(event, evMouseMove));
+				clearEvent(event);
+				return;
+
+			case evKeyDown:
+				switch (ctrlToArrow(event.keyDown.keyCode)) {
+					case kbLeft:
+						color = color > 0 ? static_cast<uchar>(color - 1) : static_cast<uchar>(15);
+						break;
+					case kbRight:
+						color = color < 15 ? static_cast<uchar>(color + 1) : static_cast<uchar>(0);
+						break;
+					case kbUp:
+						color = color >= 4 ? static_cast<uchar>(color - 4) : static_cast<uchar>(color + 12);
+						break;
+					case kbDown:
+						color = color < 12 ? static_cast<uchar>(color + 4) : static_cast<uchar>(color - 12);
+						break;
+					default:
+						return;
+				}
+				break;
+
+			case evBroadcast:
+				if (event.message.command != cmColorSet) return;
+				color = static_cast<uchar>(event.message.infoByte >> 4);
+				drawView();
+				return;
+
+			default:
+				return;
+		}
+		drawView();
+		message(owner, evBroadcast, cmColorBackgroundChanged, reinterpret_cast<void *>(static_cast<std::size_t>(color)));
+		clearEvent(event);
+	}
+};
+
 class TUnifiedColorSetupDialog : public MRScrollableDialog {
   public:
 	static const int kDialogWidth = 80;
@@ -177,7 +279,7 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 	}
 
 	void getData(void *rec) override {
-		storeSlidersInCurrentColor();
+		if (mOutputMode == MRColorOutputMode::RgbAutomatic) storeSlidersInCurrentColor();
 		if (rec != nullptr) *static_cast<MRColorSetupSettings *>(rec) = mDraft;
 	}
 
@@ -346,6 +448,11 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 		const MRRgbColorAttribute *color = currentColor();
 
 		if (color == nullptr) return;
+		if (mOutputMode == MRColorOutputMode::TerminalPalette) {
+			mPalettePreview = TColorAttr(projectColorAttribute(*color, mOutputMode).toBIOS());
+			if (mPaletteDisplay != nullptr) mPaletteDisplay->setColor(&mPalettePreview);
+			return;
+		}
 		mForegroundRed->setValue(colorComponent(color->foregroundRgb, 16));
 		mForegroundGreen->setValue(colorComponent(color->foregroundRgb, 8));
 		mForegroundBlue->setValue(colorComponent(color->foregroundRgb, 0));
@@ -387,23 +494,40 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 	}
 
 	void buildViews() {
-		const std::array buttons{mr::dialogs::DialogButtonSpec{"~O~K", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~C~ancel", cmCancel, bfNormal},
-		                         mr::dialogs::DialogButtonSpec{"~L~oad Theme", cmMrColorLoadTheme, bfNormal}, mr::dialogs::DialogButtonSpec{"~S~ave Theme", cmMrColorSaveTheme, bfNormal},
+		const std::array buttons{mr::dialogs::DialogButtonSpec{"~O~K", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~L~oad Theme", cmMrColorLoadTheme, bfNormal},
+		                         mr::dialogs::DialogButtonSpec{"~S~ave Theme", cmMrColorSaveTheme, bfNormal},
 		                         mr::dialogs::DialogButtonSpec{"~H~elp", cmHelp, bfNormal}};
 		const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 1);
 		const int buttonLeft = (kDialogWidth - metrics.rowWidth) / 2;
 
-		mGroupField = new MRStringChoiceField(TRect(3, 2, 76, 3), 70);
+		const bool paletteDialog = mOutputMode == MRColorOutputMode::TerminalPalette;
+		const int itemRight = paletteDialog ? 60 : 76;
+		mGroupField = new MRStringChoiceField(TRect(3, 2, itemRight, 3), paletteDialog ? 54 : 70);
 		mGroupField->setChoices(groupNames());
-		addManaged(mGroupField, TRect(3, 2, 76, 3));
-		mGroupField->createDropListButton(*this, TRect(76, 2, 77, 3), this, cmMrColorGroupChoose, false);
-		mGroupListAnchor = TRect(3, 3, 77, 4);
+		addManaged(mGroupField, TRect(3, 2, itemRight, 3));
+		mGroupField->createDropListButton(*this, TRect(itemRight, 2, itemRight + 1, 3), this, cmMrColorGroupChoose, false);
+		mGroupListAnchor = TRect(3, 3, itemRight + 1, 4);
 
-		mItemScroll = new TScrollBar(TRect(76, 3, 77, 12));
-		addManaged(mItemScroll, TRect(76, 3, 77, 12));
-		mItemList = new TRgbColorItemList(TRect(3, 3, 76, 12), mItemScroll, this);
-		addManaged(mItemList, TRect(3, 3, 76, 12));
+		const int itemBottom = paletteDialog ? 16 : 12;
+		mItemScroll = new TScrollBar(TRect(itemRight, 3, itemRight + 1, itemBottom));
+		addManaged(mItemScroll, TRect(itemRight, 3, itemRight + 1, itemBottom));
+		mItemList = new TRgbColorItemList(TRect(3, 3, itemRight, itemBottom), mItemScroll, this);
+		addManaged(mItemList, TRect(3, 3, itemRight, itemBottom));
 
+		if (paletteDialog) {
+			addManaged(new TStaticText(TRect(64, 2, 76, 3), "Foreground"), TRect(64, 2, 76, 3));
+			TColorSelector *foreground = new TColorSelector(TRect(64, 3, 76, 7), TColorSelector::csForeground);
+			addManaged(foreground, TRect(64, 3, 76, 7));
+			addManaged(new TStaticText(TRect(64, 8, 76, 9), "Background"), TRect(64, 8, 76, 9));
+			TAnsi16BackgroundSelector *background = new TAnsi16BackgroundSelector(TRect(64, 9, 76, 13));
+			addManaged(background, TRect(64, 9, 76, 13));
+			mPaletteDisplay = new TColorDisplay(TRect(63, 14, 77, 16), "Text ");
+			addManaged(mPaletteDisplay, TRect(63, 14, 77, 16));
+			mr::dialogs::addManagedUniformButtonRow(*this, buttonLeft, 18, 1, buttons);
+			mThemeField = new TCenteredTextField(TRect(5, 20, 77, 21), "active: " + configuredColorThemeDisplayName());
+			addManaged(mThemeField, TRect(5, 20, 77, 21));
+			return;
+		}
 		addManaged(new TStaticText(TRect(3, 12, 38, 13), "Foreground RGB"), TRect(3, 12, 38, 13));
 		addManaged(new TStaticText(TRect(42, 12, 77, 13), "Background RGB"), TRect(42, 12, 77, 13));
 		mForegroundRed = addSlider(TRect(6, 13, 38, 14), "~R~");
@@ -433,6 +557,8 @@ class TUnifiedColorSetupDialog : public MRScrollableDialog {
 	MRNumericSlider *mBackgroundRed = nullptr;
 	MRNumericSlider *mBackgroundGreen = nullptr;
 	MRNumericSlider *mBackgroundBlue = nullptr;
+	TColorDisplay *mPaletteDisplay = nullptr;
+	TColorAttr mPalettePreview = TColorAttr(0x1F);
 	TCenteredTextField *mExactValueField = nullptr;
 	TCenteredTextField *mThemeField = nullptr;
 	TRect mGroupListAnchor;

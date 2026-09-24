@@ -1,4 +1,6 @@
 #define Uses_Dialogs
+#define Uses_TButton
+#define Uses_TInputLine
 #include "MRBentoBox.hpp"
 
 #include "MRGdbTerminalPane.hpp"
@@ -14,8 +16,10 @@
 #include "../../mrmac/mrmac.h"
 #include "../../mrmac/vm/MRVMRuntimeKv.hpp"
 #include "../../mrmac/vm/MRVMValue.hpp"
+#include "../MRFrame.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdlib>
 #include <filesystem>
 #include <mutex>
@@ -53,28 +57,44 @@ bool findGdbBreakpointLinesRoot(MRVMRuntimeKv &runtimeKv, const std::string &sou
 	       runtimeKv.findChild(sources, normalizeConfiguredPathInput(sourcePath), source) && runtimeKv.findChild(source, "lines", lines);
 }
 
-std::vector<int> readGdbBreakpointLines(const std::string &sourcePath) {
+std::vector<int> readGdbBreakpointLines(const std::string &sourcePath, std::vector<int> *assertedLines = nullptr) {
 	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
 	MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
 	VirtualMachine::Value lines;
+	VirtualMachine::Value source, assertions;
 	std::vector<int> result;
+	if (assertedLines != nullptr) assertedLines->clear();
 
 	if (!findGdbBreakpointLinesRoot(runtimeKv, sourcePath, lines)) return result;
+	const bool hasAssertions = assertedLines != nullptr && runtimeKv.findChild(gdbBreakpointSourcesRoot(runtimeKv), normalizeConfiguredPathInput(sourcePath), source) &&
+	                           runtimeKv.findChild(source, "asserts", assertions);
 	for (const std::string &key : runtimeKv.globalStore().keys(lines.hashHandle)) {
 		char *end = nullptr;
 		const long line = std::strtol(key.c_str(), &end, 10);
 
-		if (end != key.c_str() && *end == '\0' && line > 0) result.push_back(static_cast<int>(line));
+		if (end != key.c_str() && *end == '\0' && line > 0) {
+			result.push_back(static_cast<int>(line));
+			if (hasAssertions && runtimeKv.globalStore().contains(assertions.hashHandle, key)) {
+				const VirtualMachine::Value assertion = runtimeKv.globalStore().read(assertions.hashHandle, key);
+				if (assertion.type == TYPE_STR && !assertion.s.empty()) assertedLines->push_back(static_cast<int>(line));
+			}
+		}
 	}
 	std::sort(result.begin(), result.end());
+	if (assertedLines != nullptr) std::sort(assertedLines->begin(), assertedLines->end());
 	return result;
 }
 
-std::string readGdbBreakpointAssert(const std::string &sourcePath, int line) {
+std::string readGdbBreakpointAssert(const std::string &sourcePath, int line, bool *hasBreakpoint = nullptr) {
 	std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
 	MRVMRuntimeKv &kv = mrvmRuntimeKv();
 	VirtualMachine::Value source, assertions;
 	const VirtualMachine::Value sources = gdbBreakpointSourcesRoot(kv);
+	if (hasBreakpoint != nullptr) {
+		VirtualMachine::Value lines;
+		*hasBreakpoint = findGdbBreakpointLinesRoot(kv, sourcePath, lines) && kv.globalStore().contains(lines.hashHandle, std::to_string(line));
+		if (!*hasBreakpoint) return std::string();
+	}
 	if (!kv.findChild(sources, normalizeConfiguredPathInput(sourcePath), source) || !kv.findChild(source, "asserts", assertions)) return std::string();
 	if (!kv.globalStore().contains(assertions.hashHandle, std::to_string(line))) return std::string();
 	return kv.globalStore().read(assertions.hashHandle, std::to_string(line)).s;
@@ -134,10 +154,11 @@ std::size_t lineEndForStart(const std::string &text, std::size_t start) {
 	return newline == std::string::npos ? text.size() : newline;
 }
 
-void projectGdbBreakpointLines(MRFileEditor *editor, const std::vector<int> &breakpointLines) {
+void projectGdbBreakpointLines(MRFileEditor *editor, const std::vector<int> &breakpointLines, const std::vector<int> &assertedLines) {
 	if (editor == nullptr) return;
 	const std::string source = editor->snapshotText();
 	std::vector<std::pair<std::size_t, std::size_t>> ranges;
+	std::vector<std::size_t> assertedLineIndexes;
 
 	for (const int line : breakpointLines) {
 		const std::size_t start = lineStartForNumber(source, line);
@@ -145,7 +166,9 @@ void projectGdbBreakpointLines(MRFileEditor *editor, const std::vector<int> &bre
 		if (start >= source.size() && !source.empty()) continue;
 		ranges.push_back(std::make_pair(start, lineEndForStart(source, start)));
 	}
-	editor->setDebuggerBreakpointRanges(ranges, {}, {}, {});
+	for (const int line : assertedLines)
+		if (line > 0) assertedLineIndexes.push_back(static_cast<std::size_t>(line - 1));
+	editor->setDebuggerBreakpointRanges(ranges, {}, {}, {}, assertedLineIndexes);
 }
 
 } // namespace
@@ -193,8 +216,9 @@ bool MRBentoBox::startGdbDebugger(const std::string &programPath, const std::str
 		writeGdbInt(runtimeKv, session, "stopLine", 0);
 		writeGdbInt(runtimeKv, session, "running", 0);
 	}
-	const std::vector<int> breakpointLines = readGdbBreakpointLines(sourcePath);
-	projectGdbBreakpointLines(getEditor(), breakpointLines);
+	std::vector<int> assertedLines;
+	const std::vector<int> breakpointLines = readGdbBreakpointLines(sourcePath, &assertedLines);
+	projectGdbBreakpointLines(getEditor(), breakpointLines, assertedLines);
 	for (const int line : breakpointLines) {
 		MRGdbCommand command(MRGdbCommandKind::AddBreakpoint);
 
@@ -223,7 +247,11 @@ void MRBentoBox::stopGdbDebugger() noexcept {
 	clearDebuggerUiState();
 	if (getEditor() != nullptr) getEditor()->clearDebuggerInstructionLine();
 	if (macroDebuggerActive) refreshMacroDebuggerBreakpointRanges();
-	else if (!sourcePath.empty()) projectGdbBreakpointLines(getEditor(), readGdbBreakpointLines(sourcePath));
+	else if (!sourcePath.empty()) {
+		std::vector<int> assertedLines;
+		const std::vector<int> breakpointLines = readGdbBreakpointLines(sourcePath, &assertedLines);
+		projectGdbBreakpointLines(getEditor(), breakpointLines, assertedLines);
+	}
 }
 
 bool MRBentoBox::gdbDebuggerCanEnd() const noexcept {
@@ -367,7 +395,11 @@ bool MRBentoBox::acceptGdbEvent(const mr::coprocessor::GdbEventPayload &payload)
 			}
 			break;
 		case MRGdbEventKind::Breakpoints:
-			projectGdbBreakpointLines(getEditor(), readGdbBreakpointLines(gdbDebuggerSourcePath()));
+			{
+				std::vector<int> assertedLines;
+				const std::vector<int> breakpointLines = readGdbBreakpointLines(gdbDebuggerSourcePath(), &assertedLines);
+				projectGdbBreakpointLines(getEditor(), breakpointLines, assertedLines);
+			}
 			break;
 		case MRGdbEventKind::Finished:
 			if (gdbThreadListOpen) paneActionDropList.hide();
@@ -422,9 +454,41 @@ bool MRBentoBox::editGdbBreakpointAssert(std::size_t sourceOffset) {
 	const std::string previous = readGdbBreakpointAssert(gdbDebuggerSourcePath(), line);
 	char assertion[256] = {};
 	std::copy_n(previous.data(), std::min(previous.size(), sizeof(assertion) - 1), assertion);
-	if (mr::dialogs::execTextInputDialog("BREAKPOINT ASSERT", "Assert (empty = all threads)", assertion, sizeof(assertion) - 1) == cmCancel) return true;
+	constexpr int kDialogWidth = 48;
+	constexpr int kDialogHeight = 7;
+	MRDialogFoundation *dialog = mr::dialogs::createScrollableDialog("BREAKPOINT ASSERT", kDialogWidth, kDialogHeight);
+	TInputLine *input = new TInputLine(TRect(3, 2, kDialogWidth - 3, 3), sizeof(assertion) - 1);
+	const std::array buttons{mr::dialogs::DialogButtonSpec{"~O~K", cmOK, bfDefault}, mr::dialogs::DialogButtonSpec{"~A~ll Threads", cmYes, bfNormal}};
+	const mr::dialogs::DialogButtonRowMetrics metrics = mr::dialogs::measureUniformButtonRow(buttons, 2);
+	dialog->insert(input);
+	mr::dialogs::insertUniformButtonRow(*dialog, (kDialogWidth - metrics.rowWidth) / 2, 4, 2, buttons);
+	const ushort result = mr::dialogs::execDialogWithData(dialog, assertion);
+	if (result == cmCancel) return true;
+	if (result == cmYes) assertion[0] = '\0';
 	if (previous != assertion) static_cast<void>(sendGdbCommand(MRGdbCommandKind::SetBreakpointAssert, assertion));
 	return true;
+}
+
+void MRBentoBox::updateGdbBreakpointHover(TPoint globalMouse) {
+	MRFileEditor *editor = getEditor();
+	if (!gdbDebuggerActive() || editor == nullptr || frame == nullptr) return;
+	MRFrame *hoverFrame = static_cast<MRFrame *>(frame);
+	std::size_t offset = 0;
+	if (!editor->lineNumberOffsetForGlobalPoint(globalMouse, offset)) {
+		if (!editor->textPointInView(globalMouse)) {
+			hoverFrame->updateTaskHover(globalMouse, false);
+			return;
+		}
+		offset = editor->offsetForGlobalPoint(globalMouse);
+	}
+	const int line = static_cast<int>(editor->bufferModel().lineIndex(offset)) + 1;
+	bool hasBreakpoint = false;
+	const std::string assertion = readGdbBreakpointAssert(gdbDebuggerSourcePath(), line, &hasBreakpoint);
+	if (!hasBreakpoint) {
+		hoverFrame->updateTaskHover(globalMouse, false);
+		return;
+	}
+	hoverFrame->showTransientHint(assertion.empty() ? "Right-click to define assertion" : assertion, globalMouse);
 }
 
 bool MRBentoBox::executeGdbSourceContextCommand(ushort command, std::size_t sourceOffset, const std::string &identifier) {

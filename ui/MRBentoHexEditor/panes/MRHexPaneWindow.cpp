@@ -2,6 +2,7 @@
 
 #include "MRHexPaneView.hpp"
 #include "../MRBentoHexEditor.hpp"
+#include "../../../config/settings/MRSettingsRuntime.hpp"
 
 #include <algorithm>
 
@@ -55,9 +56,7 @@ void MRHexPaneWindow::changeBounds(const TRect &bounds) {
 
 void MRHexPaneWindow::draw() {
 	layoutHexScrollBars();
-	if (mHexView != nullptr) mHexView->drawView();
 	TWindow::draw();
-	drawHexScrollBars();
 }
 
 void MRHexPaneWindow::handleEvent(TEvent &event) {
@@ -120,31 +119,16 @@ bool MRHexPaneWindow::projectsPaneContentLocally() const noexcept {
 
 void MRHexPaneWindow::layoutHexScrollBars() noexcept {
 	if (mHexView == nullptr) return;
-	TScrollBar *horizontalScrollBar = horizontalEditorScrollBar();
-	TScrollBar *verticalScrollBar = verticalEditorScrollBar();
-	const bool horizontalScrollBarAllowed = mRole != MRHexPaneRole::Inspector;
-	const bool reserveHorizontal = horizontalScrollBarAllowed;
-	const bool reserveVertical = true;
 	TRect content(getExtent());
-
-	if (reserveVertical && content.b.x - content.a.x > 1) --content.b.x;
-	if (reserveHorizontal && content.b.y - content.a.y > 1) --content.b.y;
+	content.grow(-1, -1);
 	if (mHexView->getBounds() != content) mHexView->changeBounds(content);
-	if (horizontalScrollBar != nullptr) {
-		TRect bounds = reserveHorizontal ? TRect(0, std::max<short>(0, size.y - 1), reserveVertical ? std::max<short>(1, size.x - 1) : std::max<short>(1, size.x), size.y) : TRect(0, size.y, 0, size.y);
-
-		if (horizontalScrollBar->getBounds() != bounds) horizontalScrollBar->locate(bounds);
-		if (reserveHorizontal) horizontalScrollBar->show();
-		else
-			horizontalScrollBar->hide();
+	if (TScrollBar *horizontal = horizontalEditorScrollBar()) {
+		TRect horizontalBounds(1, size.y - 1, size.x - 1, size.y);
+		if (horizontal->getBounds() != horizontalBounds) horizontal->locate(horizontalBounds);
 	}
-	if (verticalScrollBar != nullptr) {
-		TRect bounds = reserveVertical ? TRect(std::max<short>(0, size.x - 1), 0, size.x, reserveHorizontal ? std::max<short>(1, size.y - 1) : std::max<short>(1, size.y)) : TRect(size.x, 0, size.x, 0);
-
-		if (verticalScrollBar->getBounds() != bounds) verticalScrollBar->locate(bounds);
-		if (reserveVertical) verticalScrollBar->show();
-		else
-			verticalScrollBar->hide();
+	if (TScrollBar *vertical = verticalEditorScrollBar()) {
+		TRect verticalBounds(size.x - 1, 1, size.x, size.y - 1);
+		if (vertical->getBounds() != verticalBounds) vertical->locate(verticalBounds);
 	}
 	synchronizeHexScrollBars();
 }
@@ -157,45 +141,17 @@ void MRHexPaneWindow::synchronizeHexScrollBars() noexcept {
 	mSynchronizingScrollBars = true;
 	if (horizontalScrollBar != nullptr) horizontalScrollBar->setParams(mHexView->horizontalScrollBarValue(), 0, mHexView->horizontalScrollBarMaximum(), mHexView->horizontalScrollBarPageStep(), 1);
 	if (verticalScrollBar != nullptr) verticalScrollBar->setParams(mHexView->verticalScrollBarValue(), 0, mHexView->verticalScrollBarMaximum(), mHexView->verticalScrollBarPageStep(), 1);
-	mSynchronizingScrollBars = false;
-}
-
-void MRHexPaneWindow::drawHexScrollBars() noexcept {
-	if (mHexView == nullptr) return;
-	TScrollBar *horizontalScrollBar = horizontalEditorScrollBar();
-	TScrollBar *verticalScrollBar = verticalEditorScrollBar();
-	const TColorAttr fillAttr = mHexView->getColor(0x0201)[0];
-	const TColorAttr markerAttr = mapColor(13);
-	auto fillRect = [this, fillAttr](const TRect &rect) {
-		const short left = std::max<short>(0, rect.a.x);
-		const short top = std::max<short>(0, rect.a.y);
-		const short right = std::min<short>(size.x, rect.b.x);
-		const short bottom = std::min<short>(size.y, rect.b.y);
-		const int width = right - left;
-
-		if (width <= 0 || bottom <= top) return;
-		TDrawBuffer buffer;
-		buffer.moveChar(0, ' ', TAttrPair(fillAttr), static_cast<ushort>(width));
-		for (short y = top; y < bottom; ++y)
-			writeLine(left, y, width, 1, buffer);
-	};
-	auto drawScrollBar = [fillAttr, markerAttr](TScrollBar *scrollBar) {
-		if (scrollBar == nullptr || (scrollBar->state & sfVisible) == 0 || scrollBar->size.x <= 0 || scrollBar->size.y <= 0) return;
-		if (auto *editScrollBar = dynamic_cast<MREditScrollBar *>(scrollBar)) editScrollBar->setColorOverride(true, fillAttr, fillAttr, markerAttr);
-		scrollBar->chars[4] = scrollBar->chars[2];
-		scrollBar->drawView();
-	};
-
-	if (horizontalScrollBar != nullptr) fillRect(horizontalScrollBar->getBounds());
-	if (verticalScrollBar != nullptr) fillRect(verticalScrollBar->getBounds());
-	drawScrollBar(horizontalScrollBar);
-	drawScrollBar(verticalScrollBar);
-	if (horizontalScrollBar != nullptr && verticalScrollBar != nullptr && (horizontalScrollBar->state & sfVisible) != 0 && (verticalScrollBar->state & sfVisible) != 0) {
-		const TRect horizontalBounds = horizontalScrollBar->getBounds();
-		const TRect verticalBounds = verticalScrollBar->getBounds();
-
-		if (horizontalBounds.a.y < horizontalBounds.b.y && verticalBounds.a.x < verticalBounds.b.x) fillRect(TRect(verticalBounds.a.x, horizontalBounds.a.y, static_cast<short>(verticalBounds.a.x + 1), static_cast<short>(horizontalBounds.a.y + 1)));
+	const bool paneVisible = (state & sfVisible) != 0;
+	const bool always = configuredScrollbarVisibility() == MRScrollbarVisibility::Always;
+	if (horizontalScrollBar != nullptr) {
+		if (paneVisible && (always || horizontalScrollBar->maxVal > horizontalScrollBar->minVal)) horizontalScrollBar->show();
+		else horizontalScrollBar->hide();
 	}
+	if (verticalScrollBar != nullptr) {
+		if (paneVisible && (always || verticalScrollBar->maxVal > verticalScrollBar->minVal)) verticalScrollBar->show();
+		else verticalScrollBar->hide();
+	}
+	mSynchronizingScrollBars = false;
 }
 
 bool MRHexPaneWindow::handlesHexScrollBar(const TEvent &event) const noexcept {
@@ -207,5 +163,4 @@ void MRHexPaneWindow::acceptHexScrollBarChange(TScrollBar *scrollBar) noexcept {
 	if (scrollBar == horizontalEditorScrollBar()) mHexView->setHorizontalScrollBarValue(scrollBar->value);
 	else if (scrollBar == verticalEditorScrollBar())
 		mHexView->setVerticalScrollBarValue(scrollBar->value);
-	drawHexScrollBars();
 }

@@ -91,6 +91,7 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, std::
 	bool diffTextActive = false;
 	TColorAttr diffTextColor = 0;
 	bool debuggerBreakpointLine = false;
+	bool debuggerBreakpointAssertedLine = false;
 	bool debuggerBreakpointInactiveLine = false;
 	bool debuggerBreakpointUnboundLine = false;
 
@@ -155,7 +156,7 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, std::
 	else if (currentLine && diffLineKind == mrfclkNone)
 		basePair = getColor(0x0303);
 	instructionLine = mDebuggerInstructionLineValid && mDebuggerInstructionLine == lineIndex;
-	debuggerBreakpointLine = debuggerBreakpointLineAt(lineIndex);
+	debuggerBreakpointLine = debuggerBreakpointLineAt(lineIndex, &debuggerBreakpointAssertedLine);
 	debuggerBreakpointInactiveLine = debuggerBreakpointInactiveLineAt(lineIndex);
 	debuggerBreakpointUnboundLine = debuggerBreakpointUnboundLineAt(lineIndex);
 	if (instructionLine) {
@@ -233,9 +234,9 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, std::
 			}
 			if (debuggerBreakpointChar) {
 				TColorAttr breakpointAttr;
-				if (configuredColorSlotOverride(kMrPaletteDebuggerBreakpointActive, breakpointAttr)) color = breakpointAttr;
+				if (configuredColorSlotOverride(debuggerBreakpointAssertedLine ? kMrPaletteDebuggerBreakpointAsserted : kMrPaletteDebuggerBreakpointActive, breakpointAttr)) color = breakpointAttr;
 				else
-					color = static_cast<TColorAttr>(TAttrPair(0x4E));
+					color = static_cast<TColorAttr>(TAttrPair(debuggerBreakpointAssertedLine ? 0x5E : 0x4E));
 			}
 			if (debuggerBreakpointInactiveChar) {
 				TColorAttr breakpointAttr;

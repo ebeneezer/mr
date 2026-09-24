@@ -106,7 +106,7 @@ static const MRColorSetupItem kDebuggerColorItems[] = {
 	{"breakpoint active", kMrPaletteDebuggerBreakpointActive}, {"breakpoint inactive", kMrPaletteDebuggerBreakpointInactive}, {"breakpoint unbound", kMrPaletteDebuggerBreakpointUnbound},
 	{"watchpoint active", kMrPaletteDebuggerWatchpointActive}, {"watchpoint inactive", kMrPaletteDebuggerWatchpointInactive}, {"watchpoint error", kMrPaletteDebuggerWatchpointError},
 	{"instruction pointer", kMrPaletteDebuggerInstructionPointer}, {"execution line", kMrPaletteDebuggerExecutionLine}, {"stack frame", kMrPaletteDebuggerStackFrame}, {"value changed", kMrPaletteDebuggerValueChanged},
-	{"input active", kMrPaletteDebuggerInputActive}, {"input error", kMrPaletteDebuggerInputError},
+	{"input active", kMrPaletteDebuggerInputActive}, {"input error", kMrPaletteDebuggerInputError}, {"asserted breakpoint", kMrPaletteDebuggerBreakpointAsserted},
 };
 
 static constexpr MRRgbColorAttribute kWindowColorDefaults[] = {
@@ -147,7 +147,7 @@ static constexpr MRRgbColorAttribute kFileCompareColorDefaults[] = {
 };
 static constexpr MRRgbColorAttribute kDebuggerColorDefaults[] = {
 	{0xFFFF55u, 0xAA0000u}, {0x555555u, 0x0000AAu}, {0xFF5555u, 0xAA0000u}, {0xFFFF55u, 0x00AAAAu}, {0x555555u, 0x00AAAAu}, {0xFFFFFFu, 0xAA0000u},
-	{0x000000u, 0xFFFF55u}, {0x000000u, 0xAAAAAAu}, {0xFFFFFFu, 0x00AAAAu}, {0xFFFF55u, 0x00AA00u}, {0x55FFFFu, 0x0000AAu}, {0xFFFFFFu, 0xAA0000u}
+	{0x000000u, 0xFFFF55u}, {0x000000u, 0xAAAAAAu}, {0xFFFFFFu, 0x00AAAAu}, {0xFFFF55u, 0x00AA00u}, {0x55FFFFu, 0x0000AAu}, {0xFFFFFFu, 0xAA0000u}, {0xFFFF55u, 0xAA00AAu}
 };
 
 static_assert(std::size(kWindowColorDefaults) == std::size(kWindowColorItems));
@@ -302,6 +302,7 @@ unsigned char defaultBiosColorForSlot(unsigned char paletteIndex) {
 	if (paletteIndex == kMrPaletteDebuggerBreakpointActive) return 0x4E;
 	if (paletteIndex == kMrPaletteDebuggerBreakpointInactive) return 0x18;
 	if (paletteIndex == kMrPaletteDebuggerBreakpointUnbound) return 0x4C;
+	if (paletteIndex == kMrPaletteDebuggerBreakpointAsserted) return 0x5E;
 	if (paletteIndex == kMrPaletteDebuggerWatchpointActive) return 0x3E;
 	if (paletteIndex == kMrPaletteDebuggerWatchpointInactive) return 0x38;
 	if (paletteIndex == kMrPaletteDebuggerWatchpointError) return 0x4F;
@@ -361,7 +362,13 @@ bool parseHelpColorListLiteral(const std::string &literal, std::array<MRRgbColor
 }
 
 bool parseDebuggerColorListLiteral(const std::string &literal, std::array<MRRgbColorAttribute, MRColorSetupSettings::kDebuggerCount> &outValues, std::string *errorMessage) {
-	return parseExactColorListLiteral(literal, outValues, errorMessage);
+	if (parseExactColorListLiteral(literal, outValues, errorMessage)) return true;
+	std::array<MRRgbColorAttribute, MRColorSetupSettings::kDebuggerCount - 1> previousValues{};
+	if (!parseExactColorListLiteral(literal, previousValues, nullptr)) return false;
+	std::copy(previousValues.begin(), previousValues.end(), outValues.begin());
+	outValues.back() = kDebuggerColorDefaults[std::size(kDebuggerColorDefaults) - 1];
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
 }
 
 bool parseCodeColorListLiteral(const std::string &literal, std::array<MRRgbColorAttribute, MRColorSetupSettings::kCodeCount> &outValues, std::string *errorMessage) {

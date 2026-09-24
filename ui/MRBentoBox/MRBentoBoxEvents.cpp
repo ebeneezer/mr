@@ -1,6 +1,7 @@
 #include "MRBentoBox.hpp"
 #include "MRBentoBoxRoleSupport.hpp"
 
+#include "../MRFrame.hpp"
 #include "../MRWindowSupport.hpp"
 
 #include "../../app/MRCommandRouter.hpp"
@@ -70,7 +71,11 @@ void MRBentoBox::handleCommittedSourceEditor(MRFileEditor *committedEditor) {
 
 void MRBentoBox::handleEvent(TEvent &event) {
 	const bool mouseEvent = (event.what & (evMouseDown | evMouseMove | evMouseUp | evMouseAuto | evMouseWheel)) != 0;
-	const TPoint localMouse = mouseEvent ? makeLocal(event.mouse.where) : TPoint();
+	const TPoint globalMouse = mouseEvent ? event.mouse.where : TPoint();
+	const TPoint localMouse = mouseEvent ? makeLocal(globalMouse) : TPoint();
+	const bool breakpointHoverEvent = event.what == evMouseMove && event.mouse.buttons == 0 && event.mouse.wheel == 0 && gdbDebuggerActive();
+	if (gdbDebuggerActive() && frame != nullptr && (event.what & (evMouseDown | evMouseWheel | evKeyDown | evCommand)) != 0)
+		static_cast<MRFrame *>(frame)->updateTaskHover(TPoint(), true);
 
 	if (bentoProjectionAdoptionActive && event.what == evBroadcast &&
 	    (event.message.command == cmMrEditorDocumentCommitted || event.message.command == cmUpdateTitle)) {
@@ -98,9 +103,11 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		MREditWindow::handleEvent(event);
 		bentoSourceMutationTrackingActive = trackingWasActive;
 		if (trackSourceMutation) syncCompilerDiagnosticsAfterSourceMutation(oldSnapshot, sourceEditor->lastDocumentChangeSet());
+		if (breakpointHoverEvent) updateGdbBreakpointHover(globalMouse);
 		return;
 	}
 	const int mouseLeafId = mouseEvent ? leafAt(localMouse) : -1;
+	if (breakpointHoverEvent && mouseLeafId != 0 && frame != nullptr) static_cast<MRFrame *>(frame)->updateTaskHover(globalMouse, false);
 	if (event.what == evBroadcast && event.message.command == cmUpdateTitle) {
 		const bool diagnosticsContext = compilerDiagnosticsContextEstablished();
 		MREditWindow::handleEvent(event);
@@ -361,7 +368,6 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		targetVerticalScrollBar = targetPane != nullptr ? targetPane->verticalEditorScrollBar() : nullptr;
 		const std::pair<bool, bool> targetRangeAfter = std::make_pair(targetHorizontalScrollBar != nullptr && targetHorizontalScrollBar->maxVal > targetHorizontalScrollBar->minVal, targetVerticalScrollBar != nullptr && targetVerticalScrollBar->maxVal > targetVerticalScrollBar->minVal);
 		const bool targetRangeChanged = targetRangeAfter != targetRangeBefore;
-		if (targetPane != nullptr && targetRangeChanged) targetPane->layoutPaneChrome();
 		if (trackFileCompareMutation && targetPane != nullptr) targetPane->setReadOnly(false);
 		const bool fileCompareMutated = trackFileCompareMutation && targetPane != nullptr && targetPane->getEditor() != nullptr && targetPane->getEditor()->documentVersion() != fileCompareVersionBefore;
 		if (fileCompareMutated) refreshFileCompareAfterSourceMutation(activeRole);
@@ -416,4 +422,5 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		if (!fileCompareMutated) bentoProjectionDirty |= bpdChrome;
 	}
 	flushBentoProjection();
+	if (breakpointHoverEvent) updateGdbBreakpointHover(globalMouse);
 }

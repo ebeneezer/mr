@@ -210,14 +210,10 @@ class MRPaneEditWindow : public MREditWindow {
   private:
 
 	void setPaneSpec(const MRBentoPaneSpec &spec, const MRFileEditor *sourceEditor) noexcept;
-		void setPaneFocused(bool focused) noexcept;
 		void applyPanePolicy(const MRFileEditor *sourceEditor) noexcept;
 		void layoutPaneChrome() noexcept;
-		void configurePaneScrollBarColors() noexcept;
-		void drawPaneScrollBars() noexcept;
 
 	MRBentoPaneSpec mPaneSpec;
-	bool mPaneFocused;
 };
 
 class MRBentoBox : public MREditWindow {
@@ -253,6 +249,7 @@ class MRBentoBox : public MREditWindow {
 		[[nodiscard]] bool sendGdbTerminalInput(const std::string &text);
 		[[nodiscard]] bool clearGdbProgramTerminal();
 		[[nodiscard]] bool editGdbBreakpointAssert(std::size_t sourceOffset);
+		void updateGdbBreakpointHover(TPoint globalMouse);
 		[[nodiscard]] bool executeGdbSourceContextCommand(ushort command, std::size_t sourceOffset, const std::string &identifier);
 		void resizeGdbTerminal(int columns, int rows);
 		void setMacroDebuggerTarget(const std::string &macroKey, const std::string &macroName);
@@ -415,10 +412,8 @@ class MRBentoBox : public MREditWindow {
 	void initializeLayoutTree() noexcept;
 	void layoutSplitPanes();
 		void flushBentoProjection() noexcept;
-		void layoutSourcePaneChrome(const TRect &content) noexcept;
+		void layoutSourcePaneChrome(const TRect &bounds) noexcept;
 		void hideSourcePaneChrome() noexcept;
-		void configureSourcePaneScrollBarColors() noexcept;
-		void drawSourcePaneScrollBars() noexcept;
 		void drawSharedEditorPanes() noexcept;
 		TColorAttr paneFrameColor(bool focused);
 	void drawPaneFrames() noexcept;
@@ -580,7 +575,6 @@ class MRBentoBox : public MREditWindow {
 	int nextLeafId;
 	int maximizedLeafId;
 	MRBentoBoxMode bentoMode;
-	bool sourceScrollBarPaletteActive;
 	bool secondaryPaneVisible;
 	bool windowCloseInProgress;
 	bool bentoProjectionAdoptionActive;

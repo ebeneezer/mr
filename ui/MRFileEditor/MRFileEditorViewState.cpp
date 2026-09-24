@@ -249,10 +249,11 @@ void MRFileEditor::updateMetrics() {
 void MRFileEditor::syncScrollBarsToState() noexcept {
 	normalizeScrollBarTrackGlyph(hScrollBar);
 	normalizeScrollBarTrackGlyph(vScrollBar);
-	bool showBase = mScrollBarsAlwaysVisible || (state & (sfActive | sfSelected)) != 0;
+	bool showBase = (state & sfVisible) != 0 && (mScrollBarsAlwaysVisible || (state & (sfActive | sfSelected)) != 0);
 	const bool showWithoutRange = mScrollbarVisibility == MRScrollbarVisibility::Always;
 	MREditWindow *window = dynamic_cast<MREditWindow *>(owner);
 	if (window != nullptr && window->isMinimized()) showBase = false;
+	if (window != nullptr && (window->state & sfVisible) == 0) showBase = false;
 	if (hScrollBar != nullptr) {
 		if (showBase && (showWithoutRange || scrollBarHasRange(hScrollBar))) hScrollBar->show();
 		else

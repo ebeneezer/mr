@@ -361,10 +361,12 @@ bool MRFileEditor::debuggerVariableChangedContainsOffset(std::size_t offset) con
 	return false;
 }
 
-bool MRFileEditor::debuggerBreakpointLineAt(std::size_t lineIndex) const noexcept {
+bool MRFileEditor::debuggerBreakpointLineAt(std::size_t lineIndex, bool *asserted) const noexcept {
 	const auto marker = std::lower_bound(mDebuggerBreakpointLines.begin(), mDebuggerBreakpointLines.end(), lineIndex,
 	                                     [](const DebuggerBreakpointLineMarker &item, std::size_t value) { return item.lineIndex < value; });
-	return marker != mDebuggerBreakpointLines.end() && marker->lineIndex == lineIndex;
+	const bool found = marker != mDebuggerBreakpointLines.end() && marker->lineIndex == lineIndex;
+	if (asserted != nullptr) *asserted = found && marker->asserted;
+	return found;
 }
 
 bool MRFileEditor::debuggerBreakpointInactiveLineAt(std::size_t lineIndex) const noexcept {
@@ -754,7 +756,8 @@ void MRFileEditor::drawDebugGutter(TDrawBuffer &b, int drawX, int width, std::si
 	TColorAttr configured;
 	TColorAttr color = static_cast<TColorAttr>(getColor(0x0606));
 	const bool instructionLine = mDebuggerInstructionLineValid && mDebuggerInstructionLine == lineIndex;
-	const bool breakpointLine = debuggerBreakpointLineAt(lineIndex);
+	bool breakpointAsserted = false;
+	const bool breakpointLine = debuggerBreakpointLineAt(lineIndex, &breakpointAsserted);
 	const bool breakpointInactiveLine = debuggerBreakpointInactiveLineAt(lineIndex);
 	const bool breakpointUnboundLine = debuggerBreakpointUnboundLineAt(lineIndex);
 
@@ -769,9 +772,9 @@ void MRFileEditor::drawDebugGutter(TDrawBuffer &b, int drawX, int width, std::si
 		return;
 	}
 	if (breakpointLine) {
-		if (configuredColorSlotOverride(kMrPaletteDebuggerBreakpointActive, configured)) color = configured;
+		if (configuredColorSlotOverride(breakpointAsserted ? kMrPaletteDebuggerBreakpointAsserted : kMrPaletteDebuggerBreakpointActive, configured)) color = configured;
 		else
-			color = static_cast<TColorAttr>(0x4E);
+			color = static_cast<TColorAttr>(breakpointAsserted ? 0x5E : 0x4E);
 		b.moveChar(static_cast<ushort>(drawX), '\x07', color, 1);
 		return;
 	}

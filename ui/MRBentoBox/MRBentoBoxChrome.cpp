@@ -463,7 +463,6 @@ void MRBentoBox::updateActivePaneFrame() noexcept {
 		MRBentoPaneFrameView *view = paneFrameViews[i];
 		if (view == nullptr || !leaves[i].visible) continue;
 		const bool focused = leaves[i].id == activeLeafId && (state & sfFocused) != 0;
-		if (leaves[i].pane != nullptr) leaves[i].pane->setPaneFocused(focused);
 			view->setPane(leaves[i].id, paneTitleForLeaf(leaves[i]).c_str(), leaves[i].id == 0 && bentoMode != bbmDocumentViewports, focused, leaves[i].id == maximizedLeafId, paneCloseActionEnabled(), paneMaximizeActionEnabled(), paneFrameColor(focused));
 	}
 }
