@@ -105,6 +105,7 @@ void MRBentoBox::setMacroDebuggerTarget(const std::string &macroKey, const std::
 	macroDebuggerProjectedMacroKey = macroKey;
 	macroDebuggerActive = !macroDebuggerMacroKey.empty();
 	if (!macroDebuggerActive) macroDebuggerStatus.clear();
+	if (getEditor() != nullptr) getEditor()->setDebuggerGutterVisible(macroDebuggerActive || gdbDebuggerActive());
 	refreshMacroDebuggerBreakpointRanges();
 }
 

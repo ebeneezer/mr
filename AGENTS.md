@@ -160,12 +160,26 @@ temporary directory and must not be staged inside the repository.
 
 ## Test policy
 
+- The quality objective is to hand off no known regressions. Do not present a
+  change as complete while a relevant check fails or a reproduced regression
+  remains unresolved. Absolute absence of undiscovered defects cannot be
+  guaranteed or claimed.
+- The agent owns the choice, placement and maintenance of checks. Spend test
+  effort where it protects a concrete maintainer-facing workflow or a stable
+  architectural invariant against a credible regression. There is no target
+  number of tests and no mandate to generate a check for every change.
 - Existing required checks must be run only when relevant to the touched area and approved scope.
 - Protected architecture changes require a named manual test plan before implementation.
 - Regression checks are not protected architecture.
 - Regression checks are proposed only after implementation and sight review, not during preflight planning.
 - Adding, expanding or replacing regression checks does not require separate maintainer approval when it is directly tied to the current change.
-- Regression checks should be used sparingly and must protect stable behavior or structural invariants with low maintenance cost.
+- Add a regression check only when its expected protection value exceeds its
+  implementation and maintenance cost. Prefer the smallest deterministic check
+  of observable behavior at the appropriate layer; do not mirror implementation
+  details or duplicate existing coverage. Use focused manual verification when
+  automation would cost more than the protection it provides.
+- Before handoff, run the relevant checks and manual scenarios, investigate
+  failures, and verify adjacent paths that share the changed behavior.
 - Do not add broad test infrastructure, generated-test frameworks or large regression harness rewrites unless the maintainer explicitly requests that scope.
 - Do not treat “tests required” as a mandate to create new tests.
 

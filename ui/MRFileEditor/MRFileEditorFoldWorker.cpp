@@ -5,6 +5,7 @@
 namespace {
 
 constexpr std::size_t kFoldTargetPacketLines = 256;
+constexpr std::size_t kFoldRetainedLineBudget = 8192;
 
 const char *foldDirectionName(mr::coprocessor::WorkDirection direction) noexcept {
 	return direction == mr::coprocessor::WorkDirection::Bof ? "BOF" : "EOF";
@@ -48,6 +49,18 @@ void MRFileEditor::submitFoldPacket(FoldPacketState &packet, const MRTextBufferM
 void MRFileEditor::submitFoldPackets(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t totalLines, bool documentEndKnown) {
 	if (mFoldWarmupState.failureLatched) return;
 	const std::size_t workerBudget = std::max<std::size_t>(1, mr::coprocessor::globalCoprocessor().allowedCoreCount());
+	const std::size_t visibleTop = mFoldWarmupState.visibleTopLine;
+	const std::size_t visibleBottom = std::max(visibleTop + 1, mFoldWarmupState.visibleBottomLine);
+	const std::size_t focusLine = std::clamp(cachedCursorLineIndex(), visibleTop, visibleBottom - 1);
+	auto distanceFromFocus = [focusLine](const FoldPacketState &packet) noexcept {
+		if (packet.startLine <= focusLine && focusLine < packet.endLine) return std::size_t(0);
+		if (packet.endLine <= focusLine) return focusLine - packet.endLine + 1;
+		return packet.startLine - focusLine;
+	};
+	std::stable_sort(mFoldWarmupState.packets.begin(), mFoldWarmupState.packets.end(), [&](const FoldPacketState &left, const FoldPacketState &right) {
+		if (left.contextOnly != right.contextOnly) return left.contextOnly;
+		return distanceFromFocus(left) < distanceFromFocus(right);
+	});
 	std::size_t runningCount = 0;
 	bool submittedAny = false;
 	for (const FoldPacketState &packet : mFoldWarmupState.packets)
@@ -55,6 +68,7 @@ void MRFileEditor::submitFoldPackets(const MRTextBufferModel::ReadSnapshot &snap
 	for (FoldPacketState &packet : mFoldWarmupState.packets) {
 		if (runningCount >= workerBudget) break;
 		if (packet.generation != mFoldWarmupState.generation || packet.taskId != 0 || packet.resultReady) continue;
+		packet.direction = packet.contextOnly || packet.endLine <= focusLine ? mr::coprocessor::WorkDirection::Bof : mr::coprocessor::WorkDirection::Eof;
 		submitFoldPacket(packet, snapshot, totalLines, documentEndKnown);
 		if (packet.taskId != 0) {
 			++runningCount;
@@ -94,74 +108,100 @@ void MRFileEditor::scheduleFoldWarmupIfNeeded(std::size_t scanTopLine, std::size
 	}
 
 	static_cast<void>(adoptReadyFoldPackets());
-	const bool currentGenerationCoversRequest = mFoldWarmupState.generation != 0 && scanTopLine >= mFoldWarmupState.scanTopLine && scanBottomLine <= mFoldWarmupState.scanBottomLine &&
-	                                            topLine >= mFoldWarmupState.visibleTopLine && requestBottomLine <= mFoldWarmupState.visibleBottomLine;
+	const bool currentGenerationCoversRequest = mFoldWarmupState.generation != 0 && scanTopLine >= mFoldWarmupState.scanTopLine && scanBottomLine <= mFoldWarmupState.scanBottomLine;
 	const bool exactGenerationRequest = scanTopLine == mFoldWarmupState.scanTopLine && scanBottomLine == mFoldWarmupState.scanBottomLine &&
 	                                    topLine == mFoldWarmupState.visibleTopLine && requestBottomLine == mFoldWarmupState.visibleBottomLine;
 	if (currentGenerationCoversRequest && (!mFoldWarmupState.failureLatched || exactGenerationRequest)) {
 		if (!mFoldWarmupState.failureLatched) {
+			if (topLine < mFoldWarmupState.visibleTopLine || requestBottomLine > mFoldWarmupState.visibleBottomLine) {
+				mFoldWarmupState.visibleTopLine = topLine;
+				mFoldWarmupState.visibleBottomLine = requestBottomLine;
+			}
+			static_cast<void>(publishCurrentFoldProjection(false));
 			const MRTextBufferModel::ReadSnapshot snapshot = mBufferModel.readSnapshot();
 			submitFoldPackets(snapshot, totalLines, documentEndKnown);
 		}
 		return;
 	}
 
-	// A superseded viewport generation has no cross-generation structural checkpoint.
-	// Its finite workers may finish, but their results must not remain in the editor ledger.
-	supersedeViewportFoldWarmup();
-	mFoldWarmupState.documentId = documentId;
-	mFoldWarmupState.version = version;
-	mFoldWarmupState.language = language;
-
+	const std::size_t oldScanTop = mFoldWarmupState.scanTopLine;
+	const std::size_t oldScanBottom = mFoldWarmupState.scanBottomLine;
+	const bool retainCurrent = mFoldWarmupState.generation != 0 && !mFoldWarmupState.failureLatched &&
+	                           std::max(scanBottomLine, oldScanBottom) - std::min(scanTopLine, oldScanTop) <=
+	                               std::max(kFoldRetainedLineBudget, scanBottomLine - scanTopLine);
+	const std::size_t newScanTop = retainCurrent ? std::min(scanTopLine, oldScanTop) : scanTopLine;
+	const std::size_t newScanBottom = retainCurrent ? std::max(scanBottomLine, oldScanBottom) : scanBottomLine;
 	std::size_t anchorLine = 0;
 	MRFoldAnalysisState anchorState;
-	if (!canonicalFoldContextForViewport(scanTopLine, scanBottomLine, topLine, requestBottomLine, language, anchorLine, anchorState)) {
-		notifyWindowTaskStateChanged();
-		return;
+	if (!retainCurrent || newScanTop < oldScanTop) {
+		if (!canonicalFoldContextForViewport(newScanTop, newScanBottom, topLine, requestBottomLine, language, anchorLine, anchorState)) {
+			notifyWindowTaskStateChanged();
+			return;
+		}
 	}
-
-	if (mFoldGenerationCounter == 0) ++mFoldGenerationCounter;
-	mFoldWarmupState.generation = mFoldGenerationCounter++;
-	mFoldWarmupState.scanTopLine = scanTopLine;
-	mFoldWarmupState.scanBottomLine = scanBottomLine;
+	if (!retainCurrent) {
+		supersedeViewportFoldWarmup();
+		mFoldWarmupState.documentId = documentId;
+		mFoldWarmupState.version = version;
+		mFoldWarmupState.language = language;
+		if (mFoldGenerationCounter == 0) ++mFoldGenerationCounter;
+		mFoldWarmupState.generation = mFoldGenerationCounter++;
+	}
+	mFoldWarmupState.scanTopLine = newScanTop;
+	mFoldWarmupState.scanBottomLine = newScanBottom;
 	mFoldWarmupState.visibleTopLine = topLine;
 	mFoldWarmupState.visibleBottomLine = requestBottomLine;
-	mFoldCanonicalContextState.requestValid = false;
-	FoldCheckpointState anchor;
-	anchor.generation = mFoldWarmupState.generation;
-	anchor.line = anchorLine;
-	anchor.state = anchorState;
-	mFoldWarmupState.checkpoints.push_back(anchor);
-
-	const std::size_t lineCount = scanBottomLine - scanTopLine;
-	const std::size_t allowedCoreCount = std::max<std::size_t>(1, mr::coprocessor::globalCoprocessor().allowedCoreCount());
-	const bool bridgeNeeded = anchorLine < scanTopLine;
-	if (bridgeNeeded) {
-		FoldPacketState bridge;
-		bridge.generation = mFoldWarmupState.generation;
-		bridge.direction = mr::coprocessor::WorkDirection::Bof;
-		bridge.startLine = anchorLine;
-		bridge.endLine = scanTopLine;
-		bridge.contextOnly = true;
-		bridge.inputState = anchorState;
-		bridge.inputStateConfirmed = true;
-		mFoldWarmupState.packets.push_back(std::move(bridge));
+	if (!retainCurrent || newScanTop < oldScanTop) {
+		mFoldCanonicalContextState.requestValid = false;
+		FoldCheckpointState anchor;
+		anchor.generation = mFoldWarmupState.generation;
+		anchor.line = anchorLine;
+		anchor.state = anchorState;
+		mFoldWarmupState.checkpoints.push_back(std::move(anchor));
+		if (anchorLine < newScanTop) {
+			FoldPacketState bridge;
+			bridge.generation = mFoldWarmupState.generation;
+			bridge.direction = mr::coprocessor::WorkDirection::Bof;
+			bridge.startLine = anchorLine;
+			bridge.endLine = newScanTop;
+			bridge.contextOnly = true;
+			bridge.inputState = anchorState;
+			bridge.inputStateConfirmed = true;
+			mFoldWarmupState.packets.push_back(std::move(bridge));
+		}
 	}
-	const std::size_t visibleWorkerLimit = bridgeNeeded && allowedCoreCount > 1 ? allowedCoreCount - 1 : allowedCoreCount;
-	const std::size_t targetPacketCount = std::max<std::size_t>(1, (lineCount + kFoldTargetPacketLines - 1) / kFoldTargetPacketLines);
-	const std::size_t visibleWorkerBudget = std::min(lineCount, std::min(visibleWorkerLimit, targetPacketCount));
-	const std::size_t packetLines = (lineCount + visibleWorkerBudget - 1) / visibleWorkerBudget;
-	std::size_t packetStartLine = scanTopLine;
-	while (packetStartLine < scanBottomLine) {
-		FoldPacketState packet;
-		packet.generation = mFoldWarmupState.generation;
-		packet.startLine = packetStartLine;
-		packet.endLine = std::min(scanBottomLine, packetStartLine + packetLines);
-		packet.direction = packet.endLine <= topLine ? mr::coprocessor::WorkDirection::Bof : mr::coprocessor::WorkDirection::Eof;
-		packet.inputStateConfirmed = foldConfirmedStateForPacket(packet, packet.inputState);
-		mFoldWarmupState.packets.push_back(packet);
-		packetStartLine = packet.endLine;
-	}
+	const std::size_t visibleBottom = std::max(topLine + 1, requestBottomLine);
+	const std::size_t focusLine = std::clamp(cachedCursorLineIndex(), topLine, visibleBottom - 1);
+	auto appendPackets = [&](std::size_t firstLine, std::size_t lastLine) {
+		if (lastLine <= firstLine) return;
+		std::size_t bofLine = std::clamp(focusLine, firstLine, lastLine);
+		std::size_t eofLine = bofLine;
+		bool preferEof = true;
+		while (bofLine > firstLine || eofLine < lastLine) {
+			FoldPacketState packet;
+			packet.generation = mFoldWarmupState.generation;
+			if ((preferEof && eofLine < lastLine) || bofLine == firstLine) {
+				packet.startLine = eofLine;
+				packet.endLine = eofLine + std::min(kFoldTargetPacketLines, lastLine - eofLine);
+				packet.direction = mr::coprocessor::WorkDirection::Eof;
+				eofLine = packet.endLine;
+			} else {
+				packet.endLine = bofLine;
+				packet.startLine = bofLine - std::min(kFoldTargetPacketLines, bofLine - firstLine);
+				packet.direction = mr::coprocessor::WorkDirection::Bof;
+				bofLine = packet.startLine;
+			}
+			packet.inputStateConfirmed = foldConfirmedStateForPacket(packet, packet.inputState);
+			mFoldWarmupState.packets.push_back(std::move(packet));
+			preferEof = !preferEof;
+		}
+	};
+	if (retainCurrent) {
+		appendPackets(newScanTop, oldScanTop);
+		appendPackets(oldScanBottom, newScanBottom);
+	} else
+		appendPackets(newScanTop, newScanBottom);
+	static_cast<void>(publishCurrentFoldProjection(false));
 	const MRTextBufferModel::ReadSnapshot snapshot = mBufferModel.readSnapshot();
 	submitFoldPackets(snapshot, totalLines, documentEndKnown);
 }

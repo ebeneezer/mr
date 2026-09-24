@@ -501,6 +501,7 @@ void MRBentoBox::invalidateMacroDebuggerRuntime() {
 	macroDebuggerVariables.clear();
 	macroDebuggerVariableRows.clear();
 	if (getEditor() != nullptr) {
+		getEditor()->setDebuggerGutterVisible(gdbDebuggerActive());
 		getEditor()->clearDebuggerInstructionLine();
 		getEditor()->clearDebuggerBreakpointRanges();
 	}

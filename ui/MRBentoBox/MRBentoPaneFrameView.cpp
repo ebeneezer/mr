@@ -15,6 +15,8 @@ static const char *kPaneRestoreIcon = "[▾]";
 struct BentoFrameGlyphs {
 	char singleHorizontal = '\xC4';
 	char singleVertical = '\xB3';
+	char doubleHorizontal = '\xCD';
+	char doubleVertical = '\xBA';
 };
 
 constexpr BentoFrameGlyphs kFrameGlyphs;
@@ -84,16 +86,16 @@ void MRBentoPaneFrameView::drawOn(TView &target) {
 	for (int y = 0; y < size.y; ++y) {
 		if (size.x <= 0) continue;
 		if (y == 0 || y == size.y - 1) {
-			buffer.moveChar(0, kFrameGlyphs.singleHorizontal, frameColor, size.x);
-			buffer.putChar(0, y == 0 ? '\xDA' : '\xC0');
-			if (size.x > 1) buffer.putChar(static_cast<ushort>(size.x - 1), y == 0 ? '\xBF' : '\xD9');
+			buffer.moveChar(0, focused ? kFrameGlyphs.doubleHorizontal : kFrameGlyphs.singleHorizontal, frameColor, size.x);
+			buffer.putChar(0, focused ? (y == 0 ? '\xC9' : '\xC8') : (y == 0 ? '\xDA' : '\xC0'));
+			if (size.x > 1) buffer.putChar(static_cast<ushort>(size.x - 1), focused ? (y == 0 ? '\xBB' : '\xBC') : (y == 0 ? '\xBF' : '\xD9'));
 			if (y == 0) drawPaneChrome(buffer, layout, frameColor, frameColor, focused, maximized);
 			target.writeBuf(0, y, size.x, 1, buffer);
 		} else {
-			buffer.moveChar(0, kFrameGlyphs.singleVertical, frameColor, 1);
+			buffer.moveChar(0, focused ? kFrameGlyphs.doubleVertical : kFrameGlyphs.singleVertical, frameColor, 1);
 			target.writeBuf(0, y, 1, 1, buffer);
 			if (size.x > 1) {
-				buffer.moveChar(0, kFrameGlyphs.singleVertical, frameColor, 1);
+				buffer.moveChar(0, focused ? kFrameGlyphs.doubleVertical : kFrameGlyphs.singleVertical, frameColor, 1);
 				target.writeBuf(size.x - 1, y, 1, 1, buffer);
 			}
 		}

@@ -519,7 +519,8 @@ enum : unsigned char {
 	kMrPaletteDebuggerInputActive = 237,
 	kMrPaletteDebuggerInputError = 238,
 	kMrPaletteDebuggerBreakpointAsserted = 239,
-	kMrPaletteMax = kMrPaletteDebuggerBreakpointAsserted
+	kMrPaletteEditorScrollBar = 240,
+	kMrPaletteMax = kMrPaletteEditorScrollBar
 };
 
 struct MRRgbColorAttribute {
@@ -536,7 +537,7 @@ struct MRRgbColorAttribute {
 };
 
 struct MRColorSetupSettings {
-	static const std::size_t kWindowCount = 14;
+	static const std::size_t kWindowCount = 15;
 	static const std::size_t kMenuDialogCount = 32;
 	static const std::size_t kHelpCount = 10;
 	static const std::size_t kOtherCount = 11;

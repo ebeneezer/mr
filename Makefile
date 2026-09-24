@@ -177,12 +177,20 @@ PDFLATEX ?= pdflatex
 MAKEINDEX ?= makeindex
 RSVG_CONVERT ?= rsvg-convert
 MANUAL_SVG_ASSETS = \
+	$(MANUAL_DIRECTORY)/assets/mr-bento-dirty-projection.svg \
+	$(MANUAL_DIRECTORY)/assets/mr-block-mutation-pipeline.svg \
 	$(MANUAL_DIRECTORY)/assets/mr-coprocessor-lanes.svg \
 	$(MANUAL_DIRECTORY)/assets/mr-deferred-scan-windows.svg \
+	$(MANUAL_DIRECTORY)/assets/mr-external-source-lifecycle.svg \
+	$(MANUAL_DIRECTORY)/assets/mr-file-compare-pipeline.svg \
 	$(MANUAL_DIRECTORY)/assets/mr-minimap-function-flow.svg \
 	$(MANUAL_DIRECTORY)/assets/mr-piece-table-snapshots.svg \
 	$(MANUAL_DIRECTORY)/assets/mr-settings-bootstrap-flow.svg \
+	$(MANUAL_DIRECTORY)/assets/mrmac-compiler-value-flow.svg \
+	$(MANUAL_DIRECTORY)/assets/mrmac-debugger-execution.svg \
+	$(MANUAL_DIRECTORY)/assets/mrmac-debugger-state.svg \
 	$(MANUAL_DIRECTORY)/assets/mrmac-exec-session-scheduler-routes.svg \
+	$(MANUAL_DIRECTORY)/assets/mrmac-mmp-runtime.svg \
 	$(MANUAL_DIRECTORY)/assets/mrmac-vm-execution-flow.svg
 MANUAL_PDF_ASSETS = $(wildcard $(MANUAL_DIRECTORY)/assets/*.pdf) $(MANUAL_SVG_ASSETS:.svg=.pdf)
 MANUAL_AUXILIARIES = \

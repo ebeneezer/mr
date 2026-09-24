@@ -452,6 +452,15 @@ static int ident_eq(const char *a, const char *b) {
 	return strcasecmp(a, b) == 0;
 }
 
+/* The fixed keyword and key-name tables use collision-free slots for their entries. */
+static unsigned int syntax_name_slot(const char *name) {
+	unsigned int slot = 62;
+
+	for (; *name != '\0'; ++name)
+		slot = (slot * 115u + (unsigned int)toupper((unsigned char)*name)) & 127u;
+	return slot;
+}
+
 static int heredoc_line_terminates(const char *line, const char *marker, size_t marker_len, const char **after_marker) {
 	const char *p = line + marker_len;
 
@@ -683,6 +692,25 @@ static void lexer_next(Lexer *lex, Token *tok) {
 	}
 
 	if (is_ident_start((unsigned char)*lex->p)) {
+		static const struct {
+			const char *name;
+			TokenKind kind;
+		} keywords[128] = {
+			[2] = {"END_MACRO", TOK_END_MACRO}, [97] = {"END_CLOSURE", TOK_END_CLOSURE},
+			[25] = {"DEF_TICK", TOK_DEF_TICK}, [7] = {"DEF_INT", TOK_DEF_INT},
+			[81] = {"DEF_STR", TOK_DEF_STR}, [118] = {"DEF_CHAR", TOK_DEF_CHAR},
+			[58] = {"DEF_REAL", TOK_DEF_REAL}, [122] = {"DEF_HASH", TOK_DEF_HASH},
+			[127] = {"IF", TOK_IF}, [15] = {"THEN", TOK_THEN}, [47] = {"ELSE", TOK_ELSE},
+			[69] = {"END", TOK_END}, [115] = {"WHILE", TOK_WHILE}, [73] = {"DO", TOK_DO},
+			[120] = {"CALL", TOK_CALL}, [95] = {"RET", TOK_RET}, [125] = {"GOTO", TOK_GOTO},
+			[121] = {"TO", TOK_TO}, [76] = {"FROM", TOK_FROM},
+			[26] = {"TRANS", TOK_TRANS}, [14] = {"DUMP", TOK_DUMP}, [62] = {"PERM", TOK_PERM},
+			[33] = {"AND", TOK_AND}, [61] = {"OR", TOK_OR},
+			[107] = {"BAND", TOK_BAND}, [75] = {"BOR", TOK_BOR}, [27] = {"BXOR", TOK_BXOR},
+			[57] = {"NOT", TOK_NOT}, [0] = {"MOD", TOK_MOD}
+		};
+		unsigned int slot;
+
 		start = lex->p;
 		++lex->p;
 		while (is_ident_part((unsigned char)*lex->p))
@@ -699,65 +727,10 @@ static void lexer_next(Lexer *lex, Token *tok) {
 		text[len] = '\0';
 		tok->text = text;
 
-		if (ident_eq(text, "END_MACRO")) tok->kind = TOK_END_MACRO;
-		else if (ident_eq(text, "END_CLOSURE"))
-			tok->kind = TOK_END_CLOSURE;
-		else if (ident_eq(text, "DEF_TICK"))
-			tok->kind = TOK_DEF_TICK;
-		else if (ident_eq(text, "DEF_INT"))
-			tok->kind = TOK_DEF_INT;
-		else if (ident_eq(text, "DEF_STR"))
-			tok->kind = TOK_DEF_STR;
-		else if (ident_eq(text, "DEF_CHAR"))
-			tok->kind = TOK_DEF_CHAR;
-		else if (ident_eq(text, "DEF_REAL"))
-			tok->kind = TOK_DEF_REAL;
-		else if (ident_eq(text, "DEF_HASH"))
-			tok->kind = TOK_DEF_HASH;
-		else if (ident_eq(text, "IF"))
-			tok->kind = TOK_IF;
-		else if (ident_eq(text, "THEN"))
-			tok->kind = TOK_THEN;
-		else if (ident_eq(text, "ELSE"))
-			tok->kind = TOK_ELSE;
-		else if (ident_eq(text, "END"))
-			tok->kind = TOK_END;
-		else if (ident_eq(text, "WHILE"))
-			tok->kind = TOK_WHILE;
-		else if (ident_eq(text, "DO"))
-			tok->kind = TOK_DO;
-		else if (ident_eq(text, "CALL"))
-			tok->kind = TOK_CALL;
-		else if (ident_eq(text, "RET"))
-			tok->kind = TOK_RET;
-		else if (ident_eq(text, "GOTO"))
-			tok->kind = TOK_GOTO;
-		else if (ident_eq(text, "TO"))
-			tok->kind = TOK_TO;
-		else if (ident_eq(text, "FROM"))
-			tok->kind = TOK_FROM;
-		else if (ident_eq(text, "TRANS"))
-			tok->kind = TOK_TRANS;
-		else if (ident_eq(text, "DUMP"))
-			tok->kind = TOK_DUMP;
-		else if (ident_eq(text, "PERM"))
-			tok->kind = TOK_PERM;
-		else if (ident_eq(text, "AND"))
-			tok->kind = TOK_AND;
-		else if (ident_eq(text, "OR"))
-			tok->kind = TOK_OR;
-		else if (ident_eq(text, "BAND"))
-			tok->kind = TOK_BAND;
-		else if (ident_eq(text, "BOR"))
-			tok->kind = TOK_BOR;
-		else if (ident_eq(text, "BXOR"))
-			tok->kind = TOK_BXOR;
-		else if (ident_eq(text, "NOT"))
-			tok->kind = TOK_NOT;
-		else if (ident_eq(text, "MOD"))
-			tok->kind = TOK_MOD;
-		else
-			tok->kind = TOK_IDENTIFIER;
+		tok->kind = TOK_IDENTIFIER;
+		slot = syntax_name_slot(text);
+		if (keywords[slot].name != NULL && ident_eq(text, keywords[slot].name))
+			tok->kind = keywords[slot].kind;
 		return;
 	}
 
@@ -1016,6 +989,16 @@ static int is_inferred_type(int type) {
 }
 
 static int validate_keyspec(const char *text, int line) {
+	static const char *const namedKeys[128] = {
+		[110] = "ENTER", [118] = "RETURN", [83] = "TAB", [3] = "ESC",
+		[103] = "BS", [1] = "BACK", [93] = "BACKSPACE",
+		[109] = "UP", [72] = "DN", [20] = "DOWN", [88] = "LF",
+		[53] = "LEFT", [24] = "RT", [122] = "RIGHT",
+		[108] = "PGUP", [71] = "PGDN", [57] = "HOME", [69] = "END",
+		[120] = "INS", [25] = "DEL", [52] = "SPACE",
+		[26] = "MINUS", [6] = "EQUAL",
+		[44] = "GREY-", [42] = "GREY+", [41] = "GREY*"
+	};
 	size_t len;
 	char token[64];
 	size_t out = 0;
@@ -1023,6 +1006,7 @@ static int validate_keyspec(const char *text, int line) {
 	int changed = 1;
 	size_t tokenLen;
 	int fnNumber;
+	unsigned int slot;
 
 	if (text == NULL) {
 		set_compile_error(line, "Keycode expected.");
@@ -1087,7 +1071,8 @@ static int validate_keyspec(const char *text, int line) {
 		if (endp != NULL && *endp == '\0' && fnNumber >= 1 && fnNumber <= 12) return 0;
 	}
 
-	if (strcmp(token, "ENTER") == 0 || strcmp(token, "RETURN") == 0 || strcmp(token, "TAB") == 0 || strcmp(token, "ESC") == 0 || strcmp(token, "BS") == 0 || strcmp(token, "BACK") == 0 || strcmp(token, "BACKSPACE") == 0 || strcmp(token, "UP") == 0 || strcmp(token, "DN") == 0 || strcmp(token, "DOWN") == 0 || strcmp(token, "LF") == 0 || strcmp(token, "LEFT") == 0 || strcmp(token, "RT") == 0 || strcmp(token, "RIGHT") == 0 || strcmp(token, "PGUP") == 0 || strcmp(token, "PGDN") == 0 || strcmp(token, "HOME") == 0 || strcmp(token, "END") == 0 || strcmp(token, "INS") == 0 || strcmp(token, "DEL") == 0 || strcmp(token, "SPACE") == 0 || strcmp(token, "MINUS") == 0 || strcmp(token, "EQUAL") == 0 || strcmp(token, "GREY-") == 0 || strcmp(token, "GREY+") == 0 || strcmp(token, "GREY*") == 0) return 0;
+	slot = syntax_name_slot(token);
+	if (namedKeys[slot] != NULL && strcmp(token, namedKeys[slot]) == 0) return 0;
 
 	if (token[1] == '\0' && isprint((unsigned char)token[0]) != 0) return 0;
 

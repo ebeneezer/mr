@@ -53,7 +53,7 @@ void MRPaneEditWindow::handleEvent(TEvent &event) {
 }
 
 TColorAttr MRPaneEditWindow::mapColor(uchar index) {
-	if (index == 4 || index == 5)
+	if (index == 4 || index == 5 || index == 14)
 		if (MRBentoBox *bento = dynamic_cast<MRBentoBox *>(owner)) return bento->mapColor(index);
 	return MREditWindow::mapColor(index);
 }

@@ -14,7 +14,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cctype>
 #include <chrono>
 #include <cstdlib>
 #include <cstdio>
@@ -51,6 +50,17 @@ void setWindowManuallyHidden(MREditWindow *win, bool hidden);
 void mrDropSidekickForParent(const MREditWindow *parent);
 bool mrMoveSnippetPlaceholderForParent(const MREditWindow *parent, int direction);
 void mrvmCloseForksForOwner(int ownerBufferId);
+
+class MREditScrollBar final : public TScrollBar {
+  public:
+	explicit MREditScrollBar(const TRect &bounds) noexcept : TScrollBar(bounds) {
+	}
+
+	TPalette &getPalette() const override {
+		static TPalette palette("\x0E\x0E\x0E", 3);
+		return palette;
+	}
+};
 
 class MREditWindow : public TWindow, public MRDesktopWindow {
 	friend class MRWindowLayout;
@@ -89,11 +99,11 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		std::strncpy(displayTitle, (title != nullptr && *title != '\0') ? title : "Untitled", sizeof(displayTitle) - 1);
 		displayTitle[sizeof(displayTitle) - 1] = '\0';
 
-		hScrollBar = new TScrollBar(TRect(1, size.y - 1, size.x - 1, size.y));
+		hScrollBar = new MREditScrollBar(TRect(1, size.y - 1, size.x - 1, size.y));
 		hScrollBar->hide();
 		insert(hScrollBar);
 
-		vScrollBar = new TScrollBar(TRect(size.x - 1, 1, size.x, size.y - 1));
+		vScrollBar = new MREditScrollBar(TRect(size.x - 1, 1, size.x, size.y - 1));
 		vScrollBar->hide();
 		insert(vScrollBar);
 
@@ -316,10 +326,10 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 				clearEvent(event);
 				return;
 			}
-			if (event.what == evMouseDown && editor != nullptr && (event.mouse.buttons & mbLeftButton) != 0 && (event.mouse.eventFlags & meDoubleClick) != 0) {
+			if (event.what == evMouseDown && editor != nullptr && event.mouse.buttons == mbLeftButton && (event.mouse.eventFlags & meDoubleClick) != 0) {
 				std::size_t sourceOffset = 0;
 
-				if (editor->lineNumberOffsetForGlobalPoint(event.mouse.where, sourceOffset) && mrToggleDebuggerBreakpointForWindowAtOffset(this, sourceOffset)) {
+				if (editor->debugGutterOffsetForGlobalPoint(event.mouse.where, sourceOffset) && mrToggleDebuggerBreakpointForWindowAtOffset(this, sourceOffset)) {
 					clearEvent(event);
 					return;
 				}
@@ -1659,115 +1669,15 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 			}
 		}
 
-	static bool doubleClickWordByte(char ch) noexcept {
-		const unsigned char uch = static_cast<unsigned char>(ch);
-		return std::isalnum(uch) != 0 || ch == '_';
-	}
-
-	bool currentWordRange(std::size_t &start, std::size_t &end) const {
-		if (editor == nullptr || editor->bufferLength() == 0) return false;
-
-		const std::size_t length = editor->bufferLength();
-		std::size_t probe = std::min(editor->cursorOffset(), length);
-
-		if (probe < length && doubleClickWordByte(editor->charAtOffset(probe))) {
-		} else if (probe > 0 && doubleClickWordByte(editor->charAtOffset(probe - 1)))
-			--probe;
-		else
-			return false;
-
-		start = probe;
-		while (start > 0 && doubleClickWordByte(editor->charAtOffset(start - 1)))
-			--start;
-		end = probe + 1;
-		while (end < length && doubleClickWordByte(editor->charAtOffset(end)))
-			++end;
-		return start < end;
-	}
-
-	std::size_t lineBlockEndForStart(std::size_t lineStart) const {
-		if (editor == nullptr) return 0;
-		const std::size_t length = editor->bufferLength();
-		if (lineStart >= length) return length;
-
-		std::size_t next = editor->nextLineOffset(lineStart);
-		if (next <= lineStart) next = length;
-		return std::min(next, length);
-	}
-
-	std::size_t lineBlockCursorEndForStart(std::size_t lineStart) const {
-		if (editor == nullptr) return 0;
-		return editor->lineEndOffset(lineStart);
-	}
-
-	std::size_t wholeFileLineBlockCursorEnd() const {
-		if (editor == nullptr || editor->bufferLength() == 0) return 0;
-
-		std::size_t probe = editor->bufferLength();
-		if (probe > 0 && editor->charAtOffset(probe - 1) == '\n') --probe;
-		return editor->lineEndOffset(probe);
-	}
-
-	bool lineIsBlank(std::size_t lineStart) const {
-		if (editor == nullptr) return true;
-
-		const std::size_t lineEnd = editor->lineEndOffset(lineStart);
-		for (std::size_t pos = lineStart; pos < lineEnd; ++pos) {
-			const unsigned char ch = static_cast<unsigned char>(editor->charAtOffset(pos));
-			if (std::isspace(ch) == 0) return false;
-		}
-		return true;
-	}
-
-	bool currentParagraphRange(std::size_t &start, std::size_t &end, std::size_t &cursorEnd) const {
-		if (editor == nullptr || editor->bufferLength() == 0) return false;
-
-		start = editor->lineStartOffset(editor->cursorOffset());
-		if (lineIsBlank(start)) return false;
-
-		while (start > 0) {
-			const std::size_t previous = editor->lineStartOffset(editor->prevLineOffset(start));
-			if (previous == start || lineIsBlank(previous)) break;
-			start = previous;
-		}
-
-		std::size_t lineStart = editor->lineStartOffset(editor->cursorOffset());
-		std::size_t lastContentLineStart = lineStart;
-		end = lineBlockEndForStart(lastContentLineStart);
-		while (end < editor->bufferLength()) {
-			lineStart = end;
-			if (lineIsBlank(lineStart)) break;
-			lastContentLineStart = lineStart;
-			end = lineBlockEndForStart(lastContentLineStart);
-		}
-		cursorEnd = lineBlockCursorEndForStart(lastContentLineStart);
-		return start < end;
-	}
-
-	bool visibleBlockMatches(MRFEBlockMode mode, std::size_t start, std::size_t end) const {
-		return mBlockOps.hasVisibleBlock() && mBlockOps.mGeometry.mode == mode && mBlockOps.mGeometry.rangeStart == start && mBlockOps.mGeometry.rangeEnd == end;
-	}
-
-	bool handleEditorDoubleClickBlockExpansion() {
-		if (editor == nullptr) return false;
-
-		std::size_t wordStart = 0;
-		std::size_t wordEnd = 0;
-		if (!currentWordRange(wordStart, wordEnd)) return false;
-
-		const std::size_t lineStart = editor->lineStartOffset(editor->cursorOffset());
-		const std::size_t lineRangeEnd = lineBlockEndForStart(lineStart);
-		const std::size_t lineCursorEnd = lineBlockCursorEndForStart(lineStart);
-		std::size_t paragraphStart = 0;
-		std::size_t paragraphEnd = 0;
-		std::size_t paragraphCursorEnd = 0;
-		const bool hasParagraph = currentParagraphRange(paragraphStart, paragraphEnd, paragraphCursorEnd);
-
-		if (hasParagraph && visibleBlockMatches(MRFEBlockMode::Line, paragraphStart, paragraphEnd)) return mBlockOps.setCommittedBlock(*editor, MRFEBlockMode::Line, 0, wholeFileLineBlockCursorEnd());
-		if (hasParagraph && visibleBlockMatches(MRFEBlockMode::Line, lineStart, lineRangeEnd)) return mBlockOps.setCommittedBlock(*editor, MRFEBlockMode::Line, paragraphStart, paragraphCursorEnd);
-		if (visibleBlockMatches(MRFEBlockMode::Stream, wordStart, wordEnd)) return mBlockOps.setCommittedBlock(*editor, MRFEBlockMode::Line, lineStart, lineCursorEnd);
-		return mBlockOps.setCommittedBlock(*editor, MRFEBlockMode::Stream, wordStart, wordEnd);
-	}
+	static bool doubleClickWordByte(char ch) noexcept;
+	bool currentWordRange(std::size_t &start, std::size_t &end) const;
+	std::size_t lineBlockEndForStart(std::size_t lineStart) const;
+	std::size_t lineBlockCursorEndForStart(std::size_t lineStart) const;
+	std::size_t wholeFileLineBlockCursorEnd() const;
+	bool lineIsBlank(std::size_t lineStart) const;
+	bool currentParagraphRange(std::size_t &start, std::size_t &end, std::size_t &cursorEnd) const;
+	bool visibleBlockMatches(MRFEBlockMode mode, std::size_t start, std::size_t end) const;
+	bool handleEditorDoubleClickBlockExpansion();
 
 	void resetWindowColorsToConfiguredDefaults() {
 		mAppliedColorThemePath.clear();
@@ -1814,6 +1724,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		mWindowPaletteData[10] = projectColorAttribute(colors[1], outputMode);
 		mWindowPaletteData[11] = projectColorAttribute(colors[8], outputMode);
 		mWindowPaletteData[12] = projectColorAttribute(colors[12], outputMode);
+		mWindowPaletteData[13] = projectColorAttribute(colors[14], outputMode);
 		mCustomEofMarkerColorValid = true;
 		mCustomEofMarkerColor = projectColorAttribute(colors[3], outputMode);
 		rebuildWindowPalette();
@@ -1925,8 +1836,8 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		return value;
 	}
 
-	static std::array<TColorAttr, 13> defaultWindowPaletteData() noexcept {
-		return {configuredWindowPaletteSlot(8), configuredWindowPaletteSlot(9), configuredWindowPaletteSlot(10), configuredWindowPaletteSlot(11), configuredWindowPaletteSlot(12), configuredWindowPaletteSlot(13), configuredWindowPaletteSlot(14), configuredWindowPaletteSlot(15), configuredWindowPaletteSlot(kMrPaletteCurrentLine), configuredWindowPaletteSlot(kMrPaletteCurrentLineInBlock), configuredWindowPaletteSlot(kMrPaletteChangedText), configuredWindowPaletteSlot(kMrPaletteLineNumbers), configuredWindowPaletteSlot(kMrPaletteFocusedPaneBorder)};
+	static std::array<TColorAttr, 14> defaultWindowPaletteData() noexcept {
+		return {configuredWindowPaletteSlot(8), configuredWindowPaletteSlot(9), configuredWindowPaletteSlot(10), configuredWindowPaletteSlot(11), configuredWindowPaletteSlot(12), configuredWindowPaletteSlot(13), configuredWindowPaletteSlot(14), configuredWindowPaletteSlot(15), configuredWindowPaletteSlot(kMrPaletteCurrentLine), configuredWindowPaletteSlot(kMrPaletteCurrentLineInBlock), configuredWindowPaletteSlot(kMrPaletteChangedText), configuredWindowPaletteSlot(kMrPaletteLineNumbers), configuredWindowPaletteSlot(kMrPaletteFocusedPaneBorder), configuredWindowPaletteSlot(kMrPaletteEditorScrollBar)};
 	}
 
 	void rebuildWindowPalette() {
@@ -2472,7 +2383,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 	std::string mLastMacroSummaryText;
 	std::string mAppliedColorThemePath;
 	std::string mAppliedColorThemeUri;
-	mutable std::array<TColorAttr, 13> mWindowPaletteData;
+	mutable std::array<TColorAttr, 14> mWindowPaletteData;
 	mutable TPalette mWindowPalette;
 	bool mCustomEofMarkerColorValid;
 	TColorAttr mCustomEofMarkerColor;

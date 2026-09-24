@@ -71,7 +71,7 @@ MRFileEditor::TextViewportGeometry MRFileEditor::textViewportGeometryFor(const M
 	inputs.visibleRows = visibleTextRows();
 	inputs.deltaX = delta.x;
 	inputs.deltaY = delta.y;
-	inputs.debugGutterEnabled = mDebuggerInstructionLineValid || !mDebuggerBreakpointLines.empty() || !mDebuggerBreakpointInactiveLines.empty() || !mDebuggerBreakpointUnboundLines.empty();
+	inputs.debugGutterEnabled = mDebuggerGutterVisible || mDebuggerInstructionLineValid || !mDebuggerBreakpointLines.empty() || !mDebuggerBreakpointInactiveLines.empty() || !mDebuggerBreakpointUnboundLines.empty();
 	inputs.debugGutterPosition = "LEADING";
 	if (foldingEnabled && settings.codeFolding) self->ensureVisibleFoldSpans(static_cast<std::size_t>(std::max(delta.y, 0)), inputs.visibleRows, mBufferModel.language());
 	inputs.codeFoldingColumns = foldingEnabled && settings.codeFolding ? self->visibleFoldGutterColumns() : 1;
@@ -264,10 +264,12 @@ void MRFileEditor::ensureVisibleFoldSpans(std::size_t topLine, int rowCount, MRS
 	if (visibleState.documentId == docId && visibleState.version == version && visibleState.language == language && topLine >= visibleState.topLine &&
 	    foldRequestBottomLine <= visibleState.bottomLine) {
 		mFoldCanonicalContextState.requestValid = false;
-		const bool currentWarmupCoversViewport = mFoldWarmupState.generation != 0 && mFoldWarmupState.documentId == docId && mFoldWarmupState.version == version &&
-		                                           mFoldWarmupState.language == language && topLine >= mFoldWarmupState.visibleTopLine &&
-		                                           foldRequestBottomLine <= mFoldWarmupState.visibleBottomLine;
-		if (mFoldWarmupState.generation != 0 && !currentWarmupCoversViewport) supersedeViewportFoldWarmup();
+		if (mFoldWarmupState.generation != 0 && mFoldWarmupState.documentId == docId && mFoldWarmupState.version == version && mFoldWarmupState.language == language) {
+			if (topLine < mFoldWarmupState.visibleTopLine || foldRequestBottomLine > mFoldWarmupState.visibleBottomLine) {
+				mFoldWarmupState.visibleTopLine = topLine;
+				mFoldWarmupState.visibleBottomLine = foldRequestBottomLine;
+			}
+		}
 		updateVisibleFoldGutterColumnsForViewport();
 		return;
 	}

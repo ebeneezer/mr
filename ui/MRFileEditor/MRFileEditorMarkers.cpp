@@ -187,6 +187,12 @@ void MRFileEditor::clearDebuggerInstructionLine() {
 	drawView();
 }
 
+void MRFileEditor::setDebuggerGutterVisible(bool visible) {
+	if (mDebuggerGutterVisible == visible) return;
+	mDebuggerGutterVisible = visible;
+	drawView();
+}
+
 void MRFileEditor::clearDirtyRanges() {
 	mDirtyRanges.clear();
 	mMiniMapState.setDirtyRanges(mDirtyRanges);

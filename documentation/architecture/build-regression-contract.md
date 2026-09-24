@@ -24,7 +24,13 @@ Versioned generated headers are treated as tracked source artifacts for clean-bu
 
 ## Invariants
 
-- Regression checks must target stable behavioral or structural invariants with low maintenance cost.
+- A regression check must protect a concrete maintainer-facing behavior or
+  stable structural invariant against a credible failure. It must be
+  deterministic, proportionate to the risk and cheaper to maintain than the
+  protection it provides. Test counts and generated coverage are not goals.
+- Prefer the narrowest existing test mechanism that observes the failure.
+  Checks that merely repeat implementation logic or duplicate coverage do not
+  qualify. Use a focused manual scenario when that gives better protection.
 - Tracked generated headers remain available to a one-shot clean build.
 - Build targets must not create a new directory inside the repository without
   explicit maintainer approval.

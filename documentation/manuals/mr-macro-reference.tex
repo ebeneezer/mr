@@ -12507,12 +12507,12 @@ both debuggers.
 
 \texttt{F9} sets a breakpoint at the cursor source line or clears one already
 there. Alternatively, double-click with the left mouse button on the desired
-line number in the source view's visible line-number gutter. The gutter must
-be visible and debugger controls active. This invokes the same action as F9
-and resolves folded viewport rows to document lines; it is not a folding-gutter
-gesture. The same mouse action is available in the compiled-program GDB
-debugger, with that backend's source-location rules.
-\index{breakpoint!gutter double-click}\index{line-number gutter!breakpoints}
+row in the source view's debugger gutter. The gutter is visible while debugger
+controls are active. This invokes the same action as F9 and resolves folded
+viewport rows to document lines; it is independent of the line-number and
+folding gutters. The same mouse action is available in the compiled-program
+GDB debugger, with that backend's source-location rules.
+\index{breakpoint!gutter double-click}\index{debugger gutter!breakpoints}
 The MRMAC debugger maps the line to its debuggable source span, so a comment,
 declaration or other non-executable line cannot receive a breakpoint.
 \texttt{Shift-F9} enables or disables the breakpoint at the cursor. Its

@@ -67,7 +67,7 @@ struct ColorGroupDefinition {
 };
 
 static const MRColorSetupItem kWindowColorItems[] = {
-    {"text", kPaletteBlueWindowText}, {"changed text", kMrPaletteChangedText}, {"highlighted text", kPaletteBlueWindowHighlight}, {"EOF marker", kMrPaletteEofMarker}, {"window border", kPaletteBlueWindowFrame}, {"window bold", kPaletteBlueWindowBold}, {"current line", kMrPaletteCurrentLine}, {"current line in block", kMrPaletteCurrentLineInBlock}, {"line numbers", kMrPaletteLineNumbers}, {"code folding", kMrPaletteCodeFolding}, {"code folding marker", kMrPaletteCodeFoldingMarker}, {"format ruler", kMrPaletteFormatRuler}, {"focused pane border", kMrPaletteFocusedPaneBorder}, {"diagnostic information", kMrPaletteDiagnosticInformation},
+    {"text", kPaletteBlueWindowText}, {"changed text", kMrPaletteChangedText}, {"highlighted text", kPaletteBlueWindowHighlight}, {"EOF marker", kMrPaletteEofMarker}, {"window border", kPaletteBlueWindowFrame}, {"window bold", kPaletteBlueWindowBold}, {"current line", kMrPaletteCurrentLine}, {"current line in block", kMrPaletteCurrentLineInBlock}, {"line numbers", kMrPaletteLineNumbers}, {"code folding", kMrPaletteCodeFolding}, {"code folding marker", kMrPaletteCodeFoldingMarker}, {"format ruler", kMrPaletteFormatRuler}, {"focused pane border", kMrPaletteFocusedPaneBorder}, {"diagnostic information", kMrPaletteDiagnosticInformation}, {"scrollbars", kMrPaletteEditorScrollBar},
 };
 
 static const MRColorSetupItem kMenuDialogColorItems[] = {
@@ -111,7 +111,7 @@ static const MRColorSetupItem kDebuggerColorItems[] = {
 
 static constexpr MRRgbColorAttribute kWindowColorDefaults[] = {
 	{0xAAAAAAu, 0x0000AAu}, {0xFFFFFFu, 0x0000AAu}, {0xFFFF55u, 0xAA5500u}, {0xFFFFFFu, 0xAA00AAu}, {0xAAAAAAu, 0x0000AAu}, {0xFFFFFFu, 0x0000AAu}, {0xFFFFFFu, 0x0000AAu},
-	{0xFFFF55u, 0x0000AAu}, {0xFFFFFFu, 0x5555FFu}, {0xFFFFFFu, 0xAA00AAu}, {0xFFFF55u, 0xAA00AAu}, {0xFFFFFFu, 0x0000AAu}, {0xFFFF55u, 0x0000AAu}, {0x000000u, 0xFFFF55u}
+	{0xFFFF55u, 0x0000AAu}, {0xFFFFFFu, 0x5555FFu}, {0xFFFFFFu, 0xAA00AAu}, {0xFFFF55u, 0xAA00AAu}, {0xFFFFFFu, 0x0000AAu}, {0xFFFF55u, 0x0000AAu}, {0x000000u, 0xFFFF55u}, {0x0000AAu, 0x00AAAAu}
 };
 static constexpr MRRgbColorAttribute kMenuDialogColorDefaults[] = {
 	{0x000000u, 0xAAAAAAu}, {0x555555u, 0xAAAAAAu}, {0xFFFF55u, 0xAA00AAu}, {0xFFFFFFu, 0xAA00AAu}, {0x555555u, 0xAA00AAu}, {0x55FFFFu, 0x0000AAu}, {0xFFFFFFu, 0x0000AAu}, {0x555555u, 0xAAAAAAu},

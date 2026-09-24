@@ -2476,18 +2476,19 @@ These keys replace their normal editor meanings in debugger context; outside
 that context, for example, \key{F9} remains Build current file.
 \index{GDB debugger!function keys}
 
-\textbf{Double-click with the left mouse button in the line-number gutter to
+\textbf{Double-click with the left mouse button in the debugger gutter to
 set or remove a breakpoint on that line.} This is the mouse equivalent of
 \key{F9}, and works in both GDB and MRMAC debugger source views while their
-debugger controls are active. The line-number gutter must be visible; this
-is not a click in the folding gutter. Folded viewport rows are mapped to their
+debugger controls are active. The debugger gutter is independent of line
+numbers and the folding gutter. Folded viewport rows are mapped to their
 document lines. Breakpoint acceptance still depends on the debugger: GDB
 resolves compiled source locations, while MRMAC requires a debuggable span.
-\index{breakpoint!gutter double-click}\index{line-number gutter!breakpoints}
+\index{breakpoint!gutter double-click}\index{debugger gutter!breakpoints}
 
 A GDB source breakpoint applies to every thread unless it has an assertion.
-Right-click a breakpoint line in the Source pane to open \menu{Breakpoint
-Assert}. Enter an expression in the inferior's language and choose
+Right-click a breakpoint line in the Source pane and choose \menu{Edit
+assertion} from the context menu to open \menu{Breakpoint Assert}.
+Enter an expression in the inferior's language and choose
 \field{OK}. GDB evaluates it in the thread that reaches the breakpoint: a
 true result stops that thread, while a false result continues execution.
 The expression may use variables in scope at that source location. For
@@ -2498,9 +2499,10 @@ runtime value and should not be treated as a persistent thread identity.
 
 Choose \field{All Threads} to remove the assertion and make the breakpoint
 unconditional again. Closing the dialog or pressing Escape keeps the previous
-assertion. Hovering over a breakpoint line shows its assertion, or prompts
-for a right-click if none is set. Successful assertion changes are retained
-for the source breakpoint across a rebuild.
+assertion. Hovering over a breakpoint line shows its assertion, or points to
+the right-click menu if none is set. Successful assertion changes are retained
+for the source breakpoint across a rebuild. Removing a breakpoint also removes
+its assertion; setting it again starts unconditionally.
 An asserted breakpoint uses the configurable \field{asserted breakpoint} color
 in Color Setup's \field{Debugger Colors} group; an unconditional breakpoint
 keeps the active breakpoint color.
@@ -2518,13 +2520,13 @@ same transient hint style as the frame markers.}
 \label{sec:users-gdb-context}
 \index{context menu!GDB source}\index{GDB debugger!context menu}
 
-Right-click source text without a breakpoint while GDB is active. On an
-existing breakpoint line, right-click opens the Breakpoint Assert dialog.
-Alongside Edit, Outline,
-References, and Rename, the menu offers:
+Right-click source text or the debugger gutter while GDB is active. Alongside
+Edit, Outline, References, and Rename, the menu offers:
 \begin{description}
 \item[Toggle breakpoint] Sets or removes the breakpoint at the clicked source
-line, as with F9 or a left-button double-click in the line-number gutter.
+line, as with F9 or a left-button double-click in the debugger gutter.
+\item[Edit assertion] On an existing breakpoint line, opens the Breakpoint
+Assert dialog.
 \item[Run here] Continues towards the clicked source location, like F6.
 \item[Watch] Adds the identifier under the mouse directly. If there is no
 identifier, it opens the Watch expression dialog instead.
@@ -2542,8 +2544,9 @@ its source view still shares the ordinary editor menu and gutter breakpoint
 gesture.
 
 \manualscreenshot{mr-users-gdb-context.png}{fig:users-gdb-context}{PTY capture
-of the extended GDB source menu in a paused matrix.c session. Watch uses the
-clicked identifier; Into, Step, and Out act on the current execution stop.}
+of the extended GDB source menu on a line without a breakpoint in a paused
+matrix.c session. Watch uses the clicked identifier; Into, Step, and Out act
+on the current execution stop.}
 
 \subsection{Following matrix.c through a stop}
 

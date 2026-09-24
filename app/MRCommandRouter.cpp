@@ -752,8 +752,12 @@ bool editorTextTargetFromCursor(MRFileEditor &editor, EditorTextTarget &target) 
 bool editorTextTargetFromGlobalPoint(MREditWindow *win, TPoint where, EditorTextTarget &target) {
 	MRFileEditor *editor = win != nullptr ? win->getEditor() : nullptr;
 
-	if (editor == nullptr || !editor->textPointInView(where)) return false;
-	const std::size_t offset = editor->offsetForGlobalPoint(where);
+	if (editor == nullptr) return false;
+	std::size_t offset = 0;
+	if (!editor->debugGutterOffsetForGlobalPoint(where, offset)) {
+		if (!editor->textPointInView(where)) return false;
+		offset = editor->offsetForGlobalPoint(where);
+	}
 	const std::size_t lineIndex = editor->lineIndexOfOffset(offset);
 	const std::size_t visibleLine = editor->visibleLineForDocumentLine(lineIndex);
 	const int viewColumn = editorViewColumnForOffset(*editor, offset);
@@ -1238,6 +1242,12 @@ std::vector<ContextMenuEntry> buildEditorContextMenuItems(MREditWindow *win, con
 	entries.push_back(ContextMenuEntry{"Edit", 0, true});
 	if (MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(win); bentoBox != nullptr && bentoBox->gdbDebuggerActive()) {
 		entries.push_back(ContextMenuEntry{"Toggle breakpoint", cmMrDebuggerToggleBreakpoint, false});
+		if (target != nullptr) {
+			const int line = static_cast<int>(editor->lineIndexOfOffset(target->offset)) + 1;
+			const std::vector<int> breakpointLines = editor->debuggerBreakpointLineNumbers();
+			if (std::binary_search(breakpointLines.begin(), breakpointLines.end(), line))
+				entries.push_back(ContextMenuEntry{"Edit assertion", cmMrDebuggerEditBreakpointAssert, false});
+		}
 		entries.push_back(ContextMenuEntry{"Run here", cmMrDebuggerRunHere, false});
 		entries.push_back(ContextMenuEntry{"Watch", cmMrDebuggerAddWatch, false});
 		entries.push_back(ContextMenuEntry{"Eval", cmMrDebuggerEvaluate, false});
@@ -1384,6 +1394,7 @@ bool showEditorContextMenuForWindow(MREditWindow *targetWindow, TPoint where) {
 			else targetWindow->getEditor()->requestSystemClipboardPaste(target.offset);
 			return true;
 		case cmMrDebuggerToggleBreakpoint:
+		case cmMrDebuggerEditBreakpointAssert:
 		case cmMrDebuggerRunHere:
 		case cmMrDebuggerAddWatch:
 		case cmMrDebuggerEvaluate:

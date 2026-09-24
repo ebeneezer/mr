@@ -252,6 +252,7 @@ class MRFileEditor : public TScroller {
 	std::size_t offsetForGlobalPoint(TPoint where) noexcept;
 	bool textPointInView(TPoint where) noexcept;
 	bool lineNumberOffsetForGlobalPoint(TPoint where, std::size_t &offset) noexcept;
+	bool debugGutterOffsetForGlobalPoint(TPoint where, std::size_t &offset) noexcept;
 
 	struct BlockOverlayState {
 		bool active = false;
@@ -293,6 +294,7 @@ class MRFileEditor : public TScroller {
 	void clearDebuggerVariableChangedRanges();
 	void setDebuggerInstructionLine(std::size_t lineIndex);
 	void clearDebuggerInstructionLine();
+	void setDebuggerGutterVisible(bool visible);
 	void revealCursor(Boolean centerCursor = True);
 
 	void centerDocumentLocationInView(std::size_t lineIndex, int visualColumn);
@@ -1079,7 +1081,7 @@ class MRFileEditor : public TScroller {
 
 		bool adoptReadyFoldPackets();
 
-		bool publishCurrentFoldProjection();
+		bool publishCurrentFoldProjection(bool redraw = true);
 
 		void submitFoldPacket(FoldPacketState &packet, const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t totalLines, bool documentEndKnown);
 		void submitFoldPackets(const MRTextBufferModel::ReadSnapshot &snapshot, std::size_t totalLines, bool documentEndKnown);
@@ -1187,6 +1189,7 @@ class MRFileEditor : public TScroller {
 	std::vector<MRTextBufferModel::Range> mDebuggerWatchpointErrorRanges;
 	std::vector<MRTextBufferModel::Range> mDebuggerVariableChangedRanges;
 	bool mDebuggerInstructionLineValid = false;
+	bool mDebuggerGutterVisible = false;
 	std::size_t mDebuggerInstructionLine = 0;
 	LoadTiming mLastLoadTiming;
 	mutable std::size_t mCachedCursorLineDocumentId;

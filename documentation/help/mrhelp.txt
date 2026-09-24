@@ -1168,7 +1168,8 @@ Record, bind, maintain, run, and debug macros.
 
 Choose a compiler profile, build the current source, follow diagnostics, and work with GDB or the macro debugger.
 GDB breakpoints apply to all threads by default. Right-click a breakpoint
-line in Source to define an assertion that GDB evaluates in the hitting thread.
+line in Source and choose Edit assertion to define a condition that GDB
+evaluates in the hitting thread.
 
   {23.5 Compiler profiles and diagnostics:UserManualC23S05}
   {23.6 Debugging compiled programs with GDB:UserManualC23S06}
@@ -4384,17 +4385,18 @@ F10: Step into; F11 steps over; Shift+F11 steps out.
 These keys replace their normal editor meanings in debugger context;
 outside that context, for example, F9 remains Build current file.
 
-Double-click with the left mouse button in the line-number gutter to set
+Double-click with the left mouse button in the debugger gutter to set
 or remove a breakpoint on that line. This is the mouse equivalent of F9,
 and works in both GDB and MRMAC debugger source views while their debugger
-controls are active. The line-number gutter must be visible; this is not a
-click in the folding gutter. Folded viewport rows are mapped to their
+controls are active. The debugger gutter is independent of line numbers and
+the folding gutter. Folded viewport rows are mapped to their
 document lines. Breakpoint acceptance still depends on the debugger: GDB
 resolves compiled source locations, while MRMAC requires a debuggable
 span.
 
 A GDB source breakpoint applies to every thread unless it has an assertion.
-Right-click a breakpoint line in the Source pane to open Breakpoint Assert.
+Right-click a breakpoint line in the Source pane and choose Edit assertion
+from the context menu to open Breakpoint Assert.
 Enter an expression in the inferior's language and choose OK. GDB evaluates
 it in the thread that reaches the breakpoint: a true result stops that
 thread, while a false result continues execution. The expression may use
@@ -4407,8 +4409,9 @@ thread identities.
 Choose All Threads to remove the assertion and make the breakpoint
 unconditional again. Closing the dialog or pressing Escape keeps the
 previous assertion. Hovering over a breakpoint line shows its assertion,
-or prompts for a right-click if none is set. Successful assertion changes
-are retained for the source breakpoint across a rebuild.
+or points to the right-click menu if none is set. Successful assertion changes
+are retained for the source breakpoint across a rebuild. Removing a breakpoint
+also removes its assertion; setting it again starts unconditionally.
 An asserted breakpoint uses the configurable asserted breakpoint color in
 Color Setup's Debugger Colors group; an unconditional breakpoint keeps the
 active breakpoint color.
@@ -4424,12 +4427,13 @@ In this section:
 .topic UserManualC23S06P01=358
  23.6.1 SOURCE-PANE CONTEXT MENU
 
-Right-click source text without a breakpoint while GDB is active. On an
-existing breakpoint line, right-click opens Breakpoint Assert. Alongside Edit, Outline,
-References, and Rename, the menu offers:
+Right-click source text or the debugger gutter while GDB is active. Alongside
+Edit, Outline, References, and Rename, the menu offers:
 
 Toggle breakpoint: Sets or removes the breakpoint at the clicked source
-line, as with F9 or a left-button double-click in the line-number gutter.
+line, as with F9 or a left-button double-click in the debugger gutter.
+
+Edit assertion: On an existing breakpoint line, opens Breakpoint Assert.
 
 Run here: Continues towards the clicked source location, like F6.
 

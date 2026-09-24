@@ -185,7 +185,8 @@ enum : ushort {
 	cmMrRuntimeScheduleChanged = 275,
 	cmMrWorkspaceAutosaveScheduled,
 	cmMrDeferredUiQueued,
-	cmMrMacroBrainStateChanged
+	cmMrMacroBrainStateChanged,
+	cmMrDebuggerEditBreakpointAssert
 };
 
 static_assert(cmMrDebuggerEndSession <= 255 && cmMrDebuggerStart <= 255, "Debugger start must fit TVision's command enablement set.");

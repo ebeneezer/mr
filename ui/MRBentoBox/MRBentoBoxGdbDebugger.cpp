@@ -202,6 +202,7 @@ bool MRBentoBox::startGdbDebugger(const std::string &programPath, const std::str
 		gdbSession.reset();
 		return false;
 	}
+	if (getEditor() != nullptr) getEditor()->setDebuggerGutterVisible(true);
 	{
 		std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
 		MRVMRuntimeKv &runtimeKv = mrvmRuntimeKv();
@@ -245,7 +246,10 @@ void MRBentoBox::stopGdbDebugger() noexcept {
 	writeGdbDebuggerRows(true, {});
 	clearGdbDebuggerState();
 	clearDebuggerUiState();
-	if (getEditor() != nullptr) getEditor()->clearDebuggerInstructionLine();
+	if (getEditor() != nullptr) {
+		getEditor()->setDebuggerGutterVisible(macroDebuggerActive);
+		getEditor()->clearDebuggerInstructionLine();
+	}
 	if (macroDebuggerActive) refreshMacroDebuggerBreakpointRanges();
 	else if (!sourcePath.empty()) {
 		std::vector<int> assertedLines;
@@ -474,7 +478,7 @@ void MRBentoBox::updateGdbBreakpointHover(TPoint globalMouse) {
 	if (!gdbDebuggerActive() || editor == nullptr || frame == nullptr) return;
 	MRFrame *hoverFrame = static_cast<MRFrame *>(frame);
 	std::size_t offset = 0;
-	if (!editor->lineNumberOffsetForGlobalPoint(globalMouse, offset)) {
+	if (!editor->debugGutterOffsetForGlobalPoint(globalMouse, offset) && !editor->lineNumberOffsetForGlobalPoint(globalMouse, offset)) {
 		if (!editor->textPointInView(globalMouse)) {
 			hoverFrame->updateTaskHover(globalMouse, false);
 			return;
@@ -488,7 +492,7 @@ void MRBentoBox::updateGdbBreakpointHover(TPoint globalMouse) {
 		hoverFrame->updateTaskHover(globalMouse, false);
 		return;
 	}
-	hoverFrame->showTransientHint(assertion.empty() ? "Right-click to define assertion" : assertion, globalMouse);
+	hoverFrame->showTransientHint(assertion.empty() ? "Right-click for breakpoint menu" : assertion, globalMouse);
 }
 
 bool MRBentoBox::executeGdbSourceContextCommand(ushort command, std::size_t sourceOffset, const std::string &identifier) {
@@ -497,6 +501,8 @@ bool MRBentoBox::executeGdbSourceContextCommand(ushort command, std::size_t sour
 	if (!gdbDebuggerActive() || editor == nullptr) return false;
 	editor->setCursorOffset(std::min(sourceOffset, editor->bufferLength()));
 	switch (command) {
+		case cmMrDebuggerEditBreakpointAssert:
+			return editGdbBreakpointAssert(sourceOffset);
 		case cmMrDebuggerToggleBreakpoint:
 			return sendGdbCommand(MRGdbCommandKind::ToggleBreakpoint);
 		case cmMrDebuggerRunHere:
@@ -626,7 +632,6 @@ bool MRBentoBox::sendGdbCommand(MRGdbCommandKind commandKind, const std::string 
 	const std::string state = readGdbString(bufferId(), "state");
 	const bool loaded = state == "loaded" || state == "starting";
 	if (contextual && !gdbDebuggerContextReady() && !(loaded && execution && commandKind != MRGdbCommandKind::StepOut)) return false;
-	if (commandKind == MRGdbCommandKind::ToggleBreakpoint && !loaded && !gdbDebuggerContextReady()) return false;
 	if (commandKind == MRGdbCommandKind::SetBreakpointAssert && gdbDebuggerRunning()) return false;
 	if (commandKind == MRGdbCommandKind::AssignVariable && readGdbInt(bufferId(), "valuesReady") != 3) return false;
 	MRGdbCommand command(commandKind);

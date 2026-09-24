@@ -76,6 +76,16 @@ void MRBentoBox::handleEvent(TEvent &event) {
 	const bool breakpointHoverEvent = event.what == evMouseMove && event.mouse.buttons == 0 && event.mouse.wheel == 0 && gdbDebuggerActive();
 	if (gdbDebuggerActive() && frame != nullptr && (event.what & (evMouseDown | evMouseWheel | evKeyDown | evCommand)) != 0)
 		static_cast<MRFrame *>(frame)->updateTaskHover(TPoint(), true);
+	if (gdbDebuggerActive() && event.what == evMouseDown && event.mouse.buttons == mbRightButton &&
+	    (event.mouse.eventFlags & meDoubleClick) == 0 &&
+	    (event.mouse.controlKeyState & (kbShift | kbCtrlShift | kbAltShift)) == 0 && getEditor() != nullptr) {
+		std::size_t sourceOffset = 0;
+		if (getEditor()->debugGutterOffsetForGlobalPoint(globalMouse, sourceOffset)) {
+			static_cast<void>(showMREditorContextMenu(this, globalMouse));
+			clearEvent(event);
+			return;
+		}
+	}
 
 	if (bentoProjectionAdoptionActive && event.what == evBroadcast &&
 	    (event.message.command == cmMrEditorDocumentCommitted || event.message.command == cmUpdateTitle)) {
@@ -221,11 +231,20 @@ void MRBentoBox::handleEvent(TEvent &event) {
 		}
 	}
 	if (event.what == evMouseDown) {
-		if (gdbDebuggerActive() && (event.mouse.buttons & mbRightButton) != 0 &&
-		    roleForLeaf(leafAt(localMouse)) == bprSource && getEditor() != nullptr && getEditor()->containsMouse(event) &&
-		    editGdbBreakpointAssert(getEditor()->offsetForGlobalPoint(event.mouse.where))) {
-			clearEvent(event);
-			return;
+		if ((event.mouse.buttons & mbLeftButton) != 0) {
+			const int scrollLeafId = leafAt(localMouse);
+			if (scrollLeafId >= 0) {
+				MRPaneEditWindow *scrollPane = paneWindowForLeaf(scrollLeafId);
+				TScrollBar *horizontal = scrollPane != nullptr ? scrollPane->horizontalEditorScrollBar() : horizontalEditorScrollBar();
+				if (horizontal != nullptr && (horizontal->state & sfVisible) != 0 && horizontal->mouseInView(globalMouse)) {
+					setActivePane(scrollLeafId);
+					if (scrollPane != nullptr) scrollPane->handleEvent(event);
+					else MREditWindow::handleEvent(event);
+					bentoProjectionDirty |= bpdContent | bpdChrome | bpdScrollBar;
+					flushBentoProjection();
+					return;
+				}
+			}
 		}
 		if (handleDividerChromeMouse(event)) {
 			clearEvent(event);

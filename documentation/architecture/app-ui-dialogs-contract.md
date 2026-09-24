@@ -113,9 +113,13 @@ GDB convenience variables such as `$_thread` are available through ordinary
 GDB expression syntax. False conditions continue through GDB's native
 breakpoint machinery, without a stop/resume cycle in MR.
 
-Right-clicking a source breakpoint line opens the existing text input dialog
-with its assertion. Empty input removes the condition; cancellation preserves
-it. Only successful GDB mutations update definitions in the central K/V.
+Right-clicking source text or the debugger gutter opens the source context
+menu. An existing breakpoint line adds Edit assertion, which opens the
+existing text input dialog. Empty input removes the condition; cancellation
+preserves it. Double-clicking the debugger gutter toggles the breakpoint.
+Only successful GDB mutations update definitions in the central K/V. Removing
+a breakpoint also removes its assertion; setting it again starts without an
+assertion.
 Breakpoint snapshots are runtime projections and never replace those
 definitions. Rapid toggles and assertion changes share the K/V mutation queue.
 Execution waits for pending breakpoint mutations and restoration replies;

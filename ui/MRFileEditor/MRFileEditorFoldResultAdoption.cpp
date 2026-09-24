@@ -3,27 +3,52 @@
 #include <algorithm>
 #include <limits>
 
-bool MRFileEditor::publishCurrentFoldProjection() {
+bool MRFileEditor::publishCurrentFoldProjection(bool redraw) {
 	const bool documentFoldLevelActive = mFoldState.documentFoldLevelActive();
 	const std::size_t oldTopDocumentLine = documentFoldLevelActive ? documentLineForVisibleLine(static_cast<std::size_t>(std::max(0, delta.y))) : 0;
 	std::vector<const FoldValidatedSegment *> ordered;
 	for (const FoldValidatedSegment &segment : mFoldWarmupState.segments)
 		if (segment.generation == mFoldWarmupState.generation) ordered.push_back(&segment);
 	std::sort(ordered.begin(), ordered.end(), [](const FoldValidatedSegment *left, const FoldValidatedSegment *right) { return left->startLine < right->startLine; });
-	std::size_t reachedLine = mFoldWarmupState.scanTopLine;
-	std::size_t segmentCount = 0;
-	for (const FoldValidatedSegment *segment : ordered) {
+	std::size_t firstSegment = 0;
+	while (firstSegment < ordered.size() && ordered[firstSegment]->endLine <= mFoldWarmupState.visibleTopLine)
+		++firstSegment;
+	if (firstSegment == ordered.size() || ordered[firstSegment]->startLine > mFoldWarmupState.visibleTopLine) return false;
+	std::size_t reachedLine = ordered[firstSegment]->startLine;
+	std::size_t lastSegment = firstSegment;
+	for (; lastSegment < ordered.size(); ++lastSegment) {
+		const FoldValidatedSegment *segment = ordered[lastSegment];
 		if (segment->startLine != reachedLine || segment->endLine <= segment->startLine) break;
 		reachedLine = segment->endLine;
-		++segmentCount;
 	}
-	if (reachedLine < mFoldWarmupState.scanBottomLine || segmentCount == 0) return false;
+	if (reachedLine < mFoldWarmupState.visibleBottomLine) return false;
 
 	MRFoldingDerivedState::VisibleState &visibleState = mFoldState.visibleState();
+	const bool currentCoversViewport = visibleState.documentId == mFoldWarmupState.documentId && visibleState.version == mFoldWarmupState.version &&
+	                                   visibleState.language == mFoldWarmupState.language && visibleState.topLine <= mFoldWarmupState.visibleTopLine &&
+	                                   visibleState.bottomLine >= mFoldWarmupState.visibleBottomLine;
+	if (currentCoversViewport) {
+		bool newVisibleSpan = false;
+		for (std::size_t index = firstSegment; index < lastSegment && !newVisibleSpan; ++index) {
+			const FoldValidatedSegment &segment = *ordered[index];
+			if (segment.startLine >= visibleState.topLine && segment.endLine <= visibleState.bottomLine) continue;
+			for (const MRFoldSpan &span : segment.spans)
+				if (span.startLine < mFoldWarmupState.visibleBottomLine && span.endLine >= mFoldWarmupState.visibleTopLine) {
+					newVisibleSpan = true;
+					break;
+				}
+			for (const MRFoldGutterBranch &branch : segment.branches)
+				if (branch.line >= mFoldWarmupState.visibleTopLine && branch.line < mFoldWarmupState.visibleBottomLine) newVisibleSpan = true;
+		}
+		if (!newVisibleSpan) return false;
+	}
+	if (visibleState.documentId == mFoldWarmupState.documentId && visibleState.version == mFoldWarmupState.version && visibleState.language == mFoldWarmupState.language &&
+	    visibleState.topLine == ordered[firstSegment]->startLine && visibleState.bottomLine == reachedLine)
+		return false;
 	visibleState.spans.clear();
 	visibleState.branches.clear();
 	visibleState.lineTexts.clear();
-	for (std::size_t index = 0; index < segmentCount; ++index) {
+	for (std::size_t index = firstSegment; index < lastSegment; ++index) {
 		const FoldValidatedSegment &segment = *ordered[index];
 		visibleState.lineTexts.insert(visibleState.lineTexts.end(), segment.lineTexts.begin(), segment.lineTexts.end());
 		visibleState.spans.insert(visibleState.spans.end(), segment.spans.begin(), segment.spans.end());
@@ -33,7 +58,7 @@ bool MRFileEditor::publishCurrentFoldProjection() {
 	if (visibleState.revision == 0) ++visibleState.revision;
 	visibleState.documentId = mFoldWarmupState.documentId;
 	visibleState.version = mFoldWarmupState.version;
-	visibleState.topLine = mFoldWarmupState.scanTopLine;
+	visibleState.topLine = ordered[firstSegment]->startLine;
 	visibleState.bottomLine = reachedLine;
 	visibleState.language = mFoldWarmupState.language;
 	const bool documentProjectionChanged = mFoldState.refreshDocumentFoldLevelViewportProjection();
@@ -63,11 +88,12 @@ bool MRFileEditor::publishCurrentFoldProjection() {
 				validatedSpan = &span;
 				break;
 			}
-		if (validatedSpan == nullptr) {
+		if (validatedSpan == nullptr && closed->second.endLine < visibleState.bottomLine) {
 			closed = closedFoldSpans.erase(closed);
 			continue;
 		}
-		closed->second = MRFoldSpan(validatedSpan->startLine, validatedSpan->endLine, validatedSpan->level, validatedSpan->sourceKind, false, validatedSpan->siblingContinuation);
+		if (validatedSpan != nullptr)
+			closed->second = MRFoldSpan(validatedSpan->startLine, validatedSpan->endLine, validatedSpan->level, validatedSpan->sourceKind, false, validatedSpan->siblingContinuation);
 		++closed;
 	}
 	mFoldState.rebuildEffectiveClosedFolds();
@@ -81,9 +107,9 @@ bool MRFileEditor::publishCurrentFoldProjection() {
 		updateMetrics();
 		const std::size_t newTopVisibleLine = visibleLineForDocumentLine(oldTopDocumentLine);
 		scrollTo(std::max(0, delta.x), static_cast<int>(std::min<std::size_t>(newTopVisibleLine, static_cast<std::size_t>(INT_MAX))));
-		drawView();
+		if (redraw) drawView();
 		updateIndicator();
-	} else if (!foldCursorTargetValid) {
+	} else if (!foldCursorTargetValid && redraw) {
 		drawView();
 	}
 	return true;

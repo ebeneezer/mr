@@ -2,6 +2,7 @@
 #include "MRSettingsRuntime.hpp"
 #include "../../app/utils/MRStringUtils.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cctype>
 #include <cstdlib>
@@ -60,5 +61,11 @@ bool parseColorListLiteral(const std::string &literal, MRRgbColorAttribute *outV
 }
 
 bool parseWindowColorListLiteral(const std::string &literal, std::array<MRRgbColorAttribute, MRColorSetupSettings::kWindowCount> &outValues, std::string *errorMessage) {
-	return parseColorListLiteral(literal, outValues.data(), outValues.size(), errorMessage);
+	if (parseColorListLiteral(literal, outValues.data(), outValues.size(), errorMessage)) return true;
+	std::array<MRRgbColorAttribute, MRColorSetupSettings::kWindowCount - 1> previousValues{};
+	if (!parseColorListLiteral(literal, previousValues.data(), previousValues.size(), nullptr)) return false;
+	std::copy(previousValues.begin(), previousValues.end(), outValues.begin());
+	outValues.back() = mrDefaultColorForSlot(kMrPaletteEditorScrollBar);
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
 }
