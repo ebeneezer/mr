@@ -1920,7 +1920,6 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		mrvmCloseForksForOwner(mBufferId);
 		static_cast<void>(prepareCoprocessorTasksForShutdown());
 		if (editor != nullptr) {
-			editor->bufferModel().clearUndoRedo();
 			remove(editor);
 			TObject::destroy(editor);
 			editor = nullptr;

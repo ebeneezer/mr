@@ -2423,6 +2423,17 @@ and the post-build \mrmac{} hook are adopted with the final result. Build
 context values identify the source, output, profile, toolchain, and exit
 status to hooks without requiring them to reconstruct the command line.
 
+The build Bento keeps the source beside Compiler Output and Problems. Click
+the close button inside the Source pane to leave the build layout and return
+to the source editor. The source buffer, including Undo and Redo history,
+remains open. The close button on the outer Bento window frame closes the
+window instead, with the same unsaved-change check as an ordinary editor.
+
+\manualscreenshot{mr-users-build-source-close.png}{fig:users-build-source-close}{
+The build Bento with the Source pane's inner close button. It returns to the
+source editor; the separate button on the outer window frame closes the
+window after the usual unsaved-change check.}
+
 \menu{Debug > Next compiler error} and \menu{Previous compiler error} navigate
 adopted diagnostics. User Interface Settings controls whether warnings and
 notes are tracked in addition to errors and how diagnostic messages are
@@ -2466,14 +2477,16 @@ While a GDB debugger is active, the function keys have these meanings:
 \item[\key{F6}] Run to the source location at the cursor.
 \item[\key{F7} / \key{Shift+F7}] Add a watch / remove a watch by object or expression.
 \item[\key{F8}] Stop the GDB session, keeping its panes available for inspection.
-\item[\key{Shift+F5}] End debug session, close all auxiliary panes, and return to
- the standard source editor. This also works after F8 or program exit.
 \item[\key{Shift+F9}] Clear current output when that command is available.
 \item[\key{F9}] Toggle a breakpoint at the cursor's source line.
 \item[\key{F10}] Step into; \key{F11} steps over; \key{Shift+F11} steps out.
 \end{description}
 These keys replace their normal editor meanings in debugger context; outside
 that context, for example, \key{F9} remains Build current file.
+Click the close button inside the Source pane to end the debugger layout and
+return to the source editor, including after \key{F8} or program exit. The
+outer Bento window close button instead closes the window after the ordinary
+unsaved-change check. \key{Shift+F5} remains Search and Replace.
 \index{GDB debugger!function keys}
 
 \textbf{Double-click with the left mouse button in the debugger gutter to

@@ -53,6 +53,7 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "../dialogs/MRFileInformation.hpp"
@@ -1728,6 +1729,8 @@ bool handleBuildCurrentFile(mr::coprocessor::BuildDebuggerContinuation debuggerC
 	MREditWindow *problemsWindow;
 	MREditWindow *sourceWindowToClose = nullptr;
 	bool createdBentoBox = false;
+	struct stat sourceBeforeHook {};
+	struct stat sourceAfterHook {};
 
 	if (win == nullptr) return true;
 	sourceBentoBox = dynamic_cast<MRBentoBox *>(win);
@@ -1750,6 +1753,8 @@ bool handleBuildCurrentFile(mr::coprocessor::BuildDebuggerContinuation debuggerC
 		postDialogWarning(errorText.empty() ? "Unable to build compiler command line." : errorText);
 		return true;
 	}
+	const bool sourceStatAvailable = ::stat(sourcePath.c_str(), &sourceBeforeHook) == 0;
+	const std::size_t sourceVersionBeforeHook = win->getEditor()->documentVersion();
 	buildContext = buildCompilerProfileHookContext(compilerProfile, sourcePath, win->bufferId());
 	if (!runBuildHookMacro(compilerProfile.preBuildMacro, buildContext, 0, "PRE_BUILD", std::string(), &errorText)) {
 		std::string postError;
@@ -1758,6 +1763,12 @@ bool handleBuildCurrentFile(mr::coprocessor::BuildDebuggerContinuation debuggerC
 		postDialogWarning(errorText.empty() ? "Pre build macro failed." : errorText);
 		return true;
 	}
+	const bool sourceChangedAfterSave = !sourceStatAvailable || ::stat(sourcePath.c_str(), &sourceAfterHook) != 0 ||
+	                                    sourceBeforeHook.st_dev != sourceAfterHook.st_dev || sourceBeforeHook.st_ino != sourceAfterHook.st_ino ||
+	                                    sourceBeforeHook.st_size != sourceAfterHook.st_size ||
+	                                    sourceBeforeHook.st_mtim.tv_sec != sourceAfterHook.st_mtim.tv_sec || sourceBeforeHook.st_mtim.tv_nsec != sourceAfterHook.st_mtim.tv_nsec ||
+	                                    sourceBeforeHook.st_ctim.tv_sec != sourceAfterHook.st_ctim.tv_sec || sourceBeforeHook.st_ctim.tv_nsec != sourceAfterHook.st_ctim.tv_nsec ||
+	                                    win->getEditor()->documentVersion() != sourceVersionBeforeHook;
 	outputTitle = buildCompilerOutputTitle(compilerProfile, matchedProfileName, sourcePath);
 
 	bentoBox = sourceBentoBox != nullptr ? sourceBentoBox : findBuildBentoBoxForSource(sourcePath);
@@ -1781,10 +1792,16 @@ bool handleBuildCurrentFile(mr::coprocessor::BuildDebuggerContinuation debuggerC
 		return true;
 	}
 	if (bentoBox->isFileChanged() && !bentoBox->confirmAbandonForReload()) return true;
-	if (!loadResolvedFileIntoWindow(bentoBox, sourcePath, "Build current file")) {
-		if (createdBentoBox) message(bentoBox, evCommand, cmClose, nullptr);
-		postSearchError("Unable to load source file into build BentoBox window.");
-		return true;
+	if (sourceChangedAfterSave) {
+		if (!loadResolvedFileIntoWindow(bentoBox, sourcePath, "Build current file")) {
+			if (createdBentoBox) message(bentoBox, evCommand, cmClose, nullptr);
+			postSearchError("Unable to load source file into build BentoBox window.");
+			return true;
+		}
+	} else if (sourceBentoBox == nullptr && win != bentoBox) {
+		bentoBox->setReadOnly(win->isReadOnly());
+		bentoBox->getEditor()->shareContentStateFrom(*win->getEditor());
+		bentoBox->setCurrentFileName(sourcePath.c_str());
 	}
 	if (sourceBentoBox == nullptr && win != bentoBox && win->currentFileName() == sourcePath && !win->isFileChanged()) sourceWindowToClose = win;
 	static_cast<void>(mrActivateEditWindow(bentoBox));

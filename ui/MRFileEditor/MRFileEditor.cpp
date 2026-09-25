@@ -91,12 +91,10 @@ bool MRFileEditor::isDocumentModified() const noexcept {
 }
 
 void MRFileEditor::setDocumentModified(bool changed) {
-	mBufferModel.setModified(changed);
+	if (changed) mBufferModel.setModified(true);
+	else mBufferModel.markSaved();
 	updateAutosaveState();
-	if (!changed) {
-		mBufferModel.clearUndoRedo();
-		clearDirtyRanges();
-	}
+	if (!changed) clearDirtyRanges();
 	syncFromEditorState(false);
 }
 

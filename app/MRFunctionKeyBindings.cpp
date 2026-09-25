@@ -227,8 +227,6 @@ std::vector<MRStatusLine::FunctionKeyLabel> mrEditorFunctionKeyLabels(ushort mod
 	const bool debuggerRunning = debuggerBento != nullptr && debuggerBento->debuggerSessionRunning();
 	const bool macroDebuggerActive = debuggerBento != nullptr && debuggerBento->macroDebuggerFunctionKeysActive();
 	const bool readOnlyActive = window != nullptr && window->isReadOnly();
-	const MRBentoBox *currentBento = dynamic_cast<MRBentoBox *>(currentEditWindow());
-	const bool canEndGdb = currentBento != nullptr && currentBento->gdbDebuggerCanEnd();
 
 	switch (modifiers) {
 		case 0:
@@ -236,7 +234,6 @@ std::vector<MRStatusLine::FunctionKeyLabel> mrEditorFunctionKeyLabels(ushort mod
 			break;
 		case kbShift:
 			labels = shiftLabels;
-			if (canEndGdb) labels[4] = {TKey(kbF5, kbShift), cmMrDebuggerEndSession, "~S-F5~ EndDbg"};
 			if (fileCompareActive) labels[7] = {TKey(kbF8, kbShift), cmMrFileComparePreviousChange, "~S-F8~ Prev"};
 			else if (diagnosticsActive)
 				labels[7] = {TKey(kbF8, kbShift), cmMrDebugFindPreviousCompilerError, "~S-F8~ PrevErr"};
@@ -357,13 +354,12 @@ bool mrHandleEditorFunctionKey(TEvent &event) {
 	const TKey pressed(event.keyDown);
 
 	if (fileCompareFunctionKeysActive() && (pressed == TKey(kbF8) || pressed == TKey(kbShiftF8) || (event.keyDown.keyCode == kbF8 && (event.keyDown.controlKeyState & kbShift) != 0))) return false;
-	const bool debugShortcut = pressed == TKey(kbF9, kbShift) ||
-	                           (pressed == TKey(kbF5, kbShift) && TView::commandEnabled(cmMrDebuggerEndSession));
+	const bool debugShortcut = pressed == TKey(kbF9, kbShift);
 	for (const MRStatusLine::FunctionKeyLabel &label : mrEditorFunctionKeyLabels(debugShortcut ? pressed.mods : 0)) {
 		if (!(pressed == label.keyCode)) continue;
 		if (label.command == cmMenu) return false;
 		if (!TView::commandEnabled(label.command)) return false;
-		if (label.command == cmMrDebuggerStart || label.command == cmMrDebuggerEndSession) {
+		if (label.command == cmMrDebuggerStart) {
 			TEvent commandEvent{};
 			commandEvent.what = evCommand;
 			commandEvent.message.command = label.command;

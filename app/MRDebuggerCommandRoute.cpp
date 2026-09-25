@@ -71,12 +71,6 @@ bool mrHandleDebuggerCommand(MRBentoBox *bentoBox, TEvent &event) {
 		event.what = evNothing;
 		return true;
 	}
-	if (event.message.command == cmMrDebuggerEndSession) {
-		MRBentoBox *currentBento = dynamic_cast<MRBentoBox *>(currentEditWindow());
-		if (currentBento == nullptr || !currentBento->endGdbDebugger()) return false;
-		event.what = evNothing;
-		return true;
-	}
 	if (bentoBox == nullptr) return false;
 	if (event.message.command == cmMrDebuggerClearProgramTerminal) {
 		if (!bentoBox->clearGdbProgramTerminal()) return false;

@@ -242,7 +242,6 @@ class MRBentoBox : public MREditWindow {
 		[[nodiscard]] bool startGdbDebugger(const std::string &programPath, const std::string &sourcePath, std::string &errorMessage);
 		void stopGdbDebugger() noexcept;
 		[[nodiscard]] bool gdbDebuggerCanEnd() const noexcept;
-		[[nodiscard]] bool endGdbDebugger();
 		void stopGdbDebuggerForRebuild() noexcept;
 		[[nodiscard]] bool startGdbAtFirstCodeLine();
 		[[nodiscard]] bool acceptGdbEvent(const mr::coprocessor::GdbEventPayload &payload);
@@ -419,6 +418,7 @@ class MRBentoBox : public MREditWindow {
 	void drawPaneFrames() noexcept;
 	void postCloseCommand() noexcept;
 	void closePane(int leafId);
+	[[nodiscard]] bool returnToSourceEditor();
 	void showPaneRoleList(TPoint globalMouse, int targetLeafId);
 	void showPaneActionList();
 	void showFileCompareActionList(TPoint globalMouse, int targetLeafId);

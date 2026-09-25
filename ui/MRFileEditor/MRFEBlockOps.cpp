@@ -106,7 +106,7 @@ enum class BlockOffsetAffinity {
 
 std::size_t remapBlockOffsetForDocumentChange(std::size_t offset, std::size_t oldLength, std::size_t newLength, std::size_t editStart, std::size_t oldEditEnd, long long delta, BlockOffsetAffinity affinity) noexcept {
 	offset = std::min(offset, oldLength);
-	if (offset <= editStart) return std::min(offset, newLength);
+	if (offset < editStart || (offset == editStart && (oldEditEnd != editStart || affinity != BlockOffsetAffinity::Start))) return std::min(offset, newLength);
 	if (offset >= oldEditEnd) {
 		const long long shifted = static_cast<long long>(offset) + delta;
 		if (shifted <= 0) return 0;
@@ -1352,6 +1352,7 @@ bool MRFEBlockOps::executeCursorMove(MRFileEditor &editor, std::string *errorTex
 	} else
 		editor.setCursorOffset(cursor);
 	mGeometry = targetGeometry;
+	mGeometry.documentVersion = editor.documentVersion();
 	applySelection(editor);
 	applyOverlay(editor);
 	return true;
@@ -1620,6 +1621,7 @@ bool MRFEBlockOps::shiftCurrentStreamBlockHorizontally(MRFileEditor &editor, int
 		targetRangeEnd = offsetAtLineVisualColumn(text, starts, targetLastLine, targetEndColumn);
 	setCommittedStreamGeometry(targetGeometry, text, starts, targetRangeStart, targetRangeEnd);
 	mGeometry = targetGeometry;
+	mGeometry.documentVersion = editor.documentVersion();
 	applySelection(editor);
 	applyOverlay(editor);
 	editor.setCursorOffset(mGeometry.rangeStart);
@@ -1710,6 +1712,7 @@ bool MRFEBlockOps::shiftCurrentColumnBlockHorizontally(MRFileEditor &editor, int
 	targetGeometry.anchor = targetGeometry.rangeStart;
 	targetGeometry.cursor = targetGeometry.rangeEnd;
 	mGeometry = targetGeometry;
+	mGeometry.documentVersion = editor.documentVersion();
 	applySelection(editor);
 	applyOverlay(editor);
 	editor.setCursorOffset(mGeometry.rangeStart);

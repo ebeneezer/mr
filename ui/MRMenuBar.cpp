@@ -678,9 +678,7 @@ void MRMenuBar::applyFunctionKeyMenuShortcuts(TMenu *targetMenu) const {
 	const MRBentoBox *bentoBox = dynamic_cast<MRBentoBox *>(currentEditWindow());
 	if (bentoBox != nullptr && bentoBox->macroDebuggerFunctionKeysActive())
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrDebugClearOutput), TKey(kbNoKey), nullptr);
-	const bool canEndGdb = commandEnabled(cmMrDebuggerEndSession);
-	setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrDebuggerEndSession), canEndGdb ? TKey(kbF5, kbShift) : TKey(kbNoKey), canEndGdb ? "ShiftF5" : nullptr);
-	setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrSearchReplace), canEndGdb ? TKey(kbNoKey) : TKey(kbF5, kbShift), canEndGdb ? nullptr : "ShiftF5");
+	setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrSearchReplace), TKey(kbF5, kbShift), "ShiftF5");
 	if (mDebuggerFunctionKeysActive)
 		setMenuItemShortcut(findMenuItemByCommand(targetMenu, cmMrDebugBuildCurrentFile), TKey(kbNoKey), nullptr);
 	if (diagnosticsActive) {

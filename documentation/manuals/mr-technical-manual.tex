@@ -906,6 +906,13 @@ snapshots preserve the layout tree, leaf roles, dividers, active and maximised
 leaf, so a workspace can resume the working arrangement rather than merely
 reopen a pile of files.
 
+The Source pane's inner close action in a build or debugger workspace ends
+active work through its existing owner, cancels pane projections, and collapses
+the auxiliary leaves. The same Bento then enters document-viewport mode with
+its source buffer and edit history intact. The outer window close action stays
+on the normal editor validation path, including the unsaved-change check, and
+destroys the window only after that check succeeds.
+
 Bento 1.5 adds a closed widget mask to every persisted leaf. The first two
 bits mean Fold Gutter and MiniMap; unknown bits are rejected rather than
 silently reduced. The existing \texttt{WORKSPACE} payload serialises leaf ID,
@@ -1832,6 +1839,9 @@ external source; process-group termination escalates from SIGTERM to SIGKILL
 if needed, and the child is reaped before descriptors are released. Workspace
 persistence can retain supported window topology, but not a running GDB
 process, PTY, pending command queue, or instruction pointer.
+The Source pane's inner close control also works after the program stops: it
+ends the debugger presentation and returns to the same source editor. Closing
+the outer Bento window remains a separate editor close operation.
 \chapter{settings.mrmac: canonical bootstrap and executable state}
 \label{ch:settings-bootstrap}
 

@@ -4,7 +4,6 @@
 #include <tvision/tv.h>
 
 enum : ushort {
-	cmMrDebuggerEndSession = 105,
 	cmMrDebuggerStart = 109,
 	cmMrFileOpen = 110,
 	cmMrFileLoad,
@@ -189,7 +188,7 @@ enum : ushort {
 	cmMrDebuggerEditBreakpointAssert
 };
 
-static_assert(cmMrDebuggerEndSession <= 255 && cmMrDebuggerStart <= 255, "Debugger start must fit TVision's command enablement set.");
+static_assert(cmMrDebuggerStart <= 255, "Debugger start must fit TVision's command enablement set.");
 static_assert(cmMrMacroDebuggerClearAllBreakpoints <= 255 && cmMrTextHexEditor <= 255 && cmMrDebuggerClearProgramTerminal <= 255,
               "Enabled application commands must fit TVision's command enablement set.");
 

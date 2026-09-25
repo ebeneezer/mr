@@ -4322,6 +4322,11 @@ result. Build context values identify the source, output, profile,
 toolchain, and exit status to hooks without requiring them to reconstruct
 the command line.
 
+The build Bento keeps the source beside Compiler Output and Problems.
+Click the close button inside the Source pane to return to the source
+editor with the same buffer and Undo/Redo history. The outer Bento window
+close button closes the window after the ordinary unsaved-change check.
+
 Debug > Next compiler error and Previous compiler error navigate adopted
 diagnostics. User Interface Settings controls whether warnings and notes
 are tracked in addition to errors and how diagnostic messages are
@@ -4373,8 +4378,6 @@ F7 / Shift+F7: Add a watch / remove a watch by object or expression.
 
 F8: Stop the GDB session, keeping its panes available for inspection.
 
-Shift+F5: End debug session, close all auxiliary panes, and return to the
-standard source editor. This also works after F8 or program exit.
 
 Shift+F9: Clear current output when that command is available.
 
@@ -4384,6 +4387,10 @@ F10: Step into; F11 steps over; Shift+F11 steps out.
 
 These keys replace their normal editor meanings in debugger context;
 outside that context, for example, F9 remains Build current file.
+Click the close button inside the Source pane to end the debugger layout
+and return to the source editor, including after F8 or program exit.
+The outer Bento window close button instead closes the window after the
+ordinary unsaved-change check. Shift+F5 remains Search and Replace.
 
 Double-click with the left mouse button in the debugger gutter to set
 or remove a breakpoint on that line. This is the mouse equivalent of F9,

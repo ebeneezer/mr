@@ -262,29 +262,6 @@ bool MRBentoBox::gdbDebuggerCanEnd() const noexcept {
 	return gdbSession != nullptr || (!macroDebuggerActive && programTerminalPane() != nullptr);
 }
 
-bool MRBentoBox::endGdbDebugger() {
-	if (!gdbDebuggerCanEnd()) return false;
-	stopGdbDebuggerForRebuild();
-	if (getEditor() != nullptr) getEditor()->clearDebuggerBreakpointRanges();
-	paneRoleDropList.hide();
-	paneActionDropList.hide();
-	gdbThreadListOpen = false;
-	updatePaneRoleListChrome();
-	setActivePane(0);
-	for (const BentoLeaf &leaf : leaves)
-		if (leaf.id != 0 && nodeIndexForLeaf(leaf.id) >= 0) closePane(leaf.id);
-	bentoMode = bbmDocumentViewports;
-	for (BentoLeaf &leaf : leaves)
-		if (leaf.id == 0) {
-			leaf.spec = paneSpecForRole(bprSource);
-			leaf.title.clear();
-			break;
-		}
-	layoutSplitPanes();
-	mrMarkWorkspaceAutosaveDirty("debugger return to editor", this);
-	return true;
-}
-
 void MRBentoBox::stopGdbDebuggerForRebuild() noexcept {
 	stopGdbDebugger();
 }

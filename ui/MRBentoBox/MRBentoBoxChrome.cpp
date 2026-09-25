@@ -50,7 +50,6 @@ void MRBentoBox::layoutNode(int nodeIndex, const TRect &bounds) {
 void MRBentoBox::postCloseCommand() noexcept {
 	TEvent event;
 
-	windowCloseInProgress = true;
 	std::memset(&event, 0, sizeof(event));
 	event.what = evCommand;
 	event.message.command = cmClose;
@@ -60,7 +59,7 @@ void MRBentoBox::postCloseCommand() noexcept {
 
 void MRBentoBox::closePane(int leafId) {
 	if (leafId == 0) {
-		postCloseCommand();
+		if (!returnToSourceEditor()) postCloseCommand();
 		return;
 	}
 	if (maximizedLeafId == leafId) maximizedLeafId = -1;
@@ -68,6 +67,35 @@ void MRBentoBox::closePane(int leafId) {
 	if (activeLeafId == leafId || nodeIndexForLeaf(activeLeafId) < 0) setActivePane(0);
 	layoutSplitPanes();
 	mrMarkWorkspaceAutosaveDirty("bento pane close", this);
+}
+
+bool MRBentoBox::returnToSourceEditor() {
+	if (bentoMode != bbmToolWorkspace) return false;
+	if (macroDebuggerActive) invalidateMacroDebuggerRuntime();
+	if (gdbDebuggerCanEnd()) stopGdbDebuggerForRebuild();
+	if (getEditor() != nullptr) getEditor()->clearDebuggerBreakpointRanges();
+	if (compilerDiagnosticsContextEstablished()) clearCompilerDiagnostics();
+	cancelAllBentoProjectionTasks();
+	paneRoleDropList.hide();
+	paneActionDropList.hide();
+	gdbThreadListOpen = false;
+	updatePaneRoleListChrome();
+	setActivePane(0);
+	for (const BentoLeaf &leaf : leaves) {
+		if (leaf.id == 0 || nodeIndexForLeaf(leaf.id) < 0) continue;
+		if (leaf.pane != nullptr) static_cast<void>(leaf.pane->prepareCoprocessorTasksForShutdown());
+		collapseLeafNode(leaf.id);
+	}
+	bentoMode = bbmDocumentViewports;
+	for (BentoLeaf &leaf : leaves)
+		if (leaf.id == 0) {
+			leaf.spec = paneSpecForRole(bprSource);
+			leaf.title.clear();
+			break;
+		}
+	layoutSplitPanes();
+	mrMarkWorkspaceAutosaveDirty("bento return to editor", this);
+	return true;
 }
 
 void MRBentoBox::showPaneRoleList(TPoint, int targetLeafId) {

@@ -509,6 +509,8 @@ void MRBentoBox::changeBounds(const TRect &bounds) {
 }
 
 void MRBentoBox::close() {
+	// The base close validates later; keep the live session intact if the user cancels.
+	if (!TWindow::valid(cmClose)) return;
 	cancelDebuggerValueInput();
 	invalidateMacroDebuggerRuntime();
 	cancelAllBentoProjectionTasks();
