@@ -61,6 +61,13 @@ class MRSidekickEditor : public TScroller {
 	TRect mOuterBounds;
 	TScrollBar *mHorizontalScrollBar;
 	TScrollBar *mVerticalScrollBar;
+	bool mApiReferenceActive = false;
+	std::size_t mApiReferenceAnchorOffset = 0;
+	std::size_t mApiReferenceCursorOffset = 0;
+	int mApiReferenceDeltaX = 0;
+	int mApiReferenceDeltaY = 0;
+	MRReadOnlySidekickPlacement mApiReferencePlacement = MRReadOnlySidekickPlacement::RightMargin;
+	std::string mApiReferenceText;
 
 	void setText(std::string text);
 	[[nodiscard]] std::string text() const;
@@ -102,9 +109,14 @@ class MRSidekickEditor : public TScroller {
 	void clampCursor() noexcept;
 
 	friend void mrDropActiveSidekick();
+	friend bool mrOpenReadOnlySidekickAt(MREditWindow *, const std::string &, const std::string &, int, int, int, MRReadOnlySidekickPlacement, std::size_t);
+	friend bool mrDismissApiReferenceSidekickForParent(const MREditWindow *);
+	friend void mrSyncApiReferenceSidekickForParent(MREditWindow *, bool);
 };
 
-bool mrOpenReadOnlySidekickAt(MREditWindow *parent, const std::string &text, const std::string &title, int anchorViewColumn, int anchorViewRow, int preferredViewColumn = 0, MRReadOnlySidekickPlacement placement = MRReadOnlySidekickPlacement::RightMargin);
+bool mrOpenReadOnlySidekickAt(MREditWindow *parent, const std::string &text, const std::string &title, int anchorViewColumn, int anchorViewRow, int preferredViewColumn = 0, MRReadOnlySidekickPlacement placement = MRReadOnlySidekickPlacement::RightMargin, std::size_t apiReferenceAnchorOffset = std::string::npos);
+bool mrDismissApiReferenceSidekickForParent(const MREditWindow *parent);
+void mrSyncApiReferenceSidekickForParent(MREditWindow *parent, bool sourceScroll);
 bool mrOpenSnippetSidekickAt(MREditWindow *parent, const std::string &text, const std::string &title, std::size_t replaceStart, std::size_t replaceEnd, const std::vector<MRSidekickSpan> &placeholders, int anchorViewColumn, int anchorViewRow, bool &committed);
 bool mrHasReadOnlySidekickForParent(const MREditWindow *parent);
 bool mrConsumeReadOnlySidekickDismissedForParent(const MREditWindow *parent);

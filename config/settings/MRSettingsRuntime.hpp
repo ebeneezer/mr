@@ -40,6 +40,7 @@ struct MREditSetupSettings {
 	std::string indentStyle;
 	std::string codeLanguage;
 	bool codeColoring;
+	bool apiReference;
 	bool autoPairBrackets;
 	std::string fileType;
 	int binaryRecordLength;
@@ -70,7 +71,7 @@ struct MREditSetupSettings {
 	std::string miniMapMarkerGlyph;
 	std::string gutters;
 
-	MREditSetupSettings() noexcept : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false), eofCrLf(false), tabExpand(true), displayTabs(false), tabSize(8), leftMargin(1), rightMargin(78), formatRuler(false), wordWrap(false), indentStyle(), codeLanguage("NONE"), codeColoring(false), autoPairBrackets(false), fileType(), binaryRecordLength(100), postLoadMacro(), preSaveMacro(), defaultPath(), formatLine(), backupMethod("BAK_FILE"), backupFrequency("FIRST_SAVE_ONLY"), backupExtension("bak"), backupDirectory(), autosaveInactivitySeconds(15), autosaveIntervalSeconds(180), backupFiles(true), showEofMarker(false), showEofMarkerEmoji(true), showLineNumbers(false), lineNumbersPosition("OFF"), lineNumZeroFill(false), persistentBlocks(true), codeFolding(false), codeFoldingPosition("OFF"), columnBlockMove(), defaultMode(), cursorStatusColor(), miniMapPosition("OFF"), miniMapWidth(4), miniMapMarkerGlyph("│"), gutters("LCM") {
+	MREditSetupSettings() noexcept : pageBreak(), wordDelimiters(), defaultExtensions(), truncateSpaces(true), eofCtrlZ(false), eofCrLf(false), tabExpand(true), displayTabs(false), tabSize(8), leftMargin(1), rightMargin(78), formatRuler(false), wordWrap(false), indentStyle(), codeLanguage("NONE"), codeColoring(false), apiReference(false), autoPairBrackets(false), fileType(), binaryRecordLength(100), postLoadMacro(), preSaveMacro(), defaultPath(), formatLine(), backupMethod("BAK_FILE"), backupFrequency("FIRST_SAVE_ONLY"), backupExtension("bak"), backupDirectory(), autosaveInactivitySeconds(15), autosaveIntervalSeconds(180), backupFiles(true), showEofMarker(false), showEofMarkerEmoji(true), showLineNumbers(false), lineNumbersPosition("OFF"), lineNumZeroFill(false), persistentBlocks(true), codeFolding(false), codeFoldingPosition("OFF"), columnBlockMove(), defaultMode(), cursorStatusColor(), miniMapPosition("OFF"), miniMapWidth(4), miniMapMarkerGlyph("│"), gutters("LCM") {
 	}
 
 	auto operator==(const MREditSetupSettings &) const noexcept -> bool = default;
@@ -143,6 +144,7 @@ enum MREditSetupOverrideMask : unsigned long long {
 	kOvCodeLanguage = 1ull << 42,
 	kOvCodeColoring = 1ull << 43,
 	kOvAutoPairBrackets = 1ull << 44,
+	kOvApiReference = 1ull << 45,
 };
 
 struct MREditSettingDescriptor {
@@ -226,6 +228,11 @@ enum class MRCursorBehaviour : unsigned char {
 };
 
 enum class MRCompilerErrorMessagePlacement : unsigned char {
+	UnderCode = 0,
+	RightMargin = 1
+};
+
+enum class MRApiReferencePlacement : unsigned char {
 	UnderCode = 0,
 	RightMargin = 1
 };
@@ -520,7 +527,8 @@ enum : unsigned char {
 	kMrPaletteDebuggerInputError = 238,
 	kMrPaletteDebuggerBreakpointAsserted = 239,
 	kMrPaletteEditorScrollBar = 240,
-	kMrPaletteMax = kMrPaletteEditorScrollBar
+	kMrPaletteSidekickScrollBar = 241,
+	kMrPaletteMax = kMrPaletteSidekickScrollBar
 };
 
 struct MRRgbColorAttribute {
@@ -543,7 +551,7 @@ struct MRColorSetupSettings {
 	static const std::size_t kOtherCount = 11;
 	static const std::size_t kMiniMapCount = 6;
 	static const std::size_t kFileCompareMiniMapCount = 9;
-	static const std::size_t kCodeCount = 33;
+	static const std::size_t kCodeCount = 34;
 	static const std::size_t kFileCompareCount = 14;
 	static const std::size_t kDebuggerCount = 13;
 
@@ -726,6 +734,8 @@ bool setConfiguredCursorBehaviour(MRCursorBehaviour behaviour, std::string *erro
 [[nodiscard]] MRCursorBehaviour configuredCursorBehaviour();
 bool setConfiguredCompilerErrorMessagePlacement(MRCompilerErrorMessagePlacement placement, std::string *errorMessage = nullptr);
 [[nodiscard]] MRCompilerErrorMessagePlacement configuredCompilerErrorMessagePlacement();
+bool setConfiguredApiReferencePlacement(MRApiReferencePlacement placement, std::string *errorMessage = nullptr);
+[[nodiscard]] MRApiReferencePlacement configuredApiReferencePlacement();
 bool setConfiguredScrollbarVisibility(MRScrollbarVisibility visibility, std::string *errorMessage = nullptr);
 [[nodiscard]] MRScrollbarVisibility configuredScrollbarVisibility();
 bool setConfiguredColorOutputMode(MRColorOutputMode mode, std::string *errorMessage = nullptr);

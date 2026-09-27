@@ -67,7 +67,28 @@ bool MRBentoBox::ensureBuildDiagnosticsPanes(MREditWindow *&outputWindow, MREdit
 	return outputWindow != nullptr && problemsWindow != nullptr;
 }
 
+void MRBentoBox::setBuildDiagnosticsCompact(bool compact) noexcept {
+	if (!compact) {
+		if (buildExpandedDividerPosition > 0 && hasPaneSplit()) setDividerPosition(rootNode, buildExpandedDividerPosition, false);
+		buildExpandedDividerPosition = 0;
+		buildDiagnosticsCompactPending = false;
+		return;
+	}
+	if (buildExpandedDividerPosition > 0 || !hasPaneSplit()) return;
+	const BentoLayoutNode &root = layoutTree[rootNode];
+	if (root.orientation != bsoHorizontal || root.firstChild != nodeIndexForLeaf(0) || leafIdForRole(bprCompilerOutput) < 0) return;
+	const TRect bounds = nodeBounds(rootNode);
+	if (bounds.b.y - bounds.a.y < minimumNodeHeight(root.firstChild) + minimumNodeHeight(root.secondChild)) {
+		buildDiagnosticsCompactPending = true;
+		return;
+	}
+	buildDiagnosticsCompactPending = false;
+	buildExpandedDividerPosition = currentDividerPosition(rootNode);
+	setDividerPosition(rootNode, bounds.b.y - minimumNodeHeight(root.secondChild), false);
+}
+
 bool MRBentoBox::ensureMacroDebuggerPanes(MREditWindow *&outputWindow, MREditWindow *&variablesWindow, MREditWindow *&watchesWindow) {
+	setBuildDiagnosticsCompact(false);
 	int outputLeaf = leafIdForRole(bprDebuggerOutput);
 
 	if (bentoMode == bbmDocumentViewports) {
@@ -102,7 +123,11 @@ bool MRBentoBox::ensureMacroDebuggerPanes(MREditWindow *&outputWindow, MREditWin
 bool MRBentoBox::ensureGdbDebuggerPanes(MREditWindow *&outputWindow, MREditWindow *&variablesWindow, MREditWindow *&watchesWindow, MRGdbTerminalPane *&terminalWindow) {
 	if (!ensureMacroDebuggerPanes(outputWindow, variablesWindow, watchesWindow)) return false;
 	int terminalLeaf = leafIdForRole(bprProgramTerminal);
-	if (terminalLeaf < 0) terminalLeaf = splitLeafNode(leafIdForRole(bprDebuggerOutput), bsoHorizontal, bprProgramTerminal);
+	if (terminalLeaf < 0) {
+		const int outputNode = nodeIndexForLeaf(leafIdForRole(bprDebuggerOutput));
+		terminalLeaf = splitLeafNode(leafIdForRole(bprDebuggerOutput), bsoHorizontal, bprProgramTerminal);
+		if (terminalLeaf >= 0 && outputNode >= 0) std::swap(layoutTree[outputNode].firstChild, layoutTree[outputNode].secondChild);
+	}
 	if (terminalLeaf < 0) return false;
 	secondaryPaneVisible = firstToolLeafId() >= 0;
 	layoutSplitPanes();
@@ -505,6 +530,7 @@ void MRBentoBox::changeBounds(const TRect &bounds) {
 	fileCompareActionDropList.hide();
 	updatePaneRoleListChrome();
 	MREditWindow::changeBounds(bounds);
+	if (buildDiagnosticsCompactPending) setBuildDiagnosticsCompact(true);
 	if (hasPaneSplit()) layoutSplitPanes();
 }
 

@@ -92,7 +92,7 @@ static const MRColorSetupItem kFileCompareMiniMapColorItems[] = {
 };
 
 static const MRColorSetupItem kCodeColorItems[] = {
-    {"comments", kMrPaletteCodeComments}, {"strings", kMrPaletteCodeStrings}, {"characters", kMrPaletteCodeCharacters}, {"numbers", kMrPaletteCodeNumbers}, {"keywords", kMrPaletteCodeKeywords}, {"types", kMrPaletteCodeTypes}, {"directives", kMrPaletteCodeDirectives}, {"functions", kMrPaletteCodeFunctions}, {"builtins", kMrPaletteCodeBuiltins}, {"constants", kMrPaletteCodeConstants}, {"operators", kMrPaletteCodeOperators}, {"brackets", kMrPaletteCodeBrackets}, {"delimiters", kMrPaletteCodeDelimiters}, {"sidekick editor text", kMrPaletteSidekickEditorText}, {"sidekick editor highlight", kMrPaletteSidekickEditorHighlight}, {"context menu", kMrPaletteContextMenu}, {"context menu selector", kMrPaletteContextMenuSelector}, {"snippet sidekick frame", kMrPaletteSnippetSidekickFrame}, {"snippet sidekick text", kMrPaletteSnippetSidekickText}, {"snippet placeholder", kMrPaletteSnippetPlaceholder}, {"snippet active placeholder", kMrPaletteSnippetActivePlaceholder}, {"snippet default text", kMrPaletteSnippetDefaultText}, {"outline file header", kMrPaletteOutlineFileHeader}, {"outline level 1", kMrPaletteOutlineLevel0}, {"outline level 2", kMrPaletteOutlineLevel1}, {"outline level 3", kMrPaletteOutlineLevel2}, {"outline level 4", kMrPaletteOutlineLevel3}, {"outline level 5", kMrPaletteOutlineLevel4}, {"outline level 6", kMrPaletteOutlineLevel5}, {"outline level 7", kMrPaletteOutlineLevel6}, {"outline level 8", kMrPaletteOutlineLevel7}, {"outline level 9", kMrPaletteOutlineLevel8}, {"outline level 10", kMrPaletteOutlineLevel9},
+    {"comments", kMrPaletteCodeComments}, {"strings", kMrPaletteCodeStrings}, {"characters", kMrPaletteCodeCharacters}, {"numbers", kMrPaletteCodeNumbers}, {"keywords", kMrPaletteCodeKeywords}, {"types", kMrPaletteCodeTypes}, {"directives", kMrPaletteCodeDirectives}, {"functions", kMrPaletteCodeFunctions}, {"builtins", kMrPaletteCodeBuiltins}, {"constants", kMrPaletteCodeConstants}, {"operators", kMrPaletteCodeOperators}, {"brackets", kMrPaletteCodeBrackets}, {"delimiters", kMrPaletteCodeDelimiters}, {"sidekick editor text", kMrPaletteSidekickEditorText}, {"sidekick scrollbars", kMrPaletteSidekickScrollBar}, {"sidekick editor highlight", kMrPaletteSidekickEditorHighlight}, {"context menu", kMrPaletteContextMenu}, {"context menu selector", kMrPaletteContextMenuSelector}, {"snippet sidekick frame", kMrPaletteSnippetSidekickFrame}, {"snippet sidekick text", kMrPaletteSnippetSidekickText}, {"snippet placeholder", kMrPaletteSnippetPlaceholder}, {"snippet active placeholder", kMrPaletteSnippetActivePlaceholder}, {"snippet default text", kMrPaletteSnippetDefaultText}, {"outline file header", kMrPaletteOutlineFileHeader}, {"outline level 1", kMrPaletteOutlineLevel0}, {"outline level 2", kMrPaletteOutlineLevel1}, {"outline level 3", kMrPaletteOutlineLevel2}, {"outline level 4", kMrPaletteOutlineLevel3}, {"outline level 5", kMrPaletteOutlineLevel4}, {"outline level 6", kMrPaletteOutlineLevel5}, {"outline level 7", kMrPaletteOutlineLevel6}, {"outline level 8", kMrPaletteOutlineLevel7}, {"outline level 9", kMrPaletteOutlineLevel8}, {"outline level 10", kMrPaletteOutlineLevel9},
 };
 
 static const MRColorSetupItem kFileCompareColorItems[] = {
@@ -136,7 +136,7 @@ static constexpr MRRgbColorAttribute kFileCompareMiniMapColorDefaults[] = {
 };
 static constexpr MRRgbColorAttribute kCodeColorDefaults[] = {
 	{0x5555FFu, 0x0000AAu}, {0x55FFFFu, 0x0000AAu}, {0x55FFFFu, 0x0000AAu}, {0xFFFF55u, 0x0000AAu}, {0xAA5500u, 0x0000AAu}, {0xFFFFFFu, 0x0000AAu}, {0xAA5500u, 0x0000AAu}, {0xAAAAAAu, 0x0000AAu},
-	{0xFFFFFFu, 0x0000AAu}, {0xAAAAAAu, 0x0000AAu}, {0xFFFFFFu, 0x0000AAu}, {0xFFFFFFu, 0x0000AAu}, {0xFFFF55u, 0x0000AAu}, {0x555555u, 0xFFFF55u}, {0x000000u, 0xFFFF55u}, {0x000000u, 0xFFFF55u},
+	{0xFFFFFFu, 0x0000AAu}, {0xAAAAAAu, 0x0000AAu}, {0xFFFFFFu, 0x0000AAu}, {0xFFFFFFu, 0x0000AAu}, {0xFFFF55u, 0x0000AAu}, {0x555555u, 0xFFFF55u}, {0x555555u, 0xFFFF55u}, {0x000000u, 0xFFFF55u}, {0x000000u, 0xFFFF55u},
 	{0xFFFFFFu, 0xAA00AAu}, {0xAAAAAAu, 0xAA00AAu}, {0xFFFFFFu, 0xAA00AAu}, {0xFFFFFFu, 0x555555u}, {0x000000u, 0xFFFF55u}, {0x555555u, 0xAA00AAu}, {0xFFFFFFu, 0x555555u}, {0x000000u, 0xAAAAAAu},
 	{0xAA00AAu, 0xAAAAAAu}, {0xFFFF55u, 0xAAAAAAu}, {0x00AAAAu, 0xAAAAAAu}, {0xFF55FFu, 0xAAAAAAu}, {0xFF5555u, 0xAAAAAAu}, {0xFFFFFFu, 0xAAAAAAu}, {0x5555FFu, 0xAAAAAAu}, {0x00AA00u, 0xAAAAAAu},
 	{0xFF5555u, 0xAAAAAAu}
@@ -239,6 +239,7 @@ unsigned char defaultBiosColorForSlot(unsigned char paletteIndex) {
 	if (paletteIndex == kMrPaletteCodeBrackets) return defaults[9];
 	if (paletteIndex == kMrPaletteCodeDelimiters) return defaults[13];
 	if (paletteIndex == kMrPaletteSidekickEditorText) return 0x30;
+	if (paletteIndex == kMrPaletteSidekickScrollBar) return 0x30;
 	if (paletteIndex == kMrPaletteSidekickEditorHighlight) return 0xE0;
 	if (paletteIndex == kMrPaletteContextMenu) return defaultBiosColorForSlot(kMrPaletteDropListDescription);
 	if (paletteIndex == kMrPaletteContextMenuSelector) return defaultBiosColorForSlot(kMrPaletteDropListSelectedInactive);
@@ -372,7 +373,15 @@ bool parseDebuggerColorListLiteral(const std::string &literal, std::array<MRRgbC
 }
 
 bool parseCodeColorListLiteral(const std::string &literal, std::array<MRRgbColorAttribute, MRColorSetupSettings::kCodeCount> &outValues, std::string *errorMessage) {
-	return parseExactColorListLiteral(literal, outValues, errorMessage);
+	if (parseExactColorListLiteral(literal, outValues, errorMessage)) return true;
+	std::array<MRRgbColorAttribute, MRColorSetupSettings::kCodeCount - 1> previousValues{};
+	if (!parseExactColorListLiteral(literal, previousValues, nullptr)) return false;
+	constexpr std::size_t scrollBarIndex = 14;
+	std::copy_n(previousValues.begin(), scrollBarIndex, outValues.begin());
+	outValues[scrollBarIndex] = previousValues[scrollBarIndex - 1];
+	std::copy(previousValues.begin() + scrollBarIndex, previousValues.end(), outValues.begin() + scrollBarIndex + 1);
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
 }
 
 bool parseFileCompareMiniMapColorListLiteral(const std::string &literal, std::array<MRRgbColorAttribute, MRColorSetupSettings::kFileCompareMiniMapCount> &outValues, std::string *errorMessage) {

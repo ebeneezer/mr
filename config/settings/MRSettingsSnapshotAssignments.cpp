@@ -415,6 +415,10 @@ bool applySettingsSnapshotAssignment(MRSettingsSnapshot &snapshot, const std::st
 				if (!parseCompilerErrorMessagePlacementLiteral(value, snapshot.compilerErrorMessagePlacement, errorMessage)) return false;
 				return true;
 			}
+			if (upper == "API_REFERENCE_PLACEMENT") {
+				if (!parseApiReferencePlacementLiteral(value, snapshot.apiReferencePlacement, errorMessage)) return false;
+				return true;
+			}
 			if (upper == "SCROLLBAR_VISIBILITY") {
 				if (!parseScrollbarVisibilityLiteral(value, snapshot.scrollbarVisibility, errorMessage)) return false;
 				return true;

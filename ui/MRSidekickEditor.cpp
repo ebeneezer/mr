@@ -54,6 +54,16 @@ MRSidekickEditor *gActiveSidekick = nullptr;
 
 constexpr TColorAttr kSidekickCursor = 0x70;
 
+class MRSidekickScrollBar final : public TScrollBar {
+  public:
+	explicit MRSidekickScrollBar(const TRect &bounds) noexcept : TScrollBar(bounds) {
+	}
+
+	TColorAttr mapColor(uchar) override {
+		return sidekickColor(kMrPaletteSidekickScrollBar, 0x30);
+	}
+};
+
 class SnippetSidekickHintGuard {
   public:
 	SnippetSidekickHintGuard() {
@@ -143,7 +153,7 @@ MRSidekickEditor::MRSidekickEditor(const TRect &bounds, int parentBufferId, std:
     : TScroller(bounds, nullptr, nullptr), mParentBufferId(parentBufferId), mReplaceStart(replaceStart), mReplaceEnd(replaceEnd), mTitle(std::move(title)), mLines(), mPlaceholders(std::move(placeholders)), mPlaceholderTouched(mPlaceholders.size(), 0), mPlaceholderIndex(-1), mPlaceholderEndEdge(false), mCursorRow(0), mCursorCol(0), mReadOnly(readOnly), mModalClose(modalClose), mSnippetSidekick(snippetSidekick), mPalette(palette), mOuterBounds(bounds), mHorizontalScrollBar(nullptr), mVerticalScrollBar(nullptr) {
 	if (mReadOnly) options &= ~ofSelectable;
 	growMode = gfGrowHiX | gfGrowHiY;
-	eventMask |= evKeyDown | evMouseDown;
+	eventMask |= evKeyDown | evMouseDown | evMouseWheel;
 	setText(std::move(text));
 	if (!mPlaceholders.empty()) moveToPlaceholder(1);
 }
@@ -201,12 +211,14 @@ void MRSidekickEditor::updateScrollBars(const TRect &bounds) {
 	TScroller::changeBounds(viewBounds);
 
 	if (horizontalVisible) {
-		mHorizontalScrollBar = new TScrollBar(TRect(bounds.a.x, viewBounds.b.y, viewBounds.b.x, bounds.b.y));
+		mHorizontalScrollBar = new MRSidekickScrollBar(TRect(bounds.a.x, viewBounds.b.y, viewBounds.b.x, bounds.b.y));
+		mHorizontalScrollBar->eventMask &= ~evMouseWheel;
 		mHorizontalScrollBar->growMode = gfGrowHiX | gfGrowLoY | gfGrowHiY;
 		hScrollBar = mHorizontalScrollBar;
 	}
 	if (verticalVisible) {
-		mVerticalScrollBar = new TScrollBar(TRect(viewBounds.b.x, bounds.a.y, bounds.b.x, viewBounds.b.y));
+		mVerticalScrollBar = new MRSidekickScrollBar(TRect(viewBounds.b.x, bounds.a.y, bounds.b.x, viewBounds.b.y));
+		mVerticalScrollBar->eventMask &= ~evMouseWheel;
 		mVerticalScrollBar->growMode = gfGrowLoX | gfGrowHiX | gfGrowHiY;
 		vScrollBar = mVerticalScrollBar;
 	}
@@ -278,9 +290,11 @@ void MRSidekickEditor::setText(std::string textValue) {
 
 void MRSidekickEditor::updateReadOnlyText(std::string textValue, std::string title, const TRect &bounds) {
 	if (!mReadOnly) return;
+	const TPoint previousScroll = delta;
 	mTitle = std::move(title);
 	setText(std::move(textValue));
 	updateScrollBars(bounds);
+	scrollTo(previousScroll.x, previousScroll.y);
 	drawView();
 }
 
@@ -346,6 +360,17 @@ void MRSidekickEditor::draw() {
 }
 
 void MRSidekickEditor::handleEvent(TEvent &event) {
+	if (event.what == evMouseWheel && containsMouse(event)) {
+		switch (event.mouse.wheel) {
+			case mwUp: scrollTo(delta.x, delta.y - 3); break;
+			case mwDown: scrollTo(delta.x, delta.y + 3); break;
+			case mwLeft: scrollTo(delta.x - 3, delta.y); break;
+			case mwRight: scrollTo(delta.x + 3, delta.y); break;
+			default: return;
+		}
+		clearEvent(event);
+		return;
+	}
 	if (event.what == evMouseDown) {
 		if (containsMouse(event)) {
 			TPoint local = makeLocal(event.mouse.where);
@@ -481,7 +506,7 @@ void MRSidekickEditor::commitAndClose() {
 	closeSidekick(cmOK);
 }
 
-bool mrOpenReadOnlySidekickAt(MREditWindow *parent, const std::string &text, const std::string &title, int anchorViewColumn, int anchorViewRow, int preferredViewColumn, MRReadOnlySidekickPlacement placement) {
+bool mrOpenReadOnlySidekickAt(MREditWindow *parent, const std::string &text, const std::string &title, int anchorViewColumn, int anchorViewRow, int preferredViewColumn, MRReadOnlySidekickPlacement placement, std::size_t apiReferenceAnchorOffset) {
 	if (parent == nullptr || parent->getEditor() == nullptr || TProgram::deskTop == nullptr) return false;
 	ReadOnlyMarker marker = romBelow;
 	int markerColumn = -1;
@@ -493,19 +518,57 @@ bool mrOpenReadOnlySidekickAt(MREditWindow *parent, const std::string &text, con
 	const int contentWidth = std::max(1, bounds.b.x - bounds.a.x - 2);
 	const int visibleLineCount = std::max(1, bounds.b.y - bounds.a.y);
 	const std::string markedText = readOnlyTextWithMarker(text, marker, contentWidth, visibleLineCount, markerColumn);
-	if (gActiveSidekick != nullptr && gActiveSidekick->parentBufferId() == parent->bufferId() && gActiveSidekick->isReadOnly()) {
-		gActiveSidekick->updateReadOnlyText(markedText, title, bounds);
-		gActiveSidekick->insertInto(*TProgram::deskTop);
-		gActiveSidekick->drawView();
-		return true;
+	MRSidekickEditor *sidekick = gActiveSidekick;
+	if (sidekick != nullptr && sidekick->parentBufferId() == parent->bufferId() && sidekick->isReadOnly())
+		sidekick->updateReadOnlyText(markedText, title, bounds);
+	else {
+		mrDropActiveSidekick();
+		sidekick = new MRSidekickEditor(bounds, parent->bufferId(), 0, 0, markedText, title, std::vector<MRSidekickSpan>(), true);
+		if (sidekick == nullptr) return false;
+		gActiveSidekick = sidekick;
 	}
-	mrDropActiveSidekick();
-	MRSidekickEditor *sidekick = new MRSidekickEditor(bounds, parent->bufferId(), 0, 0, markedText, title, std::vector<MRSidekickSpan>(), true);
-	if (sidekick == nullptr) return false;
-	gActiveSidekick = sidekick;
+	sidekick->mApiReferenceActive = apiReferenceAnchorOffset != std::string::npos;
+	if (sidekick->mApiReferenceActive) {
+		sidekick->mApiReferenceAnchorOffset = apiReferenceAnchorOffset;
+		sidekick->mApiReferenceCursorOffset = parent->getEditor()->cursorOffset();
+		sidekick->mApiReferenceDeltaX = parent->getEditor()->delta.x;
+		sidekick->mApiReferenceDeltaY = parent->getEditor()->delta.y;
+		sidekick->mApiReferencePlacement = placement;
+		sidekick->mApiReferenceText = text;
+	} else
+		sidekick->mApiReferenceText.clear();
 	sidekick->insertInto(*TProgram::deskTop);
 	sidekick->drawView();
 	return true;
+}
+
+bool mrDismissApiReferenceSidekickForParent(const MREditWindow *parent) {
+	if (parent == nullptr || gActiveSidekick == nullptr || !gActiveSidekick->mApiReferenceActive || gActiveSidekick->parentBufferId() != parent->bufferId()) return false;
+	mrDropActiveSidekick();
+	return true;
+}
+
+void mrSyncApiReferenceSidekickForParent(MREditWindow *parent, bool sourceScroll) {
+	if (parent == nullptr || gActiveSidekick == nullptr || !gActiveSidekick->mApiReferenceActive || gActiveSidekick->parentBufferId() != parent->bufferId()) return;
+	MRFileEditor *editor = parent->getEditor();
+	if (editor == nullptr || (!sourceScroll && editor->cursorOffset() != gActiveSidekick->mApiReferenceCursorOffset)) {
+		mrDropActiveSidekick();
+		return;
+	}
+	if (sourceScroll) gActiveSidekick->mApiReferenceCursorOffset = editor->cursorOffset();
+	if (editor->delta.x == gActiveSidekick->mApiReferenceDeltaX && editor->delta.y == gActiveSidekick->mApiReferenceDeltaY) return;
+	const std::size_t anchorOffset = gActiveSidekick->mApiReferenceAnchorOffset;
+	const std::size_t line = editor->lineIndexOfOffset(anchorOffset);
+	const int viewRow = static_cast<int>(editor->visibleLineForDocumentLine(line)) - editor->delta.y + 1;
+	if (viewRow < 1 || viewRow > editor->visibleViewportRows()) {
+		mrDropActiveSidekick();
+		return;
+	}
+	const int viewColumn = std::max(1, editor->charColumn(editor->lineStartOffset(anchorOffset), anchorOffset) - editor->delta.x + 1);
+	const std::string text = gActiveSidekick->mApiReferenceText;
+	const std::string title = gActiveSidekick->mTitle;
+	const MRReadOnlySidekickPlacement placement = gActiveSidekick->mApiReferencePlacement;
+	static_cast<void>(mrOpenReadOnlySidekickAt(parent, text, title, viewColumn, viewRow, 0, placement, anchorOffset));
 }
 
 bool mrOpenSnippetSidekickAt(MREditWindow *parent, const std::string &text, const std::string &title, std::size_t replaceStart, std::size_t replaceEnd, const std::vector<MRSidekickSpan> &placeholders, int anchorViewColumn, int anchorViewRow, bool &committed) {

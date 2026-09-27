@@ -443,6 +443,10 @@ void MRBentoBox::setDividerPosition(int position) noexcept {
 
 void MRBentoBox::setDividerPosition(int nodeIndex, int position, bool markWorkspace) noexcept {
 	if (!projectPaneDividerPosition(nodeIndex, position)) return;
+	if (markWorkspace && nodeIndex == rootNode) {
+		buildExpandedDividerPosition = 0;
+		buildDiagnosticsCompactPending = false;
+	}
 	layoutSplitPanes();
 	if (markWorkspace) mrMarkWorkspaceAutosaveDirty("bento divider", this);
 }

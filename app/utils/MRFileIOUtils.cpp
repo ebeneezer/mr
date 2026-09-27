@@ -234,7 +234,7 @@ void appendNormalizedLine(MRTextSaveStreamState &state, std::string &output, std
 	}
 	if (options.truncateTrailingWhitespace) {
 		const std::size_t trimmed = trimmedTrailingWhitespaceLength(normalizedLine);
-		if (trimmed != 0) normalizedLine = normalizedLine.substr(0, trimmed);
+		normalizedLine = normalizedLine.substr(0, trimmed);
 	}
 	appendOutputBytes(state, output, normalizedLine.data(), normalizedLine.size());
 	appendLineEnding(state, output, options, eofLine);

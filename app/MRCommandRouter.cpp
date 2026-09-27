@@ -22,6 +22,7 @@
 #include <tvision/tv.h>
 
 #include "MRCommandRouter.hpp"
+#include "MRLibraryReference.hpp"
 #include "../ui/MRWindowLayout.hpp"
 #include "router/MRCommandRouterSearch.hpp"
 #include "router/MRCommandRouterSearchMultiFile.hpp"
@@ -450,6 +451,7 @@ constexpr std::array kKeymapActionDispatchTable{
     KeymapActionDispatchEntry{"MR_TEXT_REFORMAT_PARAGRAPH", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ReformatParagraph},
     KeymapActionDispatchEntry{"MR_TEXT_REFORMAT_DOCUMENT", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ReformatDocument},
     KeymapActionDispatchEntry{"PRETTIFY_BLOCK_OR_FILE", KeymapDispatchKind::EditorCommand, cmMrTextPrettifyBlockOrFile, KeymapWindowMethod::None, KeymapCustomAction::None},
+    KeymapActionDispatchEntry{"API_REFERENCE", KeymapDispatchKind::AppCommand, cmMrTextApiReference, KeymapWindowMethod::None, KeymapCustomAction::None},
     KeymapActionDispatchEntry{"MR_TOGGLE_FORMAT_RULER", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ToggleFormatRuler},
     KeymapActionDispatchEntry{"MR_TOGGLE_WORD_WRAP", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::ToggleWordWrap},
     KeymapActionDispatchEntry{"MR_SET_LEFT_MARGIN", KeymapDispatchKind::Custom, 0, KeymapWindowMethod::None, KeymapCustomAction::SetLeftMargin},
@@ -669,6 +671,71 @@ std::string editorIdentifierAroundOffset(MRFileEditor &editor, std::size_t offse
 	for (std::size_t index = start; index < end; ++index)
 		identifier.push_back(editor.charAtOffset(index));
 	return identifier;
+}
+
+bool requestApiReferenceCommand(MREditWindow *window = nullptr, const std::size_t *requestedOffset = nullptr) {
+	if (window == nullptr) window = currentEditorCommandWindow();
+	MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+	if (editor == nullptr) return true;
+	if (window->currentFileName()[0] == '\0') {
+		postDialogWarning("API reference requires a named source file.");
+		return true;
+	}
+
+	MREditSetupSettings settings;
+	static_cast<void>(effectiveEditSetupSettingsForPath(window->currentFileName(), settings, nullptr));
+	if (!settings.apiReference) {
+		postDialogWarning("API reference is disabled for this file extension.");
+		return true;
+	}
+	if (editor->syntaxLanguage() != MRSyntaxLanguage::C) {
+		postDialogWarning("API reference currently supports C files.");
+		return true;
+	}
+	std::size_t symbolStart = 0;
+	std::size_t symbolEnd = 0;
+	const std::size_t cursorOffset = editor->cursorOffset();
+	const std::size_t symbolOffset = requestedOffset != nullptr ? *requestedOffset : cursorOffset;
+	if (!editorIdentifierRangeAroundOffset(*editor, symbolOffset, symbolStart, symbolEnd)) {
+		postDialogWarning("Choose a C function name.");
+		return true;
+	}
+	const std::string symbol = editorIdentifierAroundOffset(*editor, symbolOffset);
+	const MRTextBufferModel::ReadSnapshot snapshot = editor->readSnapshot();
+	const std::string sourcePath = window->currentFileName();
+	const int bufferId = window->bufferId();
+	const mr::coprocessor::ExecutionOwnerKind ownerKind = dynamic_cast<MRBentoBox *>(window->owner) != nullptr ? mr::coprocessor::ExecutionOwnerKind::BentoPane : mr::coprocessor::ExecutionOwnerKind::EditorWindow;
+	const std::uint64_t taskId = mr::coprocessor::globalCoprocessor().submit(
+	    mr::coprocessor::Lane::Io, mr::coprocessor::TaskKind::Custom, snapshot.documentId(), snapshot.version(), ownerKind, static_cast<std::size_t>(bufferId), "API reference: " + symbol,
+	    [snapshot, sourcePath, symbol, symbolStart, cursorOffset, bufferId](const mr::coprocessor::TaskInfo &info) {
+		    mr::coprocessor::Result result;
+		    result.task = info;
+		    if (info.cancelRequested()) {
+			    result.status = mr::coprocessor::TaskStatus::Cancelled;
+			    return result;
+		    }
+		    MRLibraryReferenceQuery query;
+		    query.sourcePath = sourcePath;
+		    query.sourceText = snapshot.text();
+		    query.symbol = symbol;
+		    query.offset = symbolStart;
+		    std::unique_ptr<MRLibraryReferenceProvider> provider = mrLibraryReferenceProviderForLanguage("C");
+		    std::shared_ptr<MRLibraryReferencePayload> payload = std::make_shared<MRLibraryReferencePayload>();
+		    payload->bufferId = bufferId;
+		    payload->documentId = snapshot.documentId();
+		    payload->documentVersion = snapshot.version();
+		    payload->cursorOffset = cursorOffset;
+		    payload->symbolOffset = symbolStart;
+		    payload->symbol = symbol;
+		    if (provider != nullptr) payload->entry = provider->lookup(query);
+		    result.status = info.cancelRequested() ? mr::coprocessor::TaskStatus::Cancelled : mr::coprocessor::TaskStatus::Completed;
+		    result.payload = std::move(payload);
+		    return result;
+	    });
+	if (taskId == 0) postDialogWarning("Unable to start API reference lookup.");
+	else
+		window->trackCoprocessorTask(taskId, mr::coprocessor::TaskKind::Custom, "API reference");
+	return true;
 }
 
 std::string workspaceSearchTextAroundOffset(MRFileEditor &editor, std::size_t offset) {
@@ -1258,6 +1325,7 @@ std::vector<ContextMenuEntry> buildEditorContextMenuItems(MREditWindow *win, con
 		entries.push_back(ContextMenuEntry{"Clear Program Terminal", cmMrDebuggerClearProgramTerminal, false});
 	}
 	entries.push_back(ContextMenuEntry{"Outline", cmMrTextLocalOutline, false});
+	if (editor->syntaxLanguage() != MRSyntaxLanguage::PlainText) entries.push_back(ContextMenuEntry{"API reference", cmMrTextApiReference, false});
 	if (target != nullptr && !workspaceSearchTextAroundOffset(*editor, target->offset).empty()) {
 		entries.push_back(ContextMenuEntry{"References", cmMrTextReferences, false});
 		entries.push_back(ContextMenuEntry{"Rename", cmMrTextRename, false});
@@ -1414,6 +1482,8 @@ bool showEditorContextMenuForWindow(MREditWindow *targetWindow, TPoint where) {
 			return requestWorkspaceRenameCommand(targetWindow, &target);
 		case cmMrTextLocalOutline:
 			return showLocalOutlineForWindow(targetWindow, &where);
+		case cmMrTextApiReference:
+			return requestApiReferenceCommand(targetWindow, &target.offset);
 		default:
 			break;
 	}
@@ -1809,6 +1879,7 @@ bool handleBuildCurrentFile(mr::coprocessor::BuildDebuggerContinuation debuggerC
 	buildContext.sourceBufferId = bentoBox->bufferId();
 	buildContext.debuggerContinuation = debuggerContinuation;
 	bentoBox->clearCompilerDiagnostics();
+	bentoBox->setBuildDiagnosticsCompact(false);
 	startExternalCommandInWindow(outputWindow, commandLine, true, false, false, outputTitle, compilerProfile.buildSuccessAudioUri, compilerProfile.buildFailureAudioUri, buildContext);
 	bentoBox->activatePrimaryPane();
 	return true;
@@ -2753,6 +2824,9 @@ bool handleMRCommand(ushort command, void *commandInfo) {
 
 		case cmMrTextPrettifyBlockOrFile:
 			return dispatchEditorCommand(cmMrTextPrettifyBlockOrFile, true);
+
+		case cmMrTextApiReference:
+			return requestApiReferenceCommand();
 
 		case cmMrTextFileCompare:
 			return handleTextFileCompare();

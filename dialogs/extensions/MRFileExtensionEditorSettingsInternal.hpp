@@ -65,7 +65,8 @@ enum : ushort {
 	kOptionFormatRuler = 0x0800,
 	kOptionCodeColoring = 0x1000,
 	kOptionAutoPairBrackets = 0x2000,
-	kOptionBackupFiles = 0x4000
+	kOptionBackupFiles = 0x4000,
+	kOptionApiReference = 0x8000
 };
 
 enum : ushort {
@@ -78,7 +79,8 @@ enum : ushort {
 	kLeftOptionDisplayTabs = 0x0040,
 	kLeftOptionFormatRuler = 0x0080,
 	kLeftOptionCodeColoring = 0x0100,
-	kLeftOptionAutoPairBrackets = 0x0200
+	kLeftOptionApiReference = 0x0200,
+	kLeftOptionAutoPairBrackets = 0x0400
 };
 
 enum : ushort {

@@ -23,6 +23,7 @@
 #include "MRWindowCommands.hpp"
 
 #include "../app/MRCommands.hpp"
+#include "../app/MRLibraryReference.hpp"
 #include "../app/MRRuntimeTimerSource.hpp"
 #include "../app/MRUpdate.hpp"
 #include "../app/commands/MRExternalCommand.hpp"
@@ -42,6 +43,7 @@
 #include "../ui/MRMessageLineController.hpp"
 #include "../ui/MRFileEditor/MRFileEditor.hpp"
 #include "../ui/MREditWindow.hpp"
+#include "../ui/MRSidekickEditor.hpp"
 #include "../ui/MRBentoBox/MRBentoBox.hpp"
 #include "../ui/MRBentoHexEditor/panes/MRHexPaneWindow.hpp"
 #include "../ui/MRWindowSupport.hpp"
@@ -523,6 +525,26 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 		return;
 	}
 	if (dispatchMRGitStatusResult(result)) return;
+	if (result.task.kind == mr::coprocessor::TaskKind::Custom && result.task.label.rfind("API reference: ", 0) == 0) {
+		MREditWindow *window = findEditWindowByBufferId(static_cast<int>(result.task.executionOwnerLocalId));
+		MRFileEditor *editor = window != nullptr ? window->getEditor() : nullptr;
+		const MRLibraryReferencePayload *payload = dynamic_cast<const MRLibraryReferencePayload *>(result.payload.get());
+		bool adopted = false;
+		if (window != nullptr) window->releaseCoprocessorTask(result.task.id);
+		if (result.completed() && payload != nullptr && editor != nullptr && payload->bufferId == window->bufferId() && payload->documentId == editor->documentId() && payload->documentVersion == editor->documentVersion() && payload->cursorOffset == editor->cursorOffset()) {
+			if (payload->entry.found) {
+				const MRReadOnlySidekickPlacement placement = configuredApiReferencePlacement() == MRApiReferencePlacement::UnderCode ? MRReadOnlySidekickPlacement::UnderCode : MRReadOnlySidekickPlacement::RightMargin;
+				const std::size_t line = editor->lineIndexOfOffset(payload->symbolOffset);
+				const int viewColumn = std::max(1, editor->charColumn(editor->lineStartOffset(payload->symbolOffset), payload->symbolOffset) - editor->delta.x + 1);
+				const int viewRow = static_cast<int>(editor->visibleLineForDocumentLine(line)) - editor->delta.y + 1;
+				adopted = mrOpenReadOnlySidekickAt(window, payload->entry.text, "API reference: " + payload->symbol, viewColumn, viewRow, 0, placement, payload->symbolOffset);
+			}
+			else
+				mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, "No local API reference for " + payload->symbol + ".", mr::messageline::Kind::Warning, mr::messageline::kPriorityMedium);
+		}
+		mr::coprocessor::globalCoprocessor().noteResultAdoption(result, adopted);
+		return;
+	}
 	const mr::coprocessor::GdbEventPayload *gdbEvent = dynamic_cast<const mr::coprocessor::GdbEventPayload *>(result.payload.get());
 	if (gdbEvent != nullptr) {
 		MREditWindow *targetWindow = findEditWindowByBufferId(gdbEvent->targetBufferId);
@@ -694,7 +716,11 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				targetWindow->releaseCoprocessorTask(result.task.id);
 				const std::string dividerStatus = communicationDividerStatus(*finished);
 				setSplitDiagnosticsStatusForOutput(targetWindow, dividerStatus.c_str());
-				if (MRBentoBox *split = dynamic_cast<MRBentoBox *>(targetWindow->owner); split != nullptr && split->buildOutputPane() == targetWindow) static_cast<void>(split->refreshCompilerDiagnosticsFromOutput());
+				if (MRBentoBox *split = dynamic_cast<MRBentoBox *>(targetWindow->owner); split != nullptr && split->buildOutputPane() == targetWindow) {
+					static_cast<void>(split->refreshCompilerDiagnosticsFromOutput());
+					if (!finished->buildSourcePath.empty() && !finished->signaled && finished->exitCode == 0 && finished->outputByteCount == 0 && !split->hasCompilerProblems())
+						split->setBuildDiagnosticsCompact(true);
+				}
 			} else {
 				recordTaskPerformance(result, "External command", nullptr, 0, 0, externalIoDisplayName(result.task));
 			}

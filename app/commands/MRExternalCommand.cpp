@@ -177,9 +177,10 @@ std::string wrapBuildCommandWithProfileHooks(const MRCompilerProfile &profile, c
 	return command.str();
 }
 
-std::shared_ptr<mr::coprocessor::ExternalIoFinishedPayload> makeFinishedPayload(std::size_t channelId, int exitCode, bool signaled, int signalNumber, const MRBuildHookContext &context, const std::string &successAudioUri, const std::string &failureAudioUri) {
+std::shared_ptr<mr::coprocessor::ExternalIoFinishedPayload> makeFinishedPayload(std::size_t channelId, int exitCode, bool signaled, int signalNumber, const MRBuildHookContext &context, const std::string &successAudioUri, const std::string &failureAudioUri, std::size_t outputByteCount = 0) {
 	std::shared_ptr<mr::coprocessor::ExternalIoFinishedPayload> payload = std::make_shared<mr::coprocessor::ExternalIoFinishedPayload>(channelId, exitCode, signaled, signalNumber, 0, successAudioUri, failureAudioUri);
 
+	payload->outputByteCount = outputByteCount;
 	payload->buildSourcePath = context.sourcePath;
 	payload->buildSourceDir = context.sourceDir;
 	payload->buildSourceFile = context.sourceFile;
@@ -340,6 +341,7 @@ mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &
 	bool pipeOpen = true;
 	bool cancellationRequested = false;
 	int stopPolls = 0;
+	std::size_t outputByteCount = 0;
 	std::array<char, 4096> buffer{};
 	std::string shellPath;
 
@@ -411,6 +413,7 @@ mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &
 			for (;;) {
 				ssize_t count = ::read(pipeFds[0], buffer.data(), buffer.size());
 				if (count > 0) {
+					outputByteCount += static_cast<std::size_t>(count);
 					if (streamOutput) {
 						mr::coprocessor::Result chunkResult;
 						chunkResult.task = info;
@@ -452,16 +455,16 @@ mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &
 	}
 
 	if (result.failed()) {
-		result.payload = makeFinishedPayload(channelId, childExited && WIFEXITED(waitStatus) ? WEXITSTATUS(waitStatus) : -1, childExited && WIFSIGNALED(waitStatus) != 0, childExited && WIFSIGNALED(waitStatus) ? WTERMSIG(waitStatus) : 0, buildContext, successAudioUri, failureAudioUri);
+		result.payload = makeFinishedPayload(channelId, childExited && WIFEXITED(waitStatus) ? WEXITSTATUS(waitStatus) : -1, childExited && WIFSIGNALED(waitStatus) != 0, childExited && WIFSIGNALED(waitStatus) ? WTERMSIG(waitStatus) : 0, buildContext, successAudioUri, failureAudioUri, outputByteCount);
 		return result;
 	}
 	if (cancellationRequested || info.cancelRequested()) {
 		result.status = mr::coprocessor::TaskStatus::Cancelled;
-		result.payload = makeFinishedPayload(channelId, childExited && WIFEXITED(waitStatus) ? WEXITSTATUS(waitStatus) : -2, childExited && WIFSIGNALED(waitStatus) != 0, childExited && WIFSIGNALED(waitStatus) ? WTERMSIG(waitStatus) : 0, buildContext, successAudioUri, failureAudioUri);
+		result.payload = makeFinishedPayload(channelId, childExited && WIFEXITED(waitStatus) ? WEXITSTATUS(waitStatus) : -2, childExited && WIFSIGNALED(waitStatus) != 0, childExited && WIFSIGNALED(waitStatus) ? WTERMSIG(waitStatus) : 0, buildContext, successAudioUri, failureAudioUri, outputByteCount);
 		return result;
 	}
 
 	result.status = mr::coprocessor::TaskStatus::Completed;
-	result.payload = makeFinishedPayload(channelId, WIFEXITED(waitStatus) ? WEXITSTATUS(waitStatus) : -1, WIFSIGNALED(waitStatus) != 0, WIFSIGNALED(waitStatus) ? WTERMSIG(waitStatus) : 0, buildContext, successAudioUri, failureAudioUri);
+	result.payload = makeFinishedPayload(channelId, WIFEXITED(waitStatus) ? WEXITSTATUS(waitStatus) : -1, WIFSIGNALED(waitStatus) != 0, WIFSIGNALED(waitStatus) ? WTERMSIG(waitStatus) : 0, buildContext, successAudioUri, failureAudioUri, outputByteCount);
 	return result;
 }

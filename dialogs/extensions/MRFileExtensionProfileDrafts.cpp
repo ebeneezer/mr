@@ -254,6 +254,7 @@ bool fileExtensionEditorSettingsDialogRecordToSettings(const FileExtensionEditor
 	settings.lineNumZeroFill = (record.optionsMask & kOptionLineNumZeroFill) != 0;
 	settings.displayTabs = (record.optionsMask & kOptionDisplayTabs) != 0;
 	settings.codeColoring = (record.optionsMask & kOptionCodeColoring) != 0;
+	settings.apiReference = (record.optionsMask & kOptionApiReference) != 0;
 	settings.autoPairBrackets = (record.optionsMask & kOptionAutoPairBrackets) != 0;
 	settings.backupFiles = (record.optionsMask & kOptionBackupFiles) != 0;
 	settings.lineNumbersPosition = (record.lineNumbersPositionChoice == kLineNumbersLeading) ? "LEADING" : (record.lineNumbersPositionChoice == kLineNumbersTrailing) ? "TRAILING" : "OFF";
@@ -298,6 +299,7 @@ enum : unsigned long long {
 	kOvIndentStyle = ::kOvIndentStyle,
 	kOvCodeLanguage = ::kOvCodeLanguage,
 	kOvCodeColoring = ::kOvCodeColoring,
+	kOvApiReference = ::kOvApiReference,
 	kOvAutoPairBrackets = ::kOvAutoPairBrackets,
 	kOvFileType = ::kOvFileType,
 	kOvBinaryRecordLength = ::kOvBinaryRecordLength,
@@ -438,6 +440,7 @@ enum : unsigned long long {
 	if (upperAscii(effective.indentStyle) != upperAscii(defaults.indentStyle)) mask |= kOvIndentStyle;
 	if (upperAscii(trimAscii(effective.codeLanguage)) != upperAscii(trimAscii(defaults.codeLanguage))) mask |= kOvCodeLanguage;
 	if (effective.codeColoring != defaults.codeColoring) mask |= kOvCodeColoring;
+	if (effective.apiReference != defaults.apiReference) mask |= kOvApiReference;
 	if (effective.autoPairBrackets != defaults.autoPairBrackets) mask |= kOvAutoPairBrackets;
 	if (upperAscii(effective.fileType) != upperAscii(defaults.fileType)) mask |= kOvFileType;
 	if (effective.binaryRecordLength != defaults.binaryRecordLength) mask |= kOvBinaryRecordLength;
@@ -656,6 +659,7 @@ void settingsToDialogRecord(const MREditSetupSettings &settings, FileExtensionEd
 	if (settings.displayTabs) record.optionsMask |= kOptionDisplayTabs;
 	if (settings.formatRuler) record.optionsMask |= kOptionFormatRuler;
 	if (settings.codeColoring) record.optionsMask |= kOptionCodeColoring;
+	if (settings.apiReference) record.optionsMask |= kOptionApiReference;
 	if (settings.autoPairBrackets) record.optionsMask |= kOptionAutoPairBrackets;
 	if (settings.backupFiles) record.optionsMask |= kOptionBackupFiles;
 

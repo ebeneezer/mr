@@ -23,6 +23,7 @@ bool parseLogHandlingLiteral(const std::string &value, MRLogHandling &outValue, 
 bool parseLiveLogScrollDirectionLiteral(const std::string &value, MRLiveLogScrollDirection &outValue, std::string *errorMessage);
 bool parseCursorBehaviourLiteral(const std::string &value, MRCursorBehaviour &outValue, std::string *errorMessage);
 bool parseCompilerErrorMessagePlacementLiteral(const std::string &value, MRCompilerErrorMessagePlacement &outValue, std::string *errorMessage);
+bool parseApiReferencePlacementLiteral(const std::string &value, MRApiReferencePlacement &outValue, std::string *errorMessage);
 bool parseScrollbarVisibilityLiteral(const std::string &value, MRScrollbarVisibility &outValue, std::string *errorMessage);
 bool parseColorOutputModeLiteral(const std::string &value, MRColorOutputMode &outValue, std::string *errorMessage);
 bool parseUiIndentStyleLiteral(const std::string &value, MRUiIndentStyle &outValue, std::string *errorMessage);

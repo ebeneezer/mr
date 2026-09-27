@@ -54,6 +54,7 @@ bool resetConfiguredSettingsModel(const std::string &settingsPath, MRSetupPaths 
 	if (!setConfiguredAudioPlayerPath("", errorMessage)) return false;
 	if (!setConfiguredCursorBehaviour(MRCursorBehaviour::BoundToText, errorMessage)) return false;
 	if (!setConfiguredCompilerErrorMessagePlacement(MRCompilerErrorMessagePlacement::RightMargin, errorMessage)) return false;
+	if (!setConfiguredApiReferencePlacement(MRApiReferencePlacement::RightMargin, errorMessage)) return false;
 	if (!setConfiguredScrollbarVisibility(MRScrollbarVisibility::Smart, errorMessage)) return false;
 	if (!setConfiguredColorOutputMode(MRColorOutputMode::TerminalPalette, errorMessage)) return false;
 	if (!setConfiguredTrackCompilerWarnings(false, errorMessage)) return false;
@@ -539,6 +540,11 @@ bool applyConfiguredSettingsAssignment(const std::string &key, const std::string
 				MRCompilerErrorMessagePlacement placement = MRCompilerErrorMessagePlacement::RightMargin;
 				if (!parseCompilerErrorMessagePlacementLiteral(value, placement, errorMessage)) return false;
 				return setConfiguredCompilerErrorMessagePlacement(placement, errorMessage);
+			}
+			if (upper == "API_REFERENCE_PLACEMENT") {
+				MRApiReferencePlacement placement = MRApiReferencePlacement::RightMargin;
+				if (!parseApiReferencePlacementLiteral(value, placement, errorMessage)) return false;
+				return setConfiguredApiReferencePlacement(placement, errorMessage);
 			}
 			if (upper == "SCROLLBAR_VISIBILITY") {
 				MRScrollbarVisibility visibility = MRScrollbarVisibility::Smart;

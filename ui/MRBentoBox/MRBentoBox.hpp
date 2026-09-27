@@ -278,6 +278,7 @@ class MRBentoBox : public MREditWindow {
 	[[nodiscard]] bool activatePaneWindow(MREditWindow *pane) noexcept;
 	void toggleActivePane() noexcept;
 	void setCompilerOutputStatus(const char *status);
+	void setBuildDiagnosticsCompact(bool compact) noexcept;
 	void clearCompilerDiagnostics();
 	[[nodiscard]] bool hasCompilerProblems() const noexcept;
 		[[nodiscard]] bool refreshCompilerDiagnosticsFromOutput();
@@ -574,6 +575,8 @@ class MRBentoBox : public MREditWindow {
 	int activeLeafId;
 	int nextLeafId;
 	int maximizedLeafId;
+	int buildExpandedDividerPosition;
+	bool buildDiagnosticsCompactPending;
 	MRBentoBoxMode bentoMode;
 	bool secondaryPaneVisible;
 	bool windowCloseInProgress;

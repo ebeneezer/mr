@@ -85,6 +85,10 @@ std::string formatCompilerErrorMessagePlacementLiteral(MRCompilerErrorMessagePla
 	return placement == MRCompilerErrorMessagePlacement::UnderCode ? kCompilerErrorMessageUnderCode : kCompilerErrorMessageRightMargin;
 }
 
+std::string formatApiReferencePlacementLiteral(MRApiReferencePlacement placement) {
+	return placement == MRApiReferencePlacement::UnderCode ? "UNDER_CODE" : "RIGHT_MARGIN";
+}
+
 std::string formatScrollbarVisibilityLiteral(MRScrollbarVisibility visibility) {
 	return visibility == MRScrollbarVisibility::Always ? kScrollbarVisibilityAlways : kScrollbarVisibilitySmart;
 }
@@ -445,6 +449,7 @@ MRSettingsSnapshot captureConfiguredSettingsSnapshot(const MRSetupPaths &paths) 
 	snapshot.cyclicVirtualDesktops = configuredCyclicVirtualDesktops();
 	snapshot.cursorBehaviour = configuredCursorBehaviour();
 	snapshot.compilerErrorMessagePlacement = configuredCompilerErrorMessagePlacement();
+	snapshot.apiReferencePlacement = configuredApiReferencePlacement();
 	snapshot.scrollbarVisibility = configuredScrollbarVisibility();
 	snapshot.colorOutputMode = configuredColorOutputMode();
 	snapshot.trackCompilerWarnings = configuredTrackCompilerWarnings();
@@ -645,6 +650,7 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('CYCLIC_VIRTUAL_DESKTOPS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.cyclicVirtualDesktops)) + "');\n";
 	source += "MRSETUP('CURSOR_BEHAVIOUR', '" + escapeMrmacSingleQuotedLiteral(formatCursorBehaviourLiteral(snapshot.cursorBehaviour)) + "');\n";
 	source += "MRSETUP('COMPILER_ERROR_MESSAGE_PLACEMENT', '" + escapeMrmacSingleQuotedLiteral(formatCompilerErrorMessagePlacementLiteral(snapshot.compilerErrorMessagePlacement)) + "');\n";
+	source += "MRSETUP('API_REFERENCE_PLACEMENT', '" + escapeMrmacSingleQuotedLiteral(formatApiReferencePlacementLiteral(snapshot.apiReferencePlacement)) + "');\n";
 	source += "MRSETUP('SCROLLBAR_VISIBILITY', '" + escapeMrmacSingleQuotedLiteral(formatScrollbarVisibilityLiteral(snapshot.scrollbarVisibility)) + "');\n";
 	source += "MRSETUP('COLOR_OUTPUT_MODE', '" + escapeMrmacSingleQuotedLiteral(formatColorOutputModeLiteral(snapshot.colorOutputMode)) + "');\n";
 	source += "MRSETUP('TRACK_COMPILER_WARNINGS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(snapshot.trackCompilerWarnings)) + "');\n";
@@ -694,6 +700,7 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('INDENT_STYLE', '" + escapeMrmacSingleQuotedLiteral(edit.indentStyle) + "');\n";
 	source += "MRSETUP('CODE_LANGUAGE', '" + escapeMrmacSingleQuotedLiteral(edit.codeLanguage) + "');\n";
 	source += "MRSETUP('CODE_COLORING', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.codeColoring)) + "');\n";
+	source += "MRSETUP('API_REFERENCE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.apiReference)) + "');\n";
 	source += "MRSETUP('AUTO_PAIR_BRACKETS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.autoPairBrackets)) + "');\n";
 	source += "MRSETUP('FILE_TYPE', '" + escapeMrmacSingleQuotedLiteral(edit.fileType) + "');\n";
 	source += "MRSETUP('BINARY_RECORD_LENGTH', '" + std::to_string(edit.binaryRecordLength) + "');\n";

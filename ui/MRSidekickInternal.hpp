@@ -34,6 +34,7 @@ enum ReadOnlyMarker {
 	romBelow,
 	romAbove,
 	romLeft,
+	romAboveLeft,
 	romRight,
 	romBelowRight,
 	romAboveRight

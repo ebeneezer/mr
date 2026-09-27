@@ -257,6 +257,7 @@ static const MRSettingsKeyDescriptor kFixedSettingsKeyDescriptors[] = {
     {"CYCLIC_VIRTUAL_DESKTOPS", MRSettingsKeyClass::Global, true},
     {"CURSOR_BEHAVIOUR", MRSettingsKeyClass::Global, true},
     {"COMPILER_ERROR_MESSAGE_PLACEMENT", MRSettingsKeyClass::Global, true},
+    {"API_REFERENCE_PLACEMENT", MRSettingsKeyClass::Global, true},
     {"SCROLLBAR_VISIBILITY", MRSettingsKeyClass::Global, true},
 	{"COLOR_OUTPUT_MODE", MRSettingsKeyClass::Global, true},
     {"TRACK_COMPILER_WARNINGS", MRSettingsKeyClass::Global, true},
@@ -386,6 +387,21 @@ bool parseCompilerErrorMessagePlacementLiteral(const std::string &value, MRCompi
 		return true;
 	}
 	return setError(errorMessage, "COMPILER_ERROR_MESSAGE_PLACEMENT must be UNDER_CODE or RIGHT_MARGIN.");
+}
+
+bool parseApiReferencePlacementLiteral(const std::string &value, MRApiReferencePlacement &outValue, std::string *errorMessage) {
+	const std::string upper = upperAscii(trimAscii(value));
+	if (upper == "UNDER_CODE" || upper == "UNDER") {
+		outValue = MRApiReferencePlacement::UnderCode;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	if (upper == "RIGHT_MARGIN" || upper == "RIGHT") {
+		outValue = MRApiReferencePlacement::RightMargin;
+		if (errorMessage != nullptr) errorMessage->clear();
+		return true;
+	}
+	return setError(errorMessage, "API_REFERENCE_PLACEMENT must be UNDER_CODE or RIGHT_MARGIN.");
 }
 
 bool parseScrollbarVisibilityLiteral(const std::string &value, MRScrollbarVisibility &outValue, std::string *errorMessage) {

@@ -37,6 +37,7 @@ struct MRSettingsSnapshot {
 	bool cyclicVirtualDesktops{false};
 	MRCursorBehaviour cursorBehaviour{MRCursorBehaviour::BoundToText};
 	MRCompilerErrorMessagePlacement compilerErrorMessagePlacement{MRCompilerErrorMessagePlacement::RightMargin};
+	MRApiReferencePlacement apiReferencePlacement{MRApiReferencePlacement::RightMargin};
 	MRScrollbarVisibility scrollbarVisibility{MRScrollbarVisibility::Smart};
 	MRColorOutputMode colorOutputMode{MRColorOutputMode::TerminalPalette};
 	bool trackCompilerWarnings{false};

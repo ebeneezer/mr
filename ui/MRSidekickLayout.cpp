@@ -201,6 +201,7 @@ const char *readOnlyMarkerGlyph(ReadOnlyMarker marker) noexcept {
 		case romAboveRight:
 			return "▼";
 		case romLeft:
+		case romAboveLeft:
 			return "◀";
 		case romRight:
 			return "▶";
@@ -215,7 +216,7 @@ std::string readOnlyTextWithMarker(const std::string &text, ReadOnlyMarker marke
 	const std::vector<std::string> lines = wrapReadOnlySidekickLines(text, contentWidth);
 	std::string out;
 	if (markerColumn >= 0) {
-		const bool above = marker == romAbove || marker == romAboveRight;
+		const bool above = marker == romAbove || marker == romAboveRight || marker == romAboveLeft;
 		const std::size_t markerLine = above ? std::min<std::size_t>(lines.size(), visibleLineCount > 0 ? visibleLineCount - 1 : lines.size()) : 0;
 		for (std::size_t index = 0; index <= lines.size(); ++index) {
 			if (index == markerLine) {
@@ -345,9 +346,8 @@ TRect readOnlySidekickBoundsFor(MREditWindow *parent, const std::string &text, R
 	const int maxSidekickWidth = std::max(12, (viewport.b.x - viewport.a.x) / 2);
 	const int maxContentWidth = std::max(8, maxSidekickWidth - 2);
 	const int cursorX = std::clamp(editorDesktop.x + textViewport.a.x + std::max(0, anchorViewColumn - 1), viewport.a.x, std::max(viewport.a.x, viewport.b.x - 1));
-	const int anchorRowOffset = placement == MRReadOnlySidekickPlacement::UnderCode ? anchorViewRow - 2 : std::max(0, anchorViewRow - 1);
-	const int anchorMinY = placement == MRReadOnlySidekickPlacement::UnderCode ? viewport.a.y - 1 : viewport.a.y;
-	const int cursorY = std::clamp(editorDesktop.y + textViewport.a.y + anchorRowOffset, anchorMinY, std::max(anchorMinY, viewport.b.y - 1));
+	const int anchorRowOffset = std::max(0, anchorViewRow - 1);
+	const int cursorY = std::clamp(editorDesktop.y + textViewport.a.y + anchorRowOffset, viewport.a.y, viewport.b.y - 1);
 	const int aboveCodeSpace = std::max(0, cursorY - viewport.a.y);
 	const int targetX = preferredViewColumn > 0 ? std::clamp(editorDesktop.x + textViewport.a.x + preferredViewColumn - 1, viewport.a.x, std::max(viewport.a.x, viewport.b.x - 1)) : cursorX;
 
@@ -374,14 +374,13 @@ TRect readOnlySidekickBoundsFor(MREditWindow *parent, const std::string &text, R
 		lines = splitLines(readOnlyTextWithMarker(text, marker, std::max(1, wantedWidth - 2)));
 
 		const int lineCount = static_cast<int>(lines.size());
-		const bool lowerEdge = belowSpace < lineCount && aboveSpace > 0;
-		const bool above = lowerEdge;
+		const bool above = belowSpace < std::min(lineCount, 3) && aboveSpace > belowSpace;
 
 		marker = above ? (rightEdge ? romAboveRight : romAbove) : (rightEdge ? romBelowRight : romBelow);
 
 		lines = splitLines(readOnlyTextWithMarker(text, marker, std::max(1, wantedWidth - 2)));
 		const int verticalSpace = above ? aboveSpace : belowSpace;
-		const int wantedHeight = std::max(1, std::min<int>(static_cast<int>(lines.size()), std::max(1, verticalSpace)));
+		const int wantedHeight = std::min<int>(static_cast<int>(lines.size()), verticalSpace);
 		const int y = above ? errorY - wantedHeight : errorY + 1;
 		return TRect(x, y, x + wantedWidth, y + wantedHeight);
 	}
@@ -398,12 +397,12 @@ TRect readOnlySidekickBoundsFor(MREditWindow *parent, const std::string &text, R
 	const int textLineCount = static_cast<int>(wrapReadOnlySidekickLines(text, std::max(1, wantedWidth - 2)).size());
 	const bool above = belowSpace < textLineCount + (overlapsCode ? 1 : 0) && aboveCodeSpace > belowSpace;
 	if (above || overlapsCode) {
-		marker = above ? romAbove : romBelow;
+		marker = above ? (overlapsCode ? romAbove : romAboveLeft) : romBelow;
 		markerColumn = std::clamp(cursorX - x, 0, wantedWidth - 1);
 	}
 	const int verticalSpace = above ? aboveCodeSpace : belowSpace;
 	const int wantedHeight = std::min(textLineCount + (markerColumn >= 0 ? 1 : 0), verticalSpace);
-	const int y = above ? cursorY - wantedHeight : firstRow;
+	const int y = above ? cursorY - wantedHeight + (overlapsCode ? 0 : 1) : firstRow;
 	return TRect(x, y, x + wantedWidth, y + wantedHeight);
 }
 

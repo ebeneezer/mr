@@ -80,6 +80,7 @@ struct UserInterfaceSettingsDialogData {
 	ushort virtualDesktops = 1;
 	ushort cursorBehaviourChoice = 1;
 	ushort compilerErrorMessageChoice = 1;
+	ushort apiReferencePlacementChoice = 1;
 	ushort fileCompareStartChoice = 0;
 	ushort compilerDiagnosticFlags = 0;
 	ushort scrollbarVisibilityChoice = 0;
@@ -160,7 +161,7 @@ std::vector<std::string> fileCompareGutterSpinnerValues() {
 }
 
 bool userInterfaceSettingsDialogDataEqual(const UserInterfaceSettingsDialogData &lhs, const UserInterfaceSettingsDialogData &rhs) {
-	return lhs.flags == rhs.flags && lhs.heroFlags == rhs.heroFlags && lhs.heroFileThresholdMb == rhs.heroFileThresholdMb && lhs.virtualDesktops == rhs.virtualDesktops && lhs.cursorBehaviourChoice == rhs.cursorBehaviourChoice && lhs.compilerErrorMessageChoice == rhs.compilerErrorMessageChoice &&
+	return lhs.flags == rhs.flags && lhs.heroFlags == rhs.heroFlags && lhs.heroFileThresholdMb == rhs.heroFileThresholdMb && lhs.virtualDesktops == rhs.virtualDesktops && lhs.cursorBehaviourChoice == rhs.cursorBehaviourChoice && lhs.compilerErrorMessageChoice == rhs.compilerErrorMessageChoice && lhs.apiReferencePlacementChoice == rhs.apiReferencePlacementChoice &&
 	       lhs.fileCompareStartChoice == rhs.fileCompareStartChoice && lhs.compilerDiagnosticFlags == rhs.compilerDiagnosticFlags && lhs.scrollbarVisibilityChoice == rhs.scrollbarVisibilityChoice &&
 	       lhs.colorOutputModeChoice == rhs.colorOutputModeChoice && lhs.uiIndentStyleChoice == rhs.uiIndentStyleChoice &&
 	       readRecordField(lhs.cursorPositionMarker) == readRecordField(rhs.cursorPositionMarker) && readRecordField(lhs.fileCompareOriginalLeadingGutters) == readRecordField(rhs.fileCompareOriginalLeadingGutters) &&
@@ -257,7 +258,7 @@ class THeroMessageThresholdSlider final : public MRNumericSlider {
 class TUserInterfaceSettingsDialog : public MRScrollableDialog {
   public:
 	TUserInterfaceSettingsDialog(bool initialWindowManager, const MRHeroMessageSettings &initialHeroMessages, int initialVirtualDesktops, bool initialCyclicVirtualDesktops, MRCursorBehaviour initialCursorBehaviour,
-	                            MRCompilerErrorMessagePlacement initialCompilerErrorMessagePlacement, MRScrollbarVisibility initialScrollbarVisibility, MRColorOutputMode initialColorOutputMode, bool initialTrackCompilerWarnings,
+	                            MRCompilerErrorMessagePlacement initialCompilerErrorMessagePlacement, MRApiReferencePlacement initialApiReferencePlacement, MRScrollbarVisibility initialScrollbarVisibility, MRColorOutputMode initialColorOutputMode, bool initialTrackCompilerWarnings,
 	                            bool initialTrackCompilerNotes,
 	                            MRUiIndentStyle initialUiIndentStyle, const std::string &initialCursorPositionMarker, const std::string &initialFileCompareOriginalLeadingGutters, const std::string &initialFileCompareOriginalTrailingGutters,
 	                            const std::string &initialFileCompareCompareLeadingGutters, const std::string &initialFileCompareCompareTrailingGutters, MRFileCompareStartConfiguration initialFileCompareStartConfiguration,
@@ -309,9 +310,13 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		mCompilerErrorMessageField = new TRadioButtons(TRect(leftColumnLeft, 21, leftColumnRight, 23), new TSItem("~U~nder code", new TSItem("~R~ight margin", nullptr)));
 		addManaged(mCompilerErrorMessageField, TRect(leftColumnLeft, 21, leftColumnRight, 23));
 
-		addManaged(new TStaticText(TRect(rightColumnLeft, 20, rightColumnRight, 21), "File compare:"), TRect(rightColumnLeft, 20, rightColumnRight, 21));
-		mFileCompareStartField = new TRadioButtons(TRect(rightColumnLeft, 21, rightColumnRight, 23), new TSItem("Original <> Compare", new TSItem("Compare <> Original", nullptr)));
-		addManaged(mFileCompareStartField, TRect(rightColumnLeft, 21, rightColumnRight, 23));
+		addManaged(new TStaticText(TRect(rightColumnLeft, 20, rightColumnRight, 21), "API Reference:"), TRect(rightColumnLeft, 20, rightColumnRight, 21));
+		mApiReferencePlacementField = new TRadioButtons(TRect(rightColumnLeft, 21, rightColumnRight, 23), new TSItem("~U~nder code", new TSItem("~R~ight margin", nullptr)));
+		addManaged(mApiReferencePlacementField, TRect(rightColumnLeft, 21, rightColumnRight, 23));
+
+		addManaged(new TStaticText(TRect(rightColumnLeft, 24, rightColumnRight, 25), "File compare:"), TRect(rightColumnLeft, 24, rightColumnRight, 25));
+		mFileCompareStartField = new TRadioButtons(TRect(rightColumnLeft, 25, rightColumnRight, 27), new TSItem("Original <> Compare", new TSItem("Compare <> Original", nullptr)));
+		addManaged(mFileCompareStartField, TRect(rightColumnLeft, 25, rightColumnRight, 27));
 
 		addManaged(new TStaticText(TRect(leftColumnLeft, 24, leftColumnRight, 25), "Color Management:"), TRect(leftColumnLeft, 24, leftColumnRight, 25));
 		mColorOutputModeField = new TRadioButtons(TRect(leftColumnLeft, 25, leftColumnRight, 27), new TSItem("~2~4-bit RGB (automatic)", new TSItem("~P~alette (256 colors)", nullptr)));
@@ -336,6 +341,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 
 		mInitialCursorBehaviourChoice = initialCursorBehaviour == MRCursorBehaviour::FreeMovement ? 0 : 1;
 		mInitialCompilerErrorMessageChoice = initialCompilerErrorMessagePlacement == MRCompilerErrorMessagePlacement::UnderCode ? 0 : 1;
+		mInitialApiReferencePlacementChoice = initialApiReferencePlacement == MRApiReferencePlacement::UnderCode ? 0 : 1;
 		mInitialFileCompareStartChoice = initialFileCompareStartConfiguration == MRFileCompareStartConfiguration::CompareOriginal ? 1 : 0;
 		mInitialScrollbarVisibilityChoice = initialScrollbarVisibility == MRScrollbarVisibility::Always ? 1 : 0;
 		mInitialColorOutputModeChoice = initialColorOutputMode == MRColorOutputMode::TerminalPalette ? 1 : 0;
@@ -409,6 +415,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		}
 		if (mCursorBehaviourField != nullptr) mCursorBehaviourField->getData(&data->cursorBehaviourChoice);
 		if (mCompilerErrorMessageField != nullptr) mCompilerErrorMessageField->getData(&data->compilerErrorMessageChoice);
+		if (mApiReferencePlacementField != nullptr) mApiReferencePlacementField->getData(&data->apiReferencePlacementChoice);
 		if (mFileCompareStartField != nullptr) mFileCompareStartField->getData(&data->fileCompareStartChoice);
 		if (mCompilerDiagnosticsField != nullptr) mCompilerDiagnosticsField->getData(&data->compilerDiagnosticFlags);
 		if (mScrollbarVisibilityField != nullptr) mScrollbarVisibilityField->getData(&data->scrollbarVisibilityChoice);
@@ -453,6 +460,10 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 		if (mCompilerErrorMessageField != nullptr) {
 			if (data->compilerErrorMessageChoice > 1) data->compilerErrorMessageChoice = mInitialCompilerErrorMessageChoice;
 			mCompilerErrorMessageField->setData(&data->compilerErrorMessageChoice);
+		}
+		if (mApiReferencePlacementField != nullptr) {
+			if (data->apiReferencePlacementChoice > 1) data->apiReferencePlacementChoice = mInitialApiReferencePlacementChoice;
+			mApiReferencePlacementField->setData(&data->apiReferencePlacementChoice);
 		}
 		if (mFileCompareStartField != nullptr) {
 			if (data->fileCompareStartChoice > 1) data->fileCompareStartChoice = mInitialFileCompareStartChoice;
@@ -599,6 +610,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	MRNumericSlider *mVirtualDesktopsSlider = nullptr;
 	TRadioButtons *mCursorBehaviourField = nullptr;
 	TRadioButtons *mCompilerErrorMessageField = nullptr;
+	TRadioButtons *mApiReferencePlacementField = nullptr;
 	TRadioButtons *mFileCompareStartField = nullptr;
 	TCheckBoxes *mCompilerDiagnosticsField = nullptr;
 	TRadioButtons *mScrollbarVisibilityField = nullptr;
@@ -612,6 +624,7 @@ class TUserInterfaceSettingsDialog : public MRScrollableDialog {
 	TIndentStylePreview *mIndentStylePreview = nullptr;
 	ushort mInitialCursorBehaviourChoice = 1;
 	ushort mInitialCompilerErrorMessageChoice = 1;
+	ushort mInitialApiReferencePlacementChoice = 1;
 	ushort mInitialFileCompareStartChoice = 0;
 	ushort mInitialScrollbarVisibilityChoice = 0;
 	ushort mInitialColorOutputModeChoice = 0;
@@ -634,6 +647,7 @@ void runUserInterfaceSettingsDialogFlow() {
 		bool currentCv = configuredCyclicVirtualDesktops();
 		MRCursorBehaviour currentCb = configuredCursorBehaviour();
 		MRCompilerErrorMessagePlacement currentCemp = configuredCompilerErrorMessagePlacement();
+		MRApiReferencePlacement currentApiReferencePlacement = configuredApiReferencePlacement();
 		MRScrollbarVisibility currentScrollbarVisibility = configuredScrollbarVisibility();
 		MRColorOutputMode currentColorOutputMode = configuredColorOutputMode();
 		bool currentTrackWarnings = configuredTrackCompilerWarnings();
@@ -647,7 +661,7 @@ void runUserInterfaceSettingsDialogFlow() {
 		MRFileCompareStartConfiguration currentFileCompareStartConfiguration = configuredFileCompareStartConfiguration();
 		bool currentFileCompareComparePanelReadOnly = configuredFileCompareComparePanelReadOnly();
 
-		TUserInterfaceSettingsDialog *dialog = new TUserInterfaceSettingsDialog(currentWm, currentHeroMessages, currentVd, currentCv, currentCb, currentCemp, currentScrollbarVisibility, currentColorOutputMode, currentTrackWarnings, currentTrackNotes, currentUiIndentStyle, currentCp,
+		TUserInterfaceSettingsDialog *dialog = new TUserInterfaceSettingsDialog(currentWm, currentHeroMessages, currentVd, currentCv, currentCb, currentCemp, currentApiReferencePlacement, currentScrollbarVisibility, currentColorOutputMode, currentTrackWarnings, currentTrackNotes, currentUiIndentStyle, currentCp,
 		                                                                         currentFileCompareOriginalLeadingGutters, currentFileCompareOriginalTrailingGutters, currentFileCompareCompareLeadingGutters, currentFileCompareCompareTrailingGutters,
 		                                                                         currentFileCompareStartConfiguration, currentFileCompareComparePanelReadOnly);
 		UserInterfaceSettingsDialogData dialogData;
@@ -662,6 +676,7 @@ void runUserInterfaceSettingsDialogFlow() {
 		dialogData.virtualDesktops = static_cast<ushort>(currentVd);
 		dialogData.cursorBehaviourChoice = currentCb == MRCursorBehaviour::FreeMovement ? 0 : 1;
 		dialogData.compilerErrorMessageChoice = currentCemp == MRCompilerErrorMessagePlacement::UnderCode ? 0 : 1;
+		dialogData.apiReferencePlacementChoice = currentApiReferencePlacement == MRApiReferencePlacement::UnderCode ? 0 : 1;
 		dialogData.fileCompareStartChoice = currentFileCompareStartConfiguration == MRFileCompareStartConfiguration::CompareOriginal ? 1 : 0;
 		dialogData.scrollbarVisibilityChoice = currentScrollbarVisibility == MRScrollbarVisibility::Always ? 1 : 0;
 		dialogData.colorOutputModeChoice = currentColorOutputMode == MRColorOutputMode::TerminalPalette ? 1 : 0;
@@ -687,6 +702,7 @@ void runUserInterfaceSettingsDialogFlow() {
 		int newVd = static_cast<int>(dialogData.virtualDesktops);
 		MRCursorBehaviour newCb = dialogData.cursorBehaviourChoice == 0 ? MRCursorBehaviour::FreeMovement : MRCursorBehaviour::BoundToText;
 		MRCompilerErrorMessagePlacement newCemp = dialogData.compilerErrorMessageChoice == 0 ? MRCompilerErrorMessagePlacement::UnderCode : MRCompilerErrorMessagePlacement::RightMargin;
+		MRApiReferencePlacement newApiReferencePlacement = dialogData.apiReferencePlacementChoice == 0 ? MRApiReferencePlacement::UnderCode : MRApiReferencePlacement::RightMargin;
 		MRFileCompareStartConfiguration newFileCompareStartConfiguration = dialogData.fileCompareStartChoice == 1 ? MRFileCompareStartConfiguration::CompareOriginal : MRFileCompareStartConfiguration::OriginalCompare;
 		MRScrollbarVisibility newScrollbarVisibility = dialogData.scrollbarVisibilityChoice == 1 ? MRScrollbarVisibility::Always : MRScrollbarVisibility::Smart;
 		MRColorOutputMode newColorOutputMode = dialogData.colorOutputModeChoice == 1 ? MRColorOutputMode::TerminalPalette : MRColorOutputMode::RgbAutomatic;
@@ -713,6 +729,10 @@ void runUserInterfaceSettingsDialogFlow() {
 				return false;
 			}
 			if (!setConfiguredCompilerErrorMessagePlacement(newCemp, &errorText)) {
+				setSetupDialogStatus(errorText, MRMenuBar::MarqueeKind::Warning);
+				return false;
+			}
+			if (!setConfiguredApiReferencePlacement(newApiReferencePlacement, &errorText)) {
 				setSetupDialogStatus(errorText, MRMenuBar::MarqueeKind::Warning);
 				return false;
 			}

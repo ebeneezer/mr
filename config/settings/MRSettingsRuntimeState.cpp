@@ -769,6 +769,18 @@ MRCompilerErrorMessagePlacement configuredCompilerErrorMessagePlacement() {
 	return static_cast<MRCompilerErrorMessagePlacement>(configuredRuntimeInt("compilerErrorMessagePlacement", static_cast<int>(MRCompilerErrorMessagePlacement::RightMargin)));
 }
 
+bool setConfiguredApiReferencePlacement(MRApiReferencePlacement placement, std::string *errorMessage) {
+	if (configuredApiReferencePlacement() != placement) markConfiguredSettingsDirty();
+	storeConfiguredRuntimeInt("apiReferencePlacement", static_cast<int>(placement));
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
+MRApiReferencePlacement configuredApiReferencePlacement() {
+	recordSettingsRuntimeRead();
+	return static_cast<MRApiReferencePlacement>(configuredRuntimeInt("apiReferencePlacement", static_cast<int>(MRApiReferencePlacement::RightMargin)));
+}
+
 bool setConfiguredScrollbarVisibility(MRScrollbarVisibility visibility, std::string *errorMessage) {
 	if (configuredScrollbarVisibility() != visibility) markConfiguredSettingsDirty();
 	storeConfiguredRuntimeInt("scrollbarVisibility", static_cast<int>(visibility));

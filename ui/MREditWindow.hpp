@@ -48,6 +48,8 @@ void mrTraceCoprocessorTaskCancel(int bufferId, std::uint64_t taskId);
 class MREditWindow;
 void setWindowManuallyHidden(MREditWindow *win, bool hidden);
 void mrDropSidekickForParent(const MREditWindow *parent);
+bool mrDismissApiReferenceSidekickForParent(const MREditWindow *parent);
+void mrSyncApiReferenceSidekickForParent(MREditWindow *parent, bool sourceScroll = false);
 bool mrMoveSnippetPlaceholderForParent(const MREditWindow *parent, int direction);
 void mrvmCloseForksForOwner(int ownerBufferId);
 
@@ -320,9 +322,21 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 				TWindow::handleEvent(event);
 				return;
 			}
-			if (handleEditorScrollBarArrowHold(event)) return;
+			if (event.what == evKeyDown) {
+				const bool dismissedApiReference = mrDismissApiReferenceSidekickForParent(this);
+				if (dismissedApiReference && ctrlToArrow(event.keyDown.keyCode) == kbEsc) {
+					clearEvent(event);
+					return;
+				}
+			}
+			if (event.what == evMouseDown && editor != nullptr && editor->textPointInView(event.mouse.where)) static_cast<void>(mrDismissApiReferenceSidekickForParent(this));
+			if (handleEditorScrollBarArrowHold(event)) {
+				mrSyncApiReferenceSidekickForParent(this, true);
+				return;
+			}
 			if (event.what == evMouseWheel && editor != nullptr) {
 				static_cast<void>(editor->scrollWindowByWheel(event.mouse.wheel));
+				mrSyncApiReferenceSidekickForParent(this, true);
 				clearEvent(event);
 				return;
 			}
@@ -519,6 +533,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 					if (!mBlockOps.remapAfterEditorChange(*editor)) static_cast<void>(mBlockOps.refreshVisual(*editor));
 				}
 		}
+		mrSyncApiReferenceSidekickForParent(this);
 		traceCalculatorHotkeyEvent("window-post", event);
 		if (keyDebugEnabled() && originalEvent == evKeyDown && TKey(keyCodeBefore, keyModifiersBefore) == TKey(kbShiftTab)) {
 			char line[192];

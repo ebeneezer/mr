@@ -208,6 +208,7 @@ void updateAppCommandState(int desktopCount, bool cyclicVirtualDesktops) {
 	setCommandEnabled(cmMrTextTimeDateStamp, canModify);
 	setCommandEnabled(cmMrTextReformatParagraph, canModify);
 	setCommandEnabled(cmMrTextPrettifyBlockOrFile, canModify);
+	setCommandEnabled(cmMrTextApiReference, hasEditor && state.hasPersistentFileName);
 	setCommandEnabled(cmMrTextHexEditor, hasEditor && state.window->getEditor() != nullptr && state.window->allowsDocumentViewportSplit() && !state.window->hasTrackedExternalIoTasks());
 	setCommandEnabled(cmMrTextFileCompare, hasEditor && hasMultipleWindows);
 	setCommandEnabled(cmMrDebugBuildCurrentFile, hasEditor && state.hasBuildSourceFile);

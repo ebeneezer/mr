@@ -105,7 +105,7 @@ TVISION_CMAKE_FLAGS = \
 NCURSESW_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libncursesw.so.6 ]; then echo -l:libncursesw.so.6; else echo -lncursesw; fi)
 GPM_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libgpm.so.2 ]; then echo -l:libgpm.so.2; else echo -lgpm; fi)
 TINFO_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libtinfo.so.6 ]; then echo -l:libtinfo.so.6; else echo -ltinfo; fi)
-LDFLAGS = $(PTHREAD_FLAGS) $(TVISION_LIB) $(PCRE2_LIB) $(NCURSESW_LIB) $(GPM_LIB) $(TINFO_LIB) $(PDF_EXPORT_LIBS) $(UPDATE_LIBS) -Wl,--strip-debug $(ARCH_LDFLAGS)
+LDFLAGS = $(PTHREAD_FLAGS) $(TVISION_LIB) $(PCRE2_LIB) $(NCURSESW_LIB) $(GPM_LIB) $(TINFO_LIB) $(PDF_EXPORT_LIBS) $(UPDATE_LIBS) -ldl -Wl,--strip-debug $(ARCH_LDFLAGS)
 
 TARGET = mr
 MRFOLDTRAINER_TARGET = trainers/foldtrainer/mrfoldtrainer
@@ -216,7 +216,7 @@ MANUAL_AUXILIARIES = \
 	$(MANUAL_DIRECTORY)/mr-users-manual.toc
 MANUAL_BUILD_ARTIFACTS = $(MANUAL_AUXILIARIES) $(MANUAL_PDF_ASSETS)
 
-MR_RELEASE_VERSION ?= 0.2.68
+MR_RELEASE_VERSION ?= 0.2.69
 MR_RELEASE_EPOCH ?= $(MR_BUILD_EPOCH)
 MR_RELEASE_PLATFORM ?= linux-x86_64-baseline
 MR_RELEASE_ARCH_FLAGS ?= -march=x86-64 -mtune=generic
@@ -271,6 +271,7 @@ CXX_SOURCES = \
 	mr.cpp \
 	app/MRAppState.cpp \
 	app/MRCommandRouter.cpp \
+	app/MRLibraryReference.cpp \
 	app/router/MRCommandRouterGit.cpp \
 	app/router/MRCommandRouterPdf.cpp \
 	app/router/MRCommandRouterSearch.cpp \
