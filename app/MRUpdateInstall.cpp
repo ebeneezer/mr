@@ -99,6 +99,7 @@ class UpdateAuthorization final {
 namespace {
 
 constexpr char kInstalledBinary[] = "/usr/local/bin/mr";
+constexpr char kInstalledRealBinary[] = "/usr/local/bin/mr.real";
 constexpr char kSudoExecutable[] = "/usr/bin/sudo";
 constexpr char kProtocolMagic[] = "MRUPD01";
 constexpr std::size_t kProcessDiagnosticLimit = 16 * 1024;
@@ -430,20 +431,25 @@ bool writeProtocolFile(const UpdatePackagePayload &package, std::string &protoco
 	return true;
 }
 
-bool installedBinaryIsTrusted() {
+bool installedBinaryIsTrusted(const char *path) {
 	struct stat status {};
 
-	if (::lstat(kInstalledBinary, &status) != 0) return false;
+	if (::lstat(path, &status) != 0) return false;
 	return S_ISREG(status.st_mode) && status.st_uid == 0 && (status.st_mode & 0022) == 0;
 }
 
-bool currentExecutableIsSystemBinary() {
+bool currentExecutableIsSystemBinary(bool &wrappedInstallation) {
 	std::array<char, 4096> path{};
 	const ssize_t count = ::readlink("/proc/self/exe", path.data(), path.size() - 1);
 
 	if (count <= 0 || static_cast<std::size_t>(count) >= path.size()) return false;
 	path[static_cast<std::size_t>(count)] = '\0';
-	return std::strcmp(path.data(), kInstalledBinary) == 0 && installedBinaryIsTrusted();
+	if (std::strcmp(path.data(), kInstalledRealBinary) == 0 && installedBinaryIsTrusted(kInstalledRealBinary) && installedBinaryIsTrusted(kInstalledBinary)) {
+		wrappedInstallation = true;
+		return true;
+	}
+	wrappedInstallation = false;
+	return std::strcmp(path.data(), kInstalledBinary) == 0 && installedBinaryIsTrusted(kInstalledBinary);
 }
 
 bool applyPackageThroughSudo(const UpdatePackagePayload &package, const std::shared_ptr<UpdateAuthorization> &authorization, std::string &diagnostic, std::string &error) {
@@ -454,8 +460,21 @@ bool applyPackageThroughSudo(const UpdatePackagePayload &package, const std::sha
 		error = "Missing update authorization.";
 		return false;
 	}
-	if (!installedBinaryIsTrusted()) {
+	if (!installedBinaryIsTrusted(kInstalledBinary)) {
 		error = "Unable to find a trusted update helper at /usr/local/bin/mr. Owner must be root:root.";
+		return false;
+	}
+	const int installedFd = ::open(kInstalledBinary, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+	char installedMagic[4]{};
+	const ssize_t magicSize = installedFd >= 0 ? ::pread(installedFd, installedMagic, sizeof(installedMagic), 0) : -1;
+	if (installedFd >= 0) ::close(installedFd);
+	const char *updateHelper = nullptr;
+	if (magicSize == static_cast<ssize_t>(sizeof(installedMagic))) {
+		if (std::memcmp(installedMagic, "\177ELF", sizeof(installedMagic)) == 0) updateHelper = kInstalledBinary;
+		else if (installedMagic[0] == '#' && installedMagic[1] == '!' && installedBinaryIsTrusted(kInstalledRealBinary)) updateHelper = kInstalledRealBinary;
+	}
+	if (updateHelper == nullptr) {
+		error = "Unable to identify a trusted mr update helper.";
 		return false;
 	}
 	if (!writeProtocolFile(package, protocolPath, error)) return false;
@@ -488,13 +507,13 @@ bool applyPackageThroughSudo(const UpdatePackagePayload &package, const std::sha
 		::close(passwordPipe[0]);
 		::close(processOutputPipe[1]);
 		if (::geteuid() == 0) {
-			char *const args[] = {const_cast<char *>(kInstalledBinary), const_cast<char *>(kInternalApplyOption), const_cast<char *>(protocolPath.c_str()), nullptr};
-			::execv(kInstalledBinary, args);
+			char *const args[] = {const_cast<char *>(updateHelper), const_cast<char *>(kInternalApplyOption), const_cast<char *>(protocolPath.c_str()), nullptr};
+			::execv(updateHelper, args);
 		} else if (authorization->passwordRequired()) {
-			char *const args[] = {const_cast<char *>(kSudoExecutable), const_cast<char *>("-S"), const_cast<char *>("-p"), const_cast<char *>(""), const_cast<char *>(kInstalledBinary), const_cast<char *>(kInternalApplyOption), const_cast<char *>(protocolPath.c_str()), nullptr};
+			char *const args[] = {const_cast<char *>(kSudoExecutable), const_cast<char *>("-S"), const_cast<char *>("-p"), const_cast<char *>(""), const_cast<char *>(updateHelper), const_cast<char *>(kInternalApplyOption), const_cast<char *>(protocolPath.c_str()), nullptr};
 			::execv(kSudoExecutable, args);
 		} else {
-			char *const args[] = {const_cast<char *>(kSudoExecutable), const_cast<char *>("-n"), const_cast<char *>("-p"), const_cast<char *>(""), const_cast<char *>(kInstalledBinary), const_cast<char *>(kInternalApplyOption), const_cast<char *>(protocolPath.c_str()), nullptr};
+			char *const args[] = {const_cast<char *>(kSudoExecutable), const_cast<char *>("-n"), const_cast<char *>("-p"), const_cast<char *>(""), const_cast<char *>(updateHelper), const_cast<char *>(kInternalApplyOption), const_cast<char *>(protocolPath.c_str()), nullptr};
 			::execv(kSudoExecutable, args);
 		}
 		::_exit(127);
@@ -690,11 +709,12 @@ bool stageTargetFile(int rootFd, std::size_t index, const std::vector<unsigned c
 	return true;
 }
 
-bool installStagedTargets(std::array<StagedTarget, kUpdateFileCount> &staged, std::string &error) {
+bool installStagedTargets(std::array<StagedTarget, kUpdateFileCount> &staged, bool wrappedInstallation, std::string &error) {
 	const std::array<std::size_t, kUpdateFileCount> order = {1, 2, 3, 4, 5, 0};
 	for (const std::size_t index : order) {
 		StagedTarget &target = staged[index];
-		if (::renameat(target.directoryFd, target.temporaryName.c_str(), target.directoryFd, kUpdateTargets[index].fileName) != 0 || ::fsync(target.directoryFd) != 0) {
+		const char *fileName = index == 0 && wrappedInstallation ? "mr.real" : kUpdateTargets[index].fileName;
+		if (::renameat(target.directoryFd, target.temporaryName.c_str(), target.directoryFd, fileName) != 0 || ::fsync(target.directoryFd) != 0) {
 			error = "Unable to atomically install update file.";
 			return false;
 		}
@@ -769,12 +789,13 @@ bool runInternalUpdateApply(const char *protocolPath, std::string &error) {
 	UpdatePackagePayload package;
 	std::array<StagedTarget, kUpdateFileCount> staged;
 	int protocolFd = -1;
+	bool wrappedInstallation = false;
 	if (::geteuid() != 0) {
 		error = "Internal update mode requires root privileges.";
 		return false;
 	}
-	if (!currentExecutableIsSystemBinary()) {
-		error = "Internal update mode must run from /usr/local/bin/mr.";
+	if (!currentExecutableIsSystemBinary(wrappedInstallation)) {
+		error = "Internal update mode must run from a trusted mr installation.";
 		return false;
 	}
 	if (protocolPath == nullptr || protocolPath[0] != '/') {
@@ -827,7 +848,7 @@ bool runInternalUpdateApply(const char *protocolPath, std::string &error) {
 			break;
 		}
 	::close(rootFd);
-	if (success) success = installStagedTargets(staged, error);
+	if (success) success = installStagedTargets(staged, wrappedInstallation, error);
 	cleanupStaged(staged);
 	return success;
 }

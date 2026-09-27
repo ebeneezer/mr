@@ -2,7 +2,7 @@
 
 set -eu
 
-release_version="0.2.67"
+release_version="0.2.68"
 release_epoch="@MR_RELEASE_EPOCH@"
 prefix="/usr/local"
 
@@ -46,6 +46,8 @@ case "$0" in
 esac
 script_directory=$(CDPATH= cd "$script_parent" && pwd)
 macro_source="$script_directory/share/mr/macros"
+printf 'mr %s installer\n' "$release_version"
+printf 'Checking the release package and runtime...\n'
 if [ -z "${XDG_CONFIG_HOME:-}" ] && [ -z "${HOME:-}" ]; then
 	printf 'mr cannot be installed.\n\nUser configuration path is unavailable:\n  neither XDG_CONFIG_HOME nor HOME is set\n\nNo files were installed.\n' >&2
 	exit 1
@@ -54,7 +56,7 @@ config_directory=${XDG_CONFIG_HOME:-"${HOME}/.config"}
 macro_target="$config_directory/mr/macros"
 
 missing_commands=
-for required_command in cmp dirname find grep install ldd locale sed sort; do
+for required_command in cat cmp dirname find grep id install ldd locale mktemp rm sed sort; do
 	if ! command -v "$required_command" >/dev/null 2>&1; then
 		if [ -n "$missing_commands" ]; then missing_commands="$missing_commands
 $required_command"
@@ -106,39 +108,44 @@ if command -v fc-list >/dev/null 2>&1; then
 else
 	missing_emoji_codepoints=unknown
 fi
-if [ -n "$missing_emoji_codepoints" ]; then
-	printf 'mr cannot be installed.\n\nRequired emoji font coverage is unavailable.\n' >&2
-	if [ "$missing_emoji_codepoints" = unknown ]; then
-		printf 'Fontconfig preflight command is missing:\n  fc-list\n' >&2
-	else
-		printf 'Missing Unicode codepoints:\n' >&2
-		printf '%s\n' "$missing_emoji_codepoints" | sed 's/^/  U+/' >&2
-	fi
-	if command -v apt >/dev/null 2>&1; then
-		printf '\nInstall as root, then run this installer again:\n  apt install fontconfig fonts-noto-color-emoji\n' >&2
-	elif command -v pacman >/dev/null 2>&1; then
-		printf '\nInstall as root, then run this installer again:\n  pacman -S --needed fontconfig noto-fonts-emoji\n' >&2
-	else
-		printf '\nInstall Fontconfig and an emoji font covering the listed codepoints, then run this installer again.\n' >&2
-	fi
-	printf '\nNo files were installed.\n' >&2
-	exit 1
-fi
 
 ldd_report=$(ldd -r "$script_directory/bin/mr" 2>&1 || true)
 missing_libraries=$(printf '%s\n' "$ldd_report" | sed -n 's/^[[:space:]]*\([^[:space:]]*\)[[:space:]]*=>[[:space:]]*not found.*/\1/p' | sort -u)
-if [ -n "$missing_libraries" ]; then
-	printf 'mr cannot be installed.\n\nMissing libraries:\n' >&2
-	printf '%s\n' "$missing_libraries" | sed 's/^/  /' >&2
+missing_terminal_probe=
+if [ ! -x /usr/bin/tput ]; then missing_terminal_probe=1; fi
+if [ -n "$missing_libraries" ] || [ -n "$missing_emoji_codepoints" ] || [ -n "$missing_terminal_probe" ]; then
+	printf '\nDependencies needed\n' >&2
+	if [ -n "$missing_libraries" ]; then
+		printf '  Missing libraries:\n' >&2
+		printf '%s\n' "$missing_libraries" | sed 's/^/    /' >&2
+	fi
+	if [ -n "$missing_emoji_codepoints" ]; then
+		printf '  Emoji font coverage is incomplete.\n' >&2
+		if [ "$missing_emoji_codepoints" = unknown ]; then
+			printf '    Missing command: fc-list\n' >&2
+		else
+			printf '    Missing Unicode codepoints:\n' >&2
+			printf '%s\n' "$missing_emoji_codepoints" | sed 's/^/      U+/' >&2
+		fi
+	fi
+	if [ -n "$missing_terminal_probe" ]; then printf '  Terminal capability tool is missing: /usr/bin/tput\n' >&2; fi
+
+	package_manager=
+	if command -v apt-get >/dev/null 2>&1; then package_manager=apt
+	elif command -v pacman >/dev/null 2>&1; then package_manager=pacman
+	fi
 	apt_packages=
 	pacman_packages=
+	unmapped_libraries=
 	for missing_library in $missing_libraries; do
 		case "$missing_library" in
 			libpcre2-8.so.0) apt_package=libpcre2-8-0; pacman_package=pcre2 ;;
 			libncursesw.so.6) apt_package=libncursesw6; pacman_package=ncurses ;;
 			libtinfo.so.6) apt_package=libtinfo6; pacman_package=ncurses ;;
 			libgpm.so.2) apt_package=libgpm2; pacman_package=gpm ;;
-			libpangocairo-1.0.so.0|libpango-1.0.so.0) apt_package=libpango-1.0-0; pacman_package=pango ;;
+			libpangocairo-1.0.so.0) apt_package=libpangocairo-1.0-0; pacman_package=pango ;;
+			libpangoft2-1.0.so.0) apt_package=libpangoft2-1.0-0; pacman_package=pango ;;
+			libpango-1.0.so.0) apt_package=libpango-1.0-0; pacman_package=pango ;;
 			libharfbuzz.so.0) apt_package=libharfbuzz0b; pacman_package=harfbuzz ;;
 			libgobject-2.0.so.0|libglib-2.0.so.0) apt_package=libglib2.0-0; pacman_package=glib2 ;;
 			libcairo.so.2) apt_package=libcairo2; pacman_package=cairo ;;
@@ -147,22 +154,90 @@ if [ -n "$missing_libraries" ]; then
 			libssl.so.3|libcrypto.so.3) apt_package=libssl3; pacman_package=openssl ;;
 			*) apt_package=; pacman_package= ;;
 		esac
+		if [ "$package_manager" = apt ] && command -v apt-cache >/dev/null 2>&1; then
+			case "$apt_package" in
+				libglib2.0-0|libcurl4|libarchive13|libssl3)
+					if apt-cache show "${apt_package}t64" >/dev/null 2>&1; then apt_package="${apt_package}t64"; fi
+					;;
+			esac
+		fi
+		if [ "$package_manager" = apt ] && [ -z "$apt_package" ]; then unmapped_libraries="${unmapped_libraries}${unmapped_libraries:+
+}$missing_library"; fi
+		if [ "$package_manager" = pacman ] && [ -z "$pacman_package" ]; then unmapped_libraries="${unmapped_libraries}${unmapped_libraries:+
+}$missing_library"; fi
 		if [ -n "$apt_package" ]; then apt_packages="${apt_packages}${apt_packages:+
 }$apt_package"; fi
 		if [ -n "$pacman_package" ]; then pacman_packages="${pacman_packages}${pacman_packages:+
 }$pacman_package"; fi
 	done
-	if command -v apt >/dev/null 2>&1 && [ -n "$apt_packages" ]; then
-		printf '\nInstall as root, then run this installer again:\n  apt install' >&2
-		printf '%s\n' "$apt_packages" | sort -u | while IFS= read -r package; do printf ' %s' "$package"; done >&2
-		printf '\n' >&2
-	elif command -v pacman >/dev/null 2>&1 && [ -n "$pacman_packages" ]; then
-		printf '\nInstall as root, then run this installer again:\n  pacman -S --needed' >&2
-		printf '%s\n' "$pacman_packages" | sort -u | while IFS= read -r package; do printf ' %s' "$package"; done >&2
-		printf '\n' >&2
+	if [ -n "$missing_emoji_codepoints" ]; then
+		apt_packages="${apt_packages}${apt_packages:+
+}fontconfig
+fonts-noto-color-emoji"
+		pacman_packages="${pacman_packages}${pacman_packages:+
+}fontconfig
+noto-fonts-emoji"
 	fi
-	printf '\nNo files were installed.\n' >&2
-	exit 1
+	if [ -n "$missing_terminal_probe" ]; then
+		apt_packages="${apt_packages}${apt_packages:+
+}ncurses-bin"
+		pacman_packages="${pacman_packages}${pacman_packages:+
+}ncurses"
+	fi
+	if [ -z "$package_manager" ] || [ -n "$unmapped_libraries" ]; then
+		printf '\nCannot install all missing dependencies automatically.\n' >&2
+		if [ -n "$unmapped_libraries" ]; then printf '%s\n' "$unmapped_libraries" | sed 's/^/  /' >&2; fi
+		printf 'No mr files were installed.\n' >&2
+		exit 1
+	fi
+	if [ "$package_manager" = apt ]; then packages=$(printf '%s\n' "$apt_packages" | sort -u)
+	else packages=$(printf '%s\n' "$pacman_packages" | sort -u)
+	fi
+	set -- $packages
+	printf '\nPackages to install\n' >&2
+	for package do printf '  %s\n' "$package" >&2; done
+	printf 'Install all packages now (sudo if needed)? [y/N] ' >&2
+	if ! IFS= read -r install_answer </dev/tty; then install_answer=; fi
+	case "$install_answer" in
+		y|Y|yes|YES) ;;
+		*) printf 'Installation cancelled. No mr files were installed.\n' >&2; exit 1 ;;
+	esac
+	printf '\nInstalling dependencies...\n' >&2
+	if [ "$(id -u)" -eq 0 ]; then
+		if [ "$package_manager" = apt ]; then apt-get install -y -- "$@"
+		else pacman -S --needed --noconfirm -- "$@"
+		fi
+	else
+		if ! command -v sudo >/dev/null 2>&1; then
+			printf 'sudo is required to install the missing packages. No mr files were installed.\n' >&2
+			exit 1
+		fi
+		if [ "$package_manager" = apt ]; then sudo apt-get install -y -- "$@"
+		else sudo pacman -S --needed --noconfirm -- "$@"
+		fi
+	fi
+	ldd_report=$(ldd -r "$script_directory/bin/mr" 2>&1 || true)
+	missing_libraries=$(printf '%s\n' "$ldd_report" | sed -n 's/^[[:space:]]*\([^[:space:]]*\)[[:space:]]*=>[[:space:]]*not found.*/\1/p' | sort -u)
+	if [ -n "$missing_libraries" ]; then
+		printf 'mr cannot be installed. Libraries are still missing:\n' >&2
+		printf '%s\n' "$missing_libraries" | sed 's/^/  /' >&2
+		printf 'No mr files were installed.\n' >&2
+		exit 1
+	fi
+	if ! command -v fc-list >/dev/null 2>&1; then
+		printf 'mr cannot be installed. Fontconfig is still unavailable. No mr files were installed.\n' >&2
+		exit 1
+	fi
+	for required_emoji_codepoint in 1F4FC 1F50E 1F550 1F551 1F552 1F553 1F554 1F555 1F556 1F557 1F558 1F559 1F55A 1F55B; do
+		if [ -z "$(fc-list ":charset=$required_emoji_codepoint" file 2>/dev/null | sed -n '1p')" ]; then
+			printf 'mr cannot be installed. Emoji font coverage is still incomplete (U+%s). No mr files were installed.\n' "$required_emoji_codepoint" >&2
+			exit 1
+		fi
+	done
+	if [ ! -x /usr/bin/tput ]; then
+		printf 'mr cannot be installed. /usr/bin/tput is still unavailable. No mr files were installed.\n' >&2
+		exit 1
+	fi
 fi
 
 missing_runtime_versions=$(printf '%s\n' "$ldd_report" | sed -n 's/.*version .\([^ ]*\). not found.*/\1/p' | sort -u)
@@ -209,9 +284,75 @@ if [ "$startup_status" -ne 0 ]; then
 	exit 1
 fi
 
+if [ "$(/usr/bin/tput -T xterm-256color colors 2>/dev/null || true)" != 256 ]; then
+	printf 'mr cannot be installed. The xterm-256color terminal definition is unavailable.\nNo mr files were installed.\n' >&2
+	exit 1
+fi
+
+terminal_shell_startup=
+terminal_colors=$(/usr/bin/tput colors 2>/dev/null || true)
+terminal_needs_color=
+case "$terminal_colors" in
+	''|*[!0-9]*) terminal_needs_color=1 ;;
+	*) if [ "$terminal_colors" -lt 8 ]; then terminal_needs_color=1; fi ;;
+esac
+if [ -n "$terminal_needs_color" ]; then
+	printf '\nTerminal setup\n' >&2
+	printf '  TERM: %s\n' "${TERM:-unset}" >&2
+	printf '  Reported colors: %s\n' "${terminal_colors:-unknown}" >&2
+	printf '  mr will use xterm-256color when the terminal reports no colors.\n' >&2
+	printf 'Set TERM=xterm-256color automatically in future shells? [y/N] ' >&2
+	if ! IFS= read -r terminal_answer </dev/tty; then terminal_answer=; fi
+	case "$terminal_answer" in
+		y|Y|yes|YES)
+		if [ -z "${HOME:-}" ]; then
+			printf 'HOME is required to update the shell startup file. No mr files were installed.\n' >&2
+			exit 1
+		fi
+		case "${SHELL:-}" in
+			*/bash) terminal_shell_startup="$HOME/.bashrc" ;;
+			*/zsh) terminal_shell_startup="$HOME/.zshrc" ;;
+			*) printf 'This shell has no supported startup file. No mr files were installed.\n' >&2; exit 1 ;;
+		esac
+		if [ -e "$terminal_shell_startup" ]; then
+			if [ ! -f "$terminal_shell_startup" ] || [ ! -w "$terminal_shell_startup" ]; then
+				printf 'Shell startup file is not writable: %s\nNo mr files were installed.\n' "$terminal_shell_startup" >&2
+				exit 1
+			fi
+		elif [ ! -w "$HOME" ]; then
+			printf 'Home directory is not writable: %s\nNo mr files were installed.\n' "$HOME" >&2
+			exit 1
+		fi
+		;;
+		*) ;;
+	esac
+fi
+
+launcher_file=$(mktemp /tmp/mr-launcher.XXXXXX)
+trap 'rm -f -- "$launcher_file"' 0
+cat > "$launcher_file" <<'EOF'
+#!/bin/sh
+case "$0" in
+	*/*) launcher_path=$0 ;;
+	*) launcher_path=$(command -v "$0") ;;
+esac
+case "$launcher_path" in
+	*/*) binary_path=${launcher_path%/*}/mr.real ;;
+	*) printf 'mr: cannot locate the installed executable.\n' >&2; exit 1 ;;
+esac
+if [ "${1:-}" != --internal-apply-update ]; then
+	terminal_colors=$(/usr/bin/tput colors 2>/dev/null || true)
+	case "$terminal_colors" in
+		''|*[!0-9]*) TERM=xterm-256color; export TERM ;;
+		*) if [ "$terminal_colors" -lt 8 ]; then TERM=xterm-256color; export TERM; fi ;;
+	esac
+fi
+exec "$binary_path" "$@"
+EOF
+
 system_install_required=0
+if ! cmp -s "$script_directory/bin/mr" "$prefix/bin/mr.real" || ! cmp -s "$launcher_file" "$prefix/bin/mr"; then system_install_required=1; fi
 for packaged_file in \
-	"bin/mr" \
 	"bin/mr.hlp" \
 	"share/doc/mr/mr-users-manual.pdf" \
 	"share/doc/mr/mr-macro-reference.pdf" \
@@ -277,19 +418,23 @@ find "$macro_source" -type f -name '*.mrmac' -print | sort |
 	done
 
 if [ "$system_install_required" -eq 0 ]; then
-	:
+	printf '\nProgram files are already current.\n' >&2
 elif [ "$system_install_with_sudo" -eq 0 ]; then
+	printf '\nInstalling mr...\n' >&2
 	install -d -m 0755 "$prefix/bin" "$prefix/share/doc/mr" "$prefix/share/licenses/mr"
-	install -m 0755 "$script_directory/bin/mr" "$prefix/bin/mr"
+	install -m 0755 "$script_directory/bin/mr" "$prefix/bin/mr.real"
 	install -m 0644 "$script_directory/bin/mr.hlp" "$prefix/bin/mr.hlp"
 	install -m 0644 "$script_directory/share/doc/mr/"*.pdf "$prefix/share/doc/mr/"
 	install -m 0644 "$script_directory/share/licenses/mr/TVISION-COPYRIGHT" "$prefix/share/licenses/mr/TVISION-COPYRIGHT"
+	install -m 0755 "$launcher_file" "$prefix/bin/mr"
 else
+	printf '\nInstalling mr...\n' >&2
 	sudo install -d -m 0755 "$prefix/bin" "$prefix/share/doc/mr" "$prefix/share/licenses/mr"
-	sudo install -m 0755 "$script_directory/bin/mr" "$prefix/bin/mr"
+	sudo install -m 0755 "$script_directory/bin/mr" "$prefix/bin/mr.real"
 	sudo install -m 0644 "$script_directory/bin/mr.hlp" "$prefix/bin/mr.hlp"
 	sudo install -m 0644 "$script_directory/share/doc/mr/"*.pdf "$prefix/share/doc/mr/"
 	sudo install -m 0644 "$script_directory/share/licenses/mr/TVISION-COPYRIGHT" "$prefix/share/licenses/mr/TVISION-COPYRIGHT"
+	sudo install -m 0755 "$launcher_file" "$prefix/bin/mr"
 fi
 
 install -d -m 0755 "$macro_target"
@@ -302,6 +447,22 @@ find "$macro_source" -type f -name '*.mrmac' -print | sort |
 		if [ ! -e "$target_file" ]; then install -m 0644 "$source_file" "$target_file"; fi
 	done
 
-printf 'mr %s (build %s) installed successfully.\n' "$release_version" "$release_epoch"
-printf 'Executable: %s/bin/mr\n' "$prefix"
-printf 'User macros: %s (existing files preserved)\n' "$macro_target"
+if [ -n "$terminal_shell_startup" ] && ! grep -Fqx '# mr terminal color fallback' "$terminal_shell_startup" 2>/dev/null; then
+	cat >> "$terminal_shell_startup" <<'EOF'
+
+# mr terminal color fallback
+if [ -x /usr/bin/tput ]; then
+	mr_terminal_colors=$(/usr/bin/tput colors 2>/dev/null || true)
+	case "$mr_terminal_colors" in
+		''|*[!0-9]*) TERM=xterm-256color; export TERM ;;
+		*) if [ "$mr_terminal_colors" -lt 8 ]; then TERM=xterm-256color; export TERM; fi ;;
+	esac
+	unset mr_terminal_colors
+fi
+EOF
+fi
+
+printf '\nInstalled mr %s (build %s).\n' "$release_version" "$release_epoch"
+printf '  Command: %s/bin/mr\n' "$prefix"
+printf '  User macros: %s (existing files preserved)\n\n' "$macro_target"
+printf "Enter 'mr' to begin.\n"
