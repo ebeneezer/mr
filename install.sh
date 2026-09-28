@@ -90,7 +90,9 @@ fi
 
 character_map=$(locale charmap 2>/dev/null || true)
 missing_utf8_locale=
+configure_utf8_locale=
 if [ "$character_map" != "UTF-8" ]; then
+	configure_utf8_locale=1
 	if [ "$(LC_ALL=C.UTF-8 locale charmap 2>/dev/null || true)" = "UTF-8" ]; then
 		LC_ALL=C.UTF-8
 		export LC_ALL
@@ -116,8 +118,9 @@ ldd_report=$(ldd -r "$script_directory/bin/mr" 2>&1 || true)
 missing_libraries=$(printf '%s\n' "$ldd_report" | sed -n 's/^[[:space:]]*\([^[:space:]]*\)[[:space:]]*=>[[:space:]]*not found.*/\1/p' | sort -u)
 missing_terminal_probe=
 if [ ! -x /usr/bin/tput ]; then missing_terminal_probe=1; fi
-if [ -n "$missing_libraries" ] || [ -n "$missing_emoji_codepoints" ] || [ -n "$missing_terminal_probe" ] || [ -n "$missing_utf8_locale" ]; then
+if [ -n "$missing_libraries" ] || [ -n "$missing_emoji_codepoints" ] || [ -n "$missing_terminal_probe" ] || [ -n "$configure_utf8_locale" ]; then
 	printf '\nDependencies needed\n' >&2
+	if [ -n "$configure_utf8_locale" ]; then printf '  System locale must be set to C.UTF-8.\n' >&2; fi
 	if [ -n "$missing_utf8_locale" ]; then printf '  C.UTF-8 locale must be generated.\n' >&2; fi
 	if [ -n "$missing_libraries" ]; then
 		printf '  Missing libraries:\n' >&2
@@ -144,6 +147,11 @@ if [ -n "$missing_libraries" ] || [ -n "$missing_emoji_codepoints" ] || [ -n "$m
 	locale_support_package=
 	if [ -n "$missing_utf8_locale" ] && { ! command -v localedef >/dev/null 2>&1 || [ ! -f /usr/share/i18n/locales/C ] || [ ! -f /usr/share/i18n/charmaps/UTF-8.gz ]; }; then
 		locale_support_package=1
+	fi
+	if [ -n "$configure_utf8_locale" ] && [ "$package_manager" = apt ] && ! command -v update-locale >/dev/null 2>&1; then
+		locale_support_package=1
+	fi
+	if [ -n "$locale_support_package" ]; then
 		apt_packages=locales
 		pacman_packages=glibc
 	fi
@@ -200,6 +208,10 @@ noto-fonts-emoji"
 		printf 'No mr files were installed.\n' >&2
 		exit 1
 	fi
+	if [ -n "$configure_utf8_locale" ] && [ "$package_manager" != apt ] && ! command -v localectl >/dev/null 2>&1; then
+		printf 'mr cannot be installed. localectl is required to save the system locale. No mr files were installed.\n' >&2
+		exit 1
+	fi
 	if [ "$package_manager" = apt ]; then packages=$(printf '%s\n' "$apt_packages" | sort -u)
 	elif [ "$package_manager" = pacman ]; then packages=$(printf '%s\n' "$pacman_packages" | sort -u)
 	else packages=
@@ -248,6 +260,27 @@ noto-fonts-emoji"
 		fi
 		LC_ALL=C.UTF-8
 		export LC_ALL
+	fi
+	if [ -n "$configure_utf8_locale" ]; then
+		printf '\nSaving C.UTF-8 as the system locale...\n' >&2
+		if [ "$package_manager" = apt ]; then
+			if ! command -v update-locale >/dev/null 2>&1; then
+				printf 'mr cannot be installed. update-locale is unavailable. No mr files were installed.\n' >&2
+				exit 1
+			fi
+			set -- update-locale LANG=C.UTF-8 LC_ALL=C.UTF-8
+		else
+			set -- localectl set-locale LANG=C.UTF-8
+		fi
+		if [ "$(id -u)" -eq 0 ]; then
+			if ! "$@"; then
+				printf 'mr cannot be installed. System locale update failed. No mr files were installed.\n' >&2
+				exit 1
+			fi
+		elif ! sudo "$@"; then
+			printf 'mr cannot be installed. System locale update failed. No mr files were installed.\n' >&2
+			exit 1
+		fi
 	fi
 	ldd_report=$(ldd -r "$script_directory/bin/mr" 2>&1 || true)
 	missing_libraries=$(printf '%s\n' "$ldd_report" | sed -n 's/^[[:space:]]*\([^[:space:]]*\)[[:space:]]*=>[[:space:]]*not found.*/\1/p' | sort -u)
