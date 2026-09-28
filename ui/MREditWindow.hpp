@@ -470,8 +470,10 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 			}
 			const ushort snippetModifiers = event.keyDown.controlKeyState;
 			const ushort snippetKeyCode = event.keyDown.keyCode;
+			// Konsole's Win32 input mode reports Ctrl+Space with the Space scan code and a NUL character.
 			const bool ctrlSpace = (snippetModifiers & kbCtrlShift) != 0 && (snippetModifiers & (kbAltShift | kbSuperShift | kbPaste)) == 0 &&
-			                       (snippetKeyCode == kbNoKey || snippetKeyCode == static_cast<ushort>(' ') || snippetKeyCode == static_cast<ushort>('@'));
+			                       (snippetKeyCode == kbNoKey || snippetKeyCode == static_cast<ushort>(' ') || snippetKeyCode == static_cast<ushort>('@') ||
+			                        (event.keyDown.charScan.scanCode == 0x39 && (event.keyDown.charScan.charCode == 0 || event.keyDown.charScan.charCode == ' ')));
 			if (ctrlSpace && editor != nullptr && !isReadOnly()) {
 				MREditSetupSettings editSettings;
 				effectiveEditSetupSettingsForPath(currentFileName(), editSettings);
