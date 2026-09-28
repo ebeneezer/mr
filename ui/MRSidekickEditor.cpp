@@ -106,12 +106,12 @@ class MRSnippetSidekickDialog : public TDialog {
 		flags |= wfMove | wfGrow | wfClose;
 		growMode = gfGrowHiX | gfGrowHiY;
 		helpCtx = hcDialogSnippetSidekick;
-		mEditor = new MRSidekickEditor(TRect(1, 1, std::max<short>(2, size.x - 1), std::max<short>(2, size.y - 3)), parentBufferId, replaceStart, replaceEnd, text, title, placeholders, false, true, true);
+		mEditor = new MRSidekickEditor(TRect(1, 1, std::max<short>(2, size.x - 1), std::max<short>(2, size.y - 4)), parentBufferId, replaceStart, replaceEnd, text, title, placeholders, false, true, true);
 		if (mEditor != nullptr) {
 			mEditor->growMode = gfGrowHiX | gfGrowHiY;
 			mEditor->insertInto(*this);
 		}
-		helpButton = new TButton(TRect(std::max<short>(2, size.x - 12), std::max<short>(2, size.y - 3), std::max<short>(3, size.x - 1), std::max<short>(4, size.y - 1)), "~H~elp", cmHelp, bfNormal);
+		helpButton = new TButton(TRect(std::max<short>(2, size.x - 12), std::max<short>(2, size.y - 4), std::max<short>(3, size.x - 1), std::max<short>(4, size.y - 2)), "~H~elp", cmHelp, bfNormal);
 		helpButton->growMode = gfGrowAll;
 		insert(helpButton);
 		if (mEditor != nullptr) mEditor->select();
@@ -124,7 +124,7 @@ class MRSnippetSidekickDialog : public TDialog {
 	void sizeLimits(TPoint &min, TPoint &max) override {
 		TDialog::sizeLimits(min, max);
 		min.x = std::max<short>(min.x, std::min<short>(32, size.x));
-		min.y = std::max<short>(min.y, std::min<short>(10, size.y));
+		min.y = std::max<short>(min.y, std::min<short>(12, size.y));
 	}
 
 	TPalette &getPalette() const override {
@@ -137,6 +137,10 @@ class MRSnippetSidekickDialog : public TDialog {
 
 	TColorAttr mapColor(uchar index) override {
 		if (index >= 1 && index <= 8) return snippetSidekickDialogColor(index);
+		if (index == 15) {
+			const TColorAttr background = snippetSidekickDialogColor(1) & 0xF0;
+			return background | (background >> 4);
+		}
 		return TDialog::mapColor(index);
 	}
 

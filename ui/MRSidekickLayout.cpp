@@ -294,9 +294,9 @@ TRect snippetSidekickBoundsFor(MREditWindow *parent, const std::string &text, st
 	const int maxWidth = std::max(1, desktopWidth - 2);
 	const int maxHeight = std::max(1, desktopHeight - 2);
 	const int minWidth = std::min(48, maxWidth);
-	const int minHeight = std::min(10, maxHeight);
+	const int minHeight = std::min(12, maxHeight);
 	int wantedWidth = std::clamp(sidekickMaxLineLength(lines) + 8, minWidth, maxWidth);
-	int wantedHeight = std::clamp<int>(static_cast<int>(lines.size()) + 6, minHeight, maxHeight);
+	int wantedHeight = std::clamp<int>(static_cast<int>(lines.size()) + 8, minHeight, maxHeight);
 	int x = desktop.a.x + 2;
 	int y = desktop.a.y + 2;
 

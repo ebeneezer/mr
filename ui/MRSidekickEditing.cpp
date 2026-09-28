@@ -441,8 +441,9 @@ void MRSidekickEditor::resizeSnippetSidekickForContent() {
 	const int desktopHeight = std::max(1, desktop.b.y - desktop.a.y);
 	const int maxWidth = std::max(32, desktopWidth - 2);
 	const int maxHeight = std::max(6, desktopHeight - 2);
+	const int minHeight = std::min(12, maxHeight);
 	const int wantedWidth = std::clamp(sidekickMaxLineLength(mLines) + 8, 32, maxWidth);
-	const int wantedHeight = std::clamp<int>(static_cast<int>(mLines.size()) + 6, 10, maxHeight);
+	const int wantedHeight = std::clamp<int>(static_cast<int>(mLines.size()) + 8, minHeight, maxHeight);
 	const int currentWidth = std::max(1, bounds.b.x - bounds.a.x);
 	const int currentHeight = std::max(1, bounds.b.y - bounds.a.y);
 	const int newWidth = std::max(currentWidth, wantedWidth);
@@ -457,7 +458,7 @@ void MRSidekickEditor::resizeSnippetSidekickForContent() {
 		if (bounds.a.y < desktop.a.y) bounds.move(0, desktop.a.y - bounds.a.y);
 		owner->locate(bounds);
 	}
-	TRect editorBounds(1, 1, std::max<short>(2, owner->size.x - 1), std::max<short>(2, owner->size.y - 3));
+	TRect editorBounds(1, 1, std::max<short>(2, owner->size.x - 1), std::max<short>(2, owner->size.y - 4));
 	updateScrollBars(editorBounds);
 }
 
