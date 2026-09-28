@@ -110,11 +110,11 @@ class MRSnippetSidekickDialog : public TDialog {
 		if (mEditor != nullptr) {
 			mEditor->growMode = gfGrowHiX | gfGrowHiY;
 			mEditor->insertInto(*this);
-			mEditor->select();
 		}
 		helpButton = new TButton(TRect(std::max<short>(2, size.x - 12), std::max<short>(2, size.y - 3), std::max<short>(3, size.x - 1), std::max<short>(4, size.y - 1)), "~H~elp", cmHelp, bfNormal);
 		helpButton->growMode = gfGrowAll;
 		insert(helpButton);
+		if (mEditor != nullptr) mEditor->select();
 	}
 
 	[[nodiscard]] MRSidekickEditor *snippetSidekick() const noexcept {
@@ -128,12 +128,10 @@ class MRSnippetSidekickDialog : public TDialog {
 	}
 
 	TPalette &getPalette() const override {
-		static TColorAttr paletteData[8];
-		static TPalette palette(paletteData, 8);
+		static TPalette palette(cpGrayDialog, sizeof(cpGrayDialog) - 1);
 
 		for (uchar index = 1; index <= 8; ++index)
-			paletteData[index - 1] = snippetSidekickDialogColor(index);
-		palette = TPalette(paletteData, 8);
+			palette[index] = snippetSidekickDialogColor(index);
 		return palette;
 	}
 
