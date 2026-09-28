@@ -118,8 +118,17 @@ ldd_report=$(ldd -r "$script_directory/bin/mr" 2>&1 || true)
 missing_libraries=$(printf '%s\n' "$ldd_report" | sed -n 's/^[[:space:]]*\([^[:space:]]*\)[[:space:]]*=>[[:space:]]*not found.*/\1/p' | sort -u)
 missing_terminal_probe=
 if [ ! -x /usr/bin/tput ]; then missing_terminal_probe=1; fi
-if [ -n "$missing_libraries" ] || [ -n "$missing_emoji_codepoints" ] || [ -n "$missing_terminal_probe" ] || [ -n "$configure_utf8_locale" ]; then
-	printf '\nDependencies needed\n' >&2
+terminal_colors=$(/usr/bin/tput colors 2>/dev/null || true)
+terminal_needs_color=
+case "$terminal_colors" in
+	''|*[!0-9]*) terminal_needs_color=1 ;;
+	*) if [ "$terminal_colors" -lt 8 ]; then terminal_needs_color=1; fi ;;
+esac
+required_changes=
+if [ -n "$missing_libraries$missing_emoji_codepoints$missing_terminal_probe$configure_utf8_locale" ]; then required_changes=1; fi
+terminal_shell_requested=
+if [ -n "$required_changes" ] || [ -n "$terminal_needs_color" ]; then
+	printf '\nInstaller setup\n' >&2
 	if [ -n "$configure_utf8_locale" ]; then printf '  System locale must be set to C.UTF-8.\n' >&2; fi
 	if [ -n "$missing_utf8_locale" ]; then printf '  C.UTF-8 locale must be generated.\n' >&2; fi
 	if [ -n "$missing_libraries" ]; then
@@ -136,6 +145,9 @@ if [ -n "$missing_libraries" ] || [ -n "$missing_emoji_codepoints" ] || [ -n "$m
 		fi
 	fi
 	if [ -n "$missing_terminal_probe" ]; then printf '  Terminal capability tool is missing: /usr/bin/tput\n' >&2; fi
+	if [ -n "$terminal_needs_color" ]; then
+		printf '  Optional shell TERM fallback: xterm-256color (current colors: %s).\n' "${terminal_colors:-unknown}" >&2
+	fi
 
 	package_manager=
 	if command -v apt-get >/dev/null 2>&1; then package_manager=apt
@@ -224,10 +236,15 @@ noto-fonts-emoji"
 	printf 'Apply these changes now (sudo if needed)? [y/N] ' >&2
 	if ! IFS= read -r install_answer </dev/tty; then install_answer=; fi
 	case "$install_answer" in
-		y|Y|yes|YES) ;;
-		*) printf 'Installation cancelled. No mr files were installed.\n' >&2; exit 1 ;;
+		y|Y|yes|YES) if [ -n "$terminal_needs_color" ]; then terminal_shell_requested=1; fi ;;
+		*)
+			if [ -n "$required_changes" ]; then
+				printf 'Installation cancelled. No mr files were installed.\n' >&2
+				exit 1
+			fi
+			;;
 	esac
-	if [ "$(id -u)" -ne 0 ] && ! command -v sudo >/dev/null 2>&1; then
+	if { [ "$#" -gt 0 ] || [ -n "$configure_utf8_locale" ]; } && [ "$(id -u)" -ne 0 ] && ! command -v sudo >/dev/null 2>&1; then
 		printf 'sudo is required to prepare the missing dependencies. No mr files were installed.\n' >&2
 		exit 1
 	fi
@@ -362,36 +379,25 @@ case "$terminal_colors" in
 	''|*[!0-9]*) terminal_needs_color=1 ;;
 	*) if [ "$terminal_colors" -lt 8 ]; then terminal_needs_color=1; fi ;;
 esac
-if [ -n "$terminal_needs_color" ]; then
-	printf '\nTerminal setup\n' >&2
-	printf '  TERM: %s\n' "${TERM:-unset}" >&2
-	printf '  Reported colors: %s\n' "${terminal_colors:-unknown}" >&2
-	printf '  mr will use xterm-256color when the terminal reports no colors.\n' >&2
-	printf 'Set TERM=xterm-256color automatically in future shells? [y/N] ' >&2
-	if ! IFS= read -r terminal_answer </dev/tty; then terminal_answer=; fi
-	case "$terminal_answer" in
-		y|Y|yes|YES)
-		if [ -z "${HOME:-}" ]; then
-			printf 'HOME is required to update the shell startup file. No mr files were installed.\n' >&2
-			exit 1
-		fi
-		case "${SHELL:-}" in
-			*/bash) terminal_shell_startup="$HOME/.bashrc" ;;
-			*/zsh) terminal_shell_startup="$HOME/.zshrc" ;;
-			*) printf 'This shell has no supported startup file. No mr files were installed.\n' >&2; exit 1 ;;
-		esac
-		if [ -e "$terminal_shell_startup" ]; then
-			if [ ! -f "$terminal_shell_startup" ] || [ ! -w "$terminal_shell_startup" ]; then
-				printf 'Shell startup file is not writable: %s\nNo mr files were installed.\n' "$terminal_shell_startup" >&2
-				exit 1
-			fi
-		elif [ ! -w "$HOME" ]; then
-			printf 'Home directory is not writable: %s\nNo mr files were installed.\n' "$HOME" >&2
-			exit 1
-		fi
-		;;
-		*) ;;
+if [ -n "$terminal_shell_requested" ] && [ -n "$terminal_needs_color" ]; then
+	if [ -z "${HOME:-}" ]; then
+		printf 'HOME is required to update the shell startup file. No mr files were installed.\n' >&2
+		exit 1
+	fi
+	case "${SHELL:-}" in
+		*/bash) terminal_shell_startup="$HOME/.bashrc" ;;
+		*/zsh) terminal_shell_startup="$HOME/.zshrc" ;;
+		*) printf 'This shell has no supported startup file. No mr files were installed.\n' >&2; exit 1 ;;
 	esac
+	if [ -e "$terminal_shell_startup" ]; then
+		if [ ! -f "$terminal_shell_startup" ] || [ ! -w "$terminal_shell_startup" ]; then
+			printf 'Shell startup file is not writable: %s\nNo mr files were installed.\n' "$terminal_shell_startup" >&2
+			exit 1
+		fi
+	elif [ ! -w "$HOME" ]; then
+		printf 'Home directory is not writable: %s\nNo mr files were installed.\n' "$HOME" >&2
+		exit 1
+	fi
 fi
 
 launcher_file=$(mktemp /tmp/mr-launcher.XXXXXX)

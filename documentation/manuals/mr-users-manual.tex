@@ -127,7 +127,8 @@ UTF-8, the installer offers to set \texttt{C.UTF-8} as the system locale with
 \texttt{update-locale} on Debian or \texttt{localectl} on Arch. It generates the
 locale first when necessary, then checks it before installing mr files. The
 launcher also uses \texttt{C.UTF-8} for the current session; the system setting
-is applied to new login sessions. Fontconfig's \texttt{fc-list}
+is applied to new login sessions. Locale setup, missing packages, and optional
+shell terminal setup share one confirmation. Fontconfig's \texttt{fc-list}
 must also find fonts covering the tape, magnifier, and clock symbols used by
 the interface. The installer lists missing codepoints and suggests
 \texttt{fontconfig} with \texttt{fonts-noto-color-emoji} on Debian-family
