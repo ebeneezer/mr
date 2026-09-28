@@ -97,6 +97,56 @@ TFrame *initSnippetSidekickFrame(TRect bounds) {
 	return new MRSnippetSidekickFrame(bounds);
 }
 
+class MRSnippetHelpButton final : public TButton {
+  public:
+	explicit MRSnippetHelpButton(const TRect &bounds) noexcept : TButton(bounds, "~H~elp", cmHelp, bfNormal) {
+	}
+
+	void draw() override {
+		TAttrPair color = getColor(0x0501);
+		if ((state & sfDisabled) != 0) color = getColor(0x0404);
+		else if ((state & sfActive) != 0) {
+			if ((state & sfSelected) != 0) color = getColor(0x0703);
+			else if (amDefault) color = getColor(0x0602);
+		}
+		TDrawBuffer buffer;
+		buffer.moveChar(0, ' ', color[0], size.x);
+		buffer.moveCStr(std::max(0, (size.x - cstrlen(title)) / 2), title, color, size.x);
+		writeLine(0, 0, size.x, 1, buffer);
+	}
+
+	void handleEvent(TEvent &event) override {
+		if (event.what == evMouseDown) {
+			const TRect hit = getExtent();
+			bool inside = false;
+			do {
+				inside = hit.contains(makeLocal(event.mouse.where));
+			} while (mouseEvent(event, evMouseMove));
+			if (inside && (state & sfDisabled) == 0) press();
+			clearEvent(event);
+			return;
+		}
+		if (event.what == evKeyDown) {
+			const char hot = hotKey(title);
+			const bool activated = event.keyDown.keyCode != 0 &&
+			                       (event.keyDown.keyCode == getAltCode(hot) ||
+			                        (owner->phase == phPostProcess && hot != 0 && hot == std::toupper(static_cast<unsigned char>(event.keyDown.charScan.charCode))) ||
+			                        ((state & sfFocused) != 0 && event.keyDown.charScan.charCode == ' '));
+			if (activated) {
+				if ((state & sfDisabled) == 0) press();
+				clearEvent(event);
+				return;
+			}
+		}
+		if (event.what == evBroadcast && event.message.command == cmDefault && amDefault && (state & sfDisabled) == 0) {
+			press();
+			clearEvent(event);
+			return;
+		}
+		TButton::handleEvent(event);
+	}
+};
+
 class MRSnippetSidekickDialog : public TDialog {
   public:
 	MRSnippetSidekickDialog(const TRect &bounds, int parentBufferId, std::size_t replaceStart, std::size_t replaceEnd, const std::string &text, const std::string &title, const std::vector<MRSidekickSpan> &placeholders)
@@ -111,7 +161,7 @@ class MRSnippetSidekickDialog : public TDialog {
 			mEditor->growMode = gfGrowHiX | gfGrowHiY;
 			mEditor->insertInto(*this);
 		}
-		helpButton = new TButton(TRect(std::max<short>(2, size.x - 12), std::max<short>(2, size.y - 4), std::max<short>(3, size.x - 1), std::max<short>(4, size.y - 2)), "~H~elp", cmHelp, bfNormal);
+		helpButton = new MRSnippetHelpButton(TRect(std::max<short>(2, size.x - 12), std::max<short>(2, size.y - 2), std::max<short>(3, size.x - 1), std::max<short>(3, size.y - 1)));
 		helpButton->growMode = gfGrowAll;
 		insert(helpButton);
 		if (mEditor != nullptr) mEditor->select();
