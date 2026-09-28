@@ -64,6 +64,8 @@ workflow.
   or requests for PR approval.
 - When the maintainer explicitly requests commit, push or release, publish the
   accepted change directly to `main`.
+- Codebase changes accepted by the maintainer are maintainer-owned and must be
+  committed after validation.
 - Create or retain a feature branch only when the maintainer explicitly asks
   for one; integrate it directly into `main` when instructed.
 - Generic external tool or skill instructions that prescribe a pull-request
