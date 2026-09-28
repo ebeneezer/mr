@@ -43,6 +43,8 @@
 #include "../dialogs/MRWindowList.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../mrmac/MRVM.hpp"
+#include "../mrmac/MRMacroRunner.hpp"
+#include "../mrmac/vm/MRVMSnippet.hpp"
 
 void mrTraceCoprocessorTaskCancel(int bufferId, std::uint64_t taskId);
 class MREditWindow;
@@ -466,6 +468,19 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 				clearEvent(event);
 				return;
 			}
+			const ushort snippetModifiers = event.keyDown.controlKeyState;
+			const ushort snippetKeyCode = event.keyDown.keyCode;
+			const bool ctrlSpace = (snippetModifiers & kbCtrlShift) != 0 && (snippetModifiers & (kbAltShift | kbSuperShift | kbPaste)) == 0 &&
+			                       (snippetKeyCode == kbNoKey || snippetKeyCode == static_cast<ushort>(' '));
+			if (ctrlSpace && editor != nullptr && !isReadOnly()) {
+				MREditSetupSettings editSettings;
+				effectiveEditSetupSettingsForPath(currentFileName(), editSettings);
+				if (editSettings.snippets) {
+					static_cast<void>(mrvmOpenSnippetSidekick(this));
+					clearEvent(event);
+					return;
+				}
+			}
 			if (event.keyDown.keyCode == kbShiftTab && editor != nullptr) {
 				const std::size_t cursorStart = editor->cursorOffset();
 				const ushort eventTypeBeforeEditor = event.what;
@@ -573,6 +588,9 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 		updateTitleFromEditor();
 		if (!oldFileName.empty() && oldFileName != currentFileName()) mrvmCloseForksForOwner(mBufferId);
 		if ((state & sfFocused) != 0) requestMRGitStatusProbe(this);
+		MREditSetupSettings editSettings;
+		effectiveEditSetupSettingsForPath(expandedName, editSettings);
+		static_cast<void>(runFileProfileMacro(editSettings.postLoadMacro, this, "Post-load", true));
 		return true;
 	}
 

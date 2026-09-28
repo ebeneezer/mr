@@ -113,6 +113,7 @@ Primitive & Role & Purpose & Reference \\
 \primitiveoverview{TRANS}{keyword-trans}{header keyword}{TRANS attribute.}
 \primitiveoverview{DUMP}{keyword-dump}{header keyword}{DUMP attribute.}
 \primitiveoverview{PERM}{keyword-perm}{header keyword}{PERM attribute.}
+\primitiveoverview{UNIQUE}{keyword-unique}{header keyword}{Run once per source-file timestamp.}
 \bottomrule
 \end{longtable}
 
@@ -322,6 +323,30 @@ $MACRO REFERENCE_PERM PERM FROM EDIT;
 END_MACRO;
 \end{verbatim}
 
+
+\begin{mrmacextension}
+\phantomsection
+\label{prim:keyword-unique}
+\subsection*{UNIQUE}
+\index{UNIQUE!header keyword@\textsc{header keyword}}
+\begin{verbatim}
+$MACRO macroName UNIQUE FROM EDIT;
+\end{verbatim}
+Parameters: macroName names the macro.
+
+Runs the macro at most once for a given source-file timestamp during the
+application session. A failed execution attempt counts as a run. If the file
+timestamp is unchanged or older, subsequent file invocations skip loading
+and execution. A newer timestamp allows a fresh compilation and run. The
+timestamp is retained in the central runtime key/value store.
+
+\paragraph{Example macro.}
+\begin{verbatim}
+$MACRO REGISTER_C_SNIPPETS UNIQUE FROM EDIT;
+SET_GLOBAL_INT('C_SNIPPETS_READY', 1);
+END_MACRO;
+\end{verbatim}
+\end{mrmacextension}
 
 \chapter{Values, Variables and Collections}
 

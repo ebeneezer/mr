@@ -29,6 +29,7 @@ struct MacroRef {
 	bool transientAttr;
 	bool dumpAttr;
 	bool permAttr;
+	bool uniqueAttr;
 	bool closureUnit;
 	std::uint64_t tickMs;
 	MRRuntimeScheduledConsumerId scheduledConsumerId;

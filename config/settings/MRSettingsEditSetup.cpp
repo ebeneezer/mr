@@ -39,6 +39,7 @@ static const MREditSettingDescriptor kEditSettingDescriptors[] = {
     {"CODE_LANGUAGE", "Code language", MREditSettingSection::Display, MREditSettingKind::Choice, true, kOvCodeLanguage},
     {"CODE_COLORING", "Code coloring", MREditSettingSection::Display, MREditSettingKind::Boolean, true, kOvCodeColoring},
     {"API_REFERENCE", "API reference", MREditSettingSection::Display, MREditSettingKind::Boolean, true, kOvApiReference},
+    {"SNIPPETS", "Snippets", MREditSettingSection::Formatting, MREditSettingKind::Boolean, true, kOvSnippets},
     {"AUTO_PAIR_BRACKETS", "Auto pair brackets", MREditSettingSection::Formatting, MREditSettingKind::Boolean, true, kOvAutoPairBrackets},
     {"FILE_TYPE", "File type", MREditSettingSection::Formatting, MREditSettingKind::Choice, true, kOvFileType},
     {"BINARY_RECORD_LENGTH", "Binary record length", MREditSettingSection::Formatting, MREditSettingKind::Integer, true, kOvBinaryRecordLength},
@@ -645,6 +646,9 @@ bool applyEditSetupValueInternal(MREditSetupSettings &current, const std::string
 		case kOvApiReference:
 			if (!parseAndAssignBooleanLiteral(value, current.apiReference, errorMessage)) return false;
 			break;
+		case kOvSnippets:
+			if (!parseAndAssignBooleanLiteral(value, current.snippets, errorMessage)) return false;
+			break;
 		case kOvAutoPairBrackets:
 			if (!parseAndAssignBooleanLiteral(value, current.autoPairBrackets, errorMessage)) return false;
 			break;
@@ -798,6 +802,7 @@ std::string editSetupValueLiteral(const MREditSetupSettings &settings, const cha
 		case kOvCodeLanguage: return settings.codeLanguage;
 		case kOvCodeColoring: return formatEditSetupBoolean(settings.codeColoring);
 		case kOvApiReference: return formatEditSetupBoolean(settings.apiReference);
+		case kOvSnippets: return formatEditSetupBoolean(settings.snippets);
 		case kOvAutoPairBrackets: return formatEditSetupBoolean(settings.autoPairBrackets);
 		case kOvFileType: return settings.fileType;
 		case kOvBinaryRecordLength: return std::to_string(settings.binaryRecordLength);
@@ -892,6 +897,7 @@ bool setConfiguredEditSetupSettings(const MREditSetupSettings &settings, std::st
 	normalized.codeLanguage = codeLanguage;
 	normalized.codeColoring = settings.codeColoring;
 	normalized.apiReference = settings.apiReference;
+	normalized.snippets = settings.snippets;
 	normalized.autoPairBrackets = settings.autoPairBrackets;
 	normalized.fileType = fileType;
 	normalized.binaryRecordLength = settings.binaryRecordLength;

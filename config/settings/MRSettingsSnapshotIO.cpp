@@ -701,6 +701,7 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('CODE_LANGUAGE', '" + escapeMrmacSingleQuotedLiteral(edit.codeLanguage) + "');\n";
 	source += "MRSETUP('CODE_COLORING', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.codeColoring)) + "');\n";
 	source += "MRSETUP('API_REFERENCE', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.apiReference)) + "');\n";
+	source += "MRSETUP('SNIPPETS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.snippets)) + "');\n";
 	source += "MRSETUP('AUTO_PAIR_BRACKETS', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.autoPairBrackets)) + "');\n";
 	source += "MRSETUP('FILE_TYPE', '" + escapeMrmacSingleQuotedLiteral(edit.fileType) + "');\n";
 	source += "MRSETUP('BINARY_RECORD_LENGTH', '" + std::to_string(edit.binaryRecordLength) + "');\n";

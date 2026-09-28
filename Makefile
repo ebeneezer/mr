@@ -250,6 +250,7 @@ MR_RELEASE_MANUALS = \
 	$(MANUAL_DIRECTORY)/mr-macro-reference.pdf \
 	$(MANUAL_DIRECTORY)/mr-technical-manual.pdf
 MR_RELEASE_MACROS = \
+	mrmac/macros/CSnippets.mrmac \
 	mrmac/macros/MRComfortExtensions.mrmac \
 	mrmac/macros/compilersupport/MRCompilerMiddleware.mrmac \
 	mrmac/macros/keymaps/MRDefaultKeymaps.mrmac \
@@ -397,6 +398,7 @@ CXX_SOURCES = \
 	mrmac/ui/conventional/MRVMMacroDialogRuntime.cpp \
 	mrmac/vm/MRVMMacroLoading.cpp \
 	mrmac/vm/MRVMMacroRuntime.cpp \
+	mrmac/vm/MRVMSnippet.cpp \
 	mrmac/ui/modeless/MRVMMacroModelessProcedures.cpp \
 	mrmac/vm/MRVMMacroSpecRuntime.cpp \
 	mrmac/ui/modeless/MRVMModelessUiStorage.cpp \

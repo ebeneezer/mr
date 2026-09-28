@@ -8,6 +8,7 @@
 #include "MRVMRuntimeCatalog.hpp"
 #include "MRVMRuntimeGlobals.hpp"
 #include "MRVMRuntimeKv.hpp"
+#include "MRVMRuntimeState.hpp"
 #include "MRVMValue.hpp"
 
 #include "../MRMacroRunner.hpp"
@@ -28,11 +29,15 @@
 #include <tvision/tv.h>
 
 #include <algorithm>
+#include <cstdio>
+#include <filesystem>
 #include <initializer_list>
 #include <map>
+#include <mutex>
 #include <set>
 #include <sstream>
 #include <stdexcept>
+#include <sys/stat.h>
 #include <string>
 #include <utility>
 #include <vector>
@@ -548,13 +553,34 @@ void stopExecSessionClosure(const std::vector<Value> &args) {
 }
 
 int currentUiMacroMode() {
-	MREditWindow *win = activeMacroEditWindow();
+	MREditWindow *win = currentEditWindow();
 	if (win != nullptr && win->isCommunicationWindow()) return MACRO_MODE_DOS_SHELL;
 	return MACRO_MODE_EDIT;
 }
 
 bool macroAllowsUiMode(const MacroRef &macroRef, int mode) noexcept {
 	return macroRef.fromMode == MACRO_MODE_ALL || macroRef.fromMode == mode;
+}
+
+std::string uniqueMacroStampKey(const MacroRef &macroRef) {
+	return macroRef.fileKey + "^" + mrvmUpperKey(macroRef.displayName);
+}
+
+void noteUniqueMacroAttempt(const MacroRef &macroRef, const LoadedMacroFile &file) {
+	struct stat status {};
+	if (!macroRef.uniqueAttr || file.resolvedPath.empty() || ::stat(file.resolvedPath.c_str(), &status) != 0) return;
+	mrvmStoreRuntimeStateString("uniqueMacroRuns", uniqueMacroStampKey(macroRef),
+	                            std::to_string(static_cast<long long>(status.st_mtim.tv_sec)) + ":" + std::to_string(status.st_mtim.tv_nsec));
+}
+
+bool uniqueMacroHasCurrentAttempt(const MacroRef &macroRef, const std::string &resolvedPath) {
+	struct stat status {};
+	if (!macroRef.uniqueAttr || resolvedPath.empty() || ::stat(resolvedPath.c_str(), &status) != 0) return false;
+	const std::string stamp = mrvmRuntimeStateString("uniqueMacroRuns", uniqueMacroStampKey(macroRef));
+	long long recordedSeconds = 0;
+	long recordedNanoseconds = 0;
+	if (std::sscanf(stamp.c_str(), "%lld:%ld", &recordedSeconds, &recordedNanoseconds) != 2) return false;
+	return recordedSeconds > status.st_mtim.tv_sec || (recordedSeconds == status.st_mtim.tv_sec && recordedNanoseconds >= status.st_mtim.tv_nsec);
 }
 
 bool executeLoadedMacro(const std::string &macroKey, const std::string &paramPart, std::vector<std::string> *logSink) {
@@ -570,6 +596,10 @@ bool executeLoadedMacro(const std::string &macroKey, const std::string &paramPar
 	if (!readLoadedMacroByKey(macroKey, macroRef)) {
 		setRuntimeErrorLevel(5001);
 		return false;
+	}
+	if (macroRef.uniqueAttr && !macroRef.firstRunPending) {
+		setRuntimeErrorLevel(0);
+		return true;
 	}
 
 	if (!readLoadedMacroFileByKey(macroRef.fileKey, file)) {
@@ -596,6 +626,7 @@ bool executeLoadedMacro(const std::string &macroKey, const std::string &paramPar
 	childFileKey = macroRef.fileKey;
 	macroRef.firstRunPending = false;
 	writeLoadedMacroByKey(macroKey, macroRef);
+	noteUniqueMacroAttempt(macroRef, file);
 
 	childVm.setExecutionSessionContext(currentExecutionSessionId());
 	if (macroRef.closureUnit) childVm.setClosureContext(macroRef.closureId);
@@ -604,6 +635,10 @@ bool executeLoadedMacro(const std::string &macroKey, const std::string &paramPar
 	if (childDump) unloadMacroFromRegistry(macroKey);
 	else if (childTransient)
 		evictTransientFileImage(childFileKey);
+	if (childVm.hasExecutionFailed() || childVm.wasCancelled()) {
+		setRuntimeErrorLevel(5007);
+		return false;
+	}
 	setRuntimeErrorLevel(0);
 	return true;
 }
@@ -922,3 +957,17 @@ bool fileContainsOnlyTransientMacros(const LoadedMacroFile &file) {
 }
 
 } // namespace mrvm_runtime
+
+bool mrvmUniqueMacroFileAlreadyRun(const std::string &spec) {
+	std::lock_guard<std::recursive_mutex> executionLock(mrvmExecutionMutex());
+	LoadedMacroFile file;
+	MacroRef macroRef;
+	const std::string fileKey = mrvmMakeMacroFileKey(spec);
+	const std::string preferredName = mrvmUpperKey(std::filesystem::path(spec).stem().string());
+	if (!mrvm_runtime::readLoadedMacroFileByKey(fileKey, file) || file.macroNames.empty() || file.resolvedPath.empty()) return false;
+	std::string macroName = file.macroNames.front();
+	for (const std::string &name : file.macroNames)
+		if (name == preferredName) { macroName = name; break; }
+	if (!mrvm_runtime::readLoadedMacroByKey(macroName, macroRef) || macroRef.fileKey != fileKey) return false;
+	return mrvm_runtime::uniqueMacroHasCurrentAttempt(macroRef, file.resolvedPath);
+}

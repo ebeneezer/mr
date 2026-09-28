@@ -642,7 +642,7 @@ std::size_t requestMacroExecutionCancellationForOwner(const MRMacroExecutionOwne
 	return cancelledCount;
 }
 
-bool runMacroFileByPathRouted(const char *path, bool forceUiThread, std::string *errorMessage, bool showErrorDialogs) {
+bool runMacroFileByPathRouted(const char *path, bool forceUiThread, std::string *errorMessage, bool showErrorDialogs, MREditWindow *targetWindow = nullptr, bool directExecution = false) {
 	std::string resolvedPath = expandUserPath(path);
 	std::string source;
 	std::string ioError;
@@ -664,6 +664,14 @@ bool runMacroFileByPathRouted(const char *path, bool forceUiThread, std::string 
 		if (errorMessage != nullptr) *errorMessage = "Only .mrmac files are allowed.";
 		if (showErrorDialogs) showErrorBox("Macro Loader", "Only .mrmac files are allowed.");
 		return false;
+	}
+	if (mrvmUniqueMacroFileAlreadyRun(resolvedPath)) return true;
+	if (directExecution) {
+		if (!mrvmLoadMacroFileAndSelect(resolvedPath, macroName, &loadError)) {
+			if (errorMessage != nullptr) *errorMessage = loadError;
+			return false;
+		}
+		return mrvmRunMacroSpec(resolvedPath + "^" + macroName, errorMessage, nullptr, targetWindow);
 	}
 
 	if (!readTextFile(resolvedPath, source, ioError)) {
@@ -700,6 +708,17 @@ bool runMacroFileByPath(const char *path, std::string *errorMessage, bool showEr
 
 bool runMacroFileByPathOnUiThread(const char *path, std::string *errorMessage, bool showErrorDialogs) {
 	return runMacroFileByPathRouted(path, true, errorMessage, showErrorDialogs);
+}
+
+bool runFileProfileMacro(const std::string &path, MREditWindow *targetWindow, const char *phase, bool showMessage) {
+	if (path.empty()) return true;
+	std::string errorText;
+	if (runMacroFileByPathRouted(path.c_str(), true, &errorText, false, targetWindow, true)) return true;
+	std::string message = std::string(phase != nullptr ? phase : "File") + " macro failed: " + path;
+	if (!errorText.empty()) message += ": " + errorText;
+	mrLogMessage(message);
+	if (showMessage) mr::messageline::postAutoTimed(mr::messageline::Owner::DialogInteraction, message, mr::messageline::Kind::Error, mr::messageline::kPriorityHigh + 1);
+	return false;
 }
 
 bool runMacroSourceText(const char *displayName, const char *source, std::string *errorMessage, bool showErrorDialogs) {

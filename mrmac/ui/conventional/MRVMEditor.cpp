@@ -11,12 +11,12 @@
 #include "../../../ui/MREditWindow.hpp"
 
 MREditWindow *mrvmEditorActiveWindow() {
-	return currentEditWindow();
+	return mrvm_runtime::activeMacroEditWindow();
 }
 
 MRFileEditor *mrvmEditorCurrentEditor() {
 	if (mrvm_runtime::currentBackgroundEditSession() != nullptr) return nullptr;
-	MREditWindow *win = currentEditorCommandWindow();
+	MREditWindow *win = mrvm_runtime::macroEditorCommandWindow();
 
 	return win != nullptr ? win->getEditor() : nullptr;
 }
@@ -57,63 +57,63 @@ bool mrvmUiSizeCurrentWindow(int x1, int y1, int x2, int y2) {
 }
 
 bool mrvmUiPushMarker() {
-	return mrvmEditorMarkPosition(currentEditorCommandWindow(), mrvmEditorCurrentEditor());
+	return mrvmEditorMarkPosition(mrvm_runtime::macroEditorCommandWindow(), mrvmEditorCurrentEditor());
 }
 
 bool mrvmUiGetMarker() {
-	return mrvmEditorGotoMark(currentEditorCommandWindow(), mrvmEditorCurrentEditor());
+	return mrvmEditorGotoMark(mrvm_runtime::macroEditorCommandWindow(), mrvmEditorCurrentEditor());
 }
 
 bool mrvmUiSetRandomAccessMark(int index) {
-	return mrvmEditorSetRandomAccessMark(currentEditorCommandWindow(), mrvmEditorCurrentEditor(), index);
+	return mrvmEditorSetRandomAccessMark(mrvm_runtime::macroEditorCommandWindow(), mrvmEditorCurrentEditor(), index);
 }
 
 bool mrvmUiGetRandomAccessMark(int index) {
-	return mrvmEditorGotoRandomAccessMark(currentEditorCommandWindow(), mrvmEditorCurrentEditor(), index);
+	return mrvmEditorGotoRandomAccessMark(mrvm_runtime::macroEditorCommandWindow(), mrvmEditorCurrentEditor(), index);
 }
 
 bool mrvmUiBlockBeginLine() {
-	MREditWindow *win = currentEditorCommandWindow();
+	MREditWindow *win = mrvm_runtime::macroEditorCommandWindow();
 	if (win == nullptr) return false;
 	win->beginLineBlock();
 	return true;
 }
 
 bool mrvmUiBlockBeginColumn() {
-	MREditWindow *win = currentEditorCommandWindow();
+	MREditWindow *win = mrvm_runtime::macroEditorCommandWindow();
 	if (win == nullptr) return false;
 	win->beginColumnBlock();
 	return true;
 }
 
 bool mrvmUiBlockBeginStream() {
-	MREditWindow *win = currentEditorCommandWindow();
+	MREditWindow *win = mrvm_runtime::macroEditorCommandWindow();
 	if (win == nullptr) return false;
 	win->beginStreamBlock();
 	return true;
 }
 
 bool mrvmUiBlockEndMarking() {
-	MREditWindow *win = currentEditorCommandWindow();
+	MREditWindow *win = mrvm_runtime::macroEditorCommandWindow();
 	if (win == nullptr) return false;
 	win->endBlock();
 	return true;
 }
 
 bool mrvmUiBlockTurnMarkingOff() {
-	MREditWindow *win = currentEditorCommandWindow();
+	MREditWindow *win = mrvm_runtime::macroEditorCommandWindow();
 	if (win == nullptr) return false;
 	win->clearBlock();
 	return true;
 }
 
 bool mrvmUiBlockToggleVisibility() {
-	MREditWindow *win = currentEditorCommandWindow();
+	MREditWindow *win = mrvm_runtime::macroEditorCommandWindow();
 	return win != nullptr && win->toggleBlockVisibility();
 }
 
 bool mrvmUiDeleteBlock() {
-	MREditWindow *win = currentEditorCommandWindow();
+	MREditWindow *win = mrvm_runtime::macroEditorCommandWindow();
 	std::string errorText;
 
 	if (win == nullptr) return false;

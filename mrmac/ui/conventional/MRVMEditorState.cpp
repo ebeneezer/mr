@@ -29,8 +29,16 @@
 namespace mrvm_runtime {
 
 MREditWindow *activeMacroEditWindow() {
+	const int targetBufferId = mrvmRuntimeStateInt("macroInvocation", "targetBufferId");
+	if (targetBufferId > 0) return findEditWindowByBufferId(targetBufferId);
 	if (TProgram::deskTop == nullptr || TProgram::deskTop->current == nullptr) return nullptr;
 	return dynamic_cast<MREditWindow *>(TProgram::deskTop->current);
+}
+
+MREditWindow *macroEditorCommandWindow() {
+	const int targetBufferId = mrvmRuntimeStateInt("macroInvocation", "targetBufferId");
+	if (targetBufferId > 0) return findEditWindowByBufferId(targetBufferId);
+	return currentEditorCommandWindow();
 }
 
 MRFileEditor *currentEditor() {
@@ -394,7 +402,7 @@ bool searchEditorBackward(MRFileEditor *editor, const std::string &needle, int n
 }
 
 bool replaceLastSearch(MRFileEditor *editor, const std::string &replacement) {
-	MREditWindow *win = currentEditorCommandWindow();
+	MREditWindow *win = mrvm_runtime::macroEditorCommandWindow();
 	const char *fileName;
 	const int bufferId = mrvmRuntimeStateInt("lastSearch", "bufferId");
 	const std::size_t searchStart = mrvmRuntimeStateSize("lastSearch", "start");
@@ -628,7 +636,7 @@ int expandedTabsAdjustedIndex(const std::string &value, int index) {
 int currentEditorIndentLevel() {
 	BackgroundEditSession *session = currentBackgroundEditSession();
 	if (session != nullptr) return session->indentLevel;
-	MREditWindow *win = currentEditorCommandWindow();
+	MREditWindow *win = mrvm_runtime::macroEditorCommandWindow();
 	return win != nullptr ? win->indentLevel() : 1;
 }
 
@@ -640,7 +648,7 @@ bool setCurrentEditorIndentLevel(int level) {
 		session->indentLevel = level;
 		return true;
 	}
-	MREditWindow *win = currentEditorCommandWindow();
+	MREditWindow *win = mrvm_runtime::macroEditorCommandWindow();
 	if (win == nullptr) return false;
 	win->setIndentLevel(level);
 	return true;

@@ -35,7 +35,7 @@ bool setEditorCursor(MRFileEditor *editor, uint target, int requestedVisualColum
 	if (requestedVisualColumn >= 0) editor->setCursorOffsetAtVisualColumn(target, requestedVisualColumn);
 	else
 		editor->setCursorOffset(target, 0);
-	win = currentEditorCommandWindow();
+	win = mrvm_runtime::macroEditorCommandWindow();
 	if (win != nullptr && win->isBlockMarking()) win->refreshBlockVisual();
 	else
 		editor->revealCursor(True);

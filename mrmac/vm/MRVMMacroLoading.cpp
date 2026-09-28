@@ -95,6 +95,8 @@ bool refreshLoadedFileBytecode(const std::string &fileKey) {
 		macroRef.transientAttr = (flags & MACRO_ATTR_TRANS) != 0;
 		macroRef.dumpAttr = (flags & MACRO_ATTR_DUMP) != 0;
 		macroRef.permAttr = (flags & MACRO_ATTR_PERM) != 0;
+		macroRef.uniqueAttr = (flags & MACRO_ATTR_UNIQUE) != 0;
+		if (macroRef.uniqueAttr && !uniqueMacroHasCurrentAttempt(macroRef, file.resolvedPath)) macroRef.firstRunPending = true;
 		macroRef.assignedKeySpec = keyspecText != nullptr ? keyspecText : std::string();
 		macroRef.fromMode = (mode == MACRO_MODE_DOS_SHELL || mode == MACRO_MODE_ALL) ? mode : MACRO_MODE_EDIT;
 		macroRef.closureUnit = unitKind == MRMAC_UNIT_CLOSURE;
@@ -161,13 +163,28 @@ bool loadMacroFileIntoRegistry(const std::string &spec, std::string *loadedFileK
 	int macroCount;
 
 	if (loadedFileKey != nullptr) loadedFileKey->clear();
+	const bool hasExistingFile = readLoadedMacroFileByKey(fileKey, existingFile);
+	if (hasExistingFile && existingFile.resolvedPath == resolvedPath && !existingFile.macroNames.empty()) {
+		bool allUniqueAlreadyAttempted = true;
+		for (const std::string &name : existingFile.macroNames) {
+			MacroRef existingMacro;
+			if (!readLoadedMacroByKey(name, existingMacro) || existingMacro.fileKey != fileKey || !uniqueMacroHasCurrentAttempt(existingMacro, resolvedPath)) {
+				allUniqueAlreadyAttempted = false;
+				break;
+			}
+		}
+		if (allUniqueAlreadyAttempted) {
+			setRuntimeErrorLevel(0);
+			if (loadedFileKey != nullptr) *loadedFileKey = fileKey;
+			return true;
+		}
+	}
 
 	if (resolvedPath.empty() || !readTextFile(resolvedPath, source)) {
 		setRuntimeErrorLevel(5001);
 		return false;
 	}
 
-	const bool hasExistingFile = readLoadedMacroFileByKey(fileKey, existingFile);
 	if (hasExistingFile) {
 		for (const auto &macroName : existingFile.macroNames)
 			if (macroIsRunning(macroName)) {
@@ -236,6 +253,8 @@ bool loadMacroFileIntoRegistry(const std::string &spec, std::string *loadedFileK
 		ref.transientAttr = (flags & MACRO_ATTR_TRANS) != 0;
 		ref.dumpAttr = (flags & MACRO_ATTR_DUMP) != 0;
 		ref.permAttr = (flags & MACRO_ATTR_PERM) != 0;
+		ref.uniqueAttr = (flags & MACRO_ATTR_UNIQUE) != 0;
+		if (ref.uniqueAttr && uniqueMacroHasCurrentAttempt(ref, resolvedPath)) ref.firstRunPending = false;
 		ref.assignedKeySpec = keyspecText != nullptr ? keyspecText : std::string();
 		ref.fromMode = (mode == MACRO_MODE_DOS_SHELL || mode == MACRO_MODE_ALL) ? mode : MACRO_MODE_EDIT;
 		ref.closureUnit = unitKind == MRMAC_UNIT_CLOSURE;
@@ -362,7 +381,16 @@ bool prepareDebugMacroByKey(const std::string &macroKey, bool stopAtEntry, Macro
 
 	breakpointOffsets.clear();
 	firstRun = false;
+	MacroRef currentMacro;
+	if (readLoadedMacroByKey(normalizedMacroKey, currentMacro) && currentMacro.uniqueAttr && !currentMacro.firstRunPending) {
+		errorMessage = "UNIQUE macro has already been run for this file timestamp.";
+		return false;
+	}
 	if (!prepareDebugMacroSourceMapByKey(normalizedMacroKey, std::string(), macroRef, file, errorMessage)) return false;
+	if (macroRef.uniqueAttr && !macroRef.firstRunPending) {
+		errorMessage = "UNIQUE macro has already been run for this file timestamp.";
+		return false;
+	}
 	static_cast<void>(mrvmCollectDebugBreakpointOffsetsForLoadedFile(normalizedMacroKey, breakpointOffsets));
 	if (stopAtEntry) breakpointOffsets.push_back(macroRef.entryOffset);
 	std::sort(breakpointOffsets.begin(), breakpointOffsets.end());
@@ -370,6 +398,7 @@ bool prepareDebugMacroByKey(const std::string &macroKey, bool stopAtEntry, Macro
 	firstRun = macroRef.firstRunPending;
 	macroRef.firstRunPending = false;
 	writeLoadedMacroByKey(normalizedMacroKey, macroRef);
+	noteUniqueMacroAttempt(macroRef, file);
 	return true;
 }
 

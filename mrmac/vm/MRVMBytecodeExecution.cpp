@@ -68,6 +68,7 @@ void VirtualMachine::BytecodeExecution::run() {
 	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
 	resumeFromDebug = (bytecode == nullptr && length == 0 && vm.debugState.paused && !vm.debugState.bytecode.empty() && vm.debugState.ip <= vm.debugState.length);
 	resumeFromDelay = (!resumeFromDebug && bytecode == nullptr && length == 0 && vm.delayState.pending && vm.delayState.ready && !vm.delayState.bytecode.empty() && vm.delayState.ip <= vm.delayState.length);
+	if (!resumeFromDebug && !resumeFromDelay) vm.executionFailed = false;
 	resumeGeneration = vm.delayState.generation;
 	ip = resumeFromDebug ? vm.debugState.ip : (resumeFromDelay ? vm.delayState.ip : entryOffset);
 	parentState = currentExecutionState();
@@ -708,6 +709,8 @@ void VirtualMachine::BytecodeExecution::run() {
 		}
 		return;
 	} catch (const std::exception &ex) {
+		vm.executionFailed = true;
+		state.errorLevel = 5007;
 		vm.appendLogLine(std::string("VM Error: ") + ex.what(), true);
 	}
 

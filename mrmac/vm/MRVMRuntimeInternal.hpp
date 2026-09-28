@@ -32,6 +32,7 @@ struct SearchMatchSnapshot {
 };
 
 MREditWindow *activeMacroEditWindow();
+MREditWindow *macroEditorCommandWindow();
 MRFileEditor *currentEditor();
 BackgroundEditSession *currentBackgroundEditSession() noexcept;
 ExecutionState *currentExecutionState() noexcept;
@@ -158,6 +159,8 @@ bool carriageReturnEditor(MRFileEditor *editor);
 bool readLoadedMacroByKey(const std::string &macroKey, MacroRef &macroRef);
 bool loadedMacroExists(const std::string &macroKey);
 bool loadMacroFileIntoRegistry(const std::string &spec, std::string *loadedFileKey = nullptr);
+bool uniqueMacroHasCurrentAttempt(const MacroRef &macroRef, const std::string &resolvedPath);
+void noteUniqueMacroAttempt(const MacroRef &macroRef, const LoadedMacroFile &file);
 bool unloadMacroFromRegistry(const std::string &macroName);
 bool ensureLoadedFileResident(const std::string &fileKey);
 bool evictTransientFileImage(const std::string &fileKey);

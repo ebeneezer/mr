@@ -100,6 +100,7 @@ typedef enum {
 	TOK_TRANS,
 	TOK_DUMP,
 	TOK_PERM,
+	TOK_UNIQUE,
 	TOK_ASSIGN,
 	TOK_EQ,
 	TOK_NE,
@@ -705,6 +706,7 @@ static void lexer_next(Lexer *lex, Token *tok) {
 			[120] = {"CALL", TOK_CALL}, [95] = {"RET", TOK_RET}, [125] = {"GOTO", TOK_GOTO},
 			[121] = {"TO", TOK_TO}, [76] = {"FROM", TOK_FROM},
 			[26] = {"TRANS", TOK_TRANS}, [14] = {"DUMP", TOK_DUMP}, [62] = {"PERM", TOK_PERM},
+			[11] = {"UNIQUE", TOK_UNIQUE},
 			[33] = {"AND", TOK_AND}, [61] = {"OR", TOK_OR},
 			[107] = {"BAND", TOK_BAND}, [75] = {"BOR", TOK_BOR}, [27] = {"BXOR", TOK_BXOR},
 			[57] = {"NOT", TOK_NOT}, [0] = {"MOD", TOK_MOD}
@@ -3302,12 +3304,14 @@ static int parse_macro_header(Parser *ps, unsigned *out_flags, char **out_keyspe
 			}
 			from_seen = 1;
 			parser_next(ps);
-		} else if (ps->tok.kind == TOK_TRANS || ps->tok.kind == TOK_DUMP || ps->tok.kind == TOK_PERM) {
+		} else if (ps->tok.kind == TOK_TRANS || ps->tok.kind == TOK_DUMP || ps->tok.kind == TOK_PERM || ps->tok.kind == TOK_UNIQUE) {
 			if (ps->tok.kind == TOK_TRANS) flags |= MACRO_ATTR_TRANS;
 			else if (ps->tok.kind == TOK_DUMP)
 				flags |= MACRO_ATTR_DUMP;
 			else if (ps->tok.kind == TOK_PERM)
 				flags |= MACRO_ATTR_PERM;
+			else if (ps->tok.kind == TOK_UNIQUE)
+				flags |= MACRO_ATTR_UNIQUE;
 			parser_next(ps);
 		} else {
 			free(keyspec);

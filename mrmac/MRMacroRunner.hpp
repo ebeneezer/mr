@@ -14,6 +14,7 @@ bool captureMacroStagedExecutionInput(MREditWindow *window, MRMacroStagedExecuti
 bool runMacroFileByPath(const char *path);
 bool runMacroFileByPath(const char *path, std::string *errorMessage, bool showErrorDialogs = true);
 bool runMacroFileByPathOnUiThread(const char *path, std::string *errorMessage = nullptr, bool showErrorDialogs = true);
+bool runFileProfileMacro(const std::string &path, MREditWindow *targetWindow, const char *phase, bool showMessage);
 bool runMacroSourceText(const char *displayName, const char *source, std::string *errorMessage = nullptr, bool showErrorDialogs = true);
 bool runMacroSourceTextAsExecutionSessionForOwner(const char *displayName, const char *source, const MRMacroExecutionOwner &owner, MRMacroExecutionSession *sessionOut, std::string *errorMessage = nullptr, bool showErrorDialogs = true);
 bool runMacroSourceUnitAsExecutionSessionForOwner(const char *displayName, const char *source, const char *unitName, const char *closureId, const MRMacroExecutionOwner &owner, MRMacroExecutionSession *sessionOut, std::string *errorMessage = nullptr, bool showErrorDialogs = true);

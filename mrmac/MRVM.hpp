@@ -253,6 +253,7 @@ class VirtualMachine {
 	std::vector<MRMacroExecUiCommandRequest> mExecUiCommandRequests;
 	bool verboseLogging;
 	bool logTruncated;
+	bool executionFailed;
 		DelayState delayState;
 		DebugState debugState;
 	enum class InstructionFlow : unsigned char {
@@ -315,6 +316,7 @@ class VirtualMachine {
 	bool wasCancelled() const noexcept {
 		return cancelledExecution;
 	}
+	bool hasExecutionFailed() const noexcept { return executionFailed; }
 };
 
 void mrvmSetProcessContext(int argc, char **argv);
@@ -702,8 +704,10 @@ bool mrvmUiProjectRuntimeMenuKeyLabels(const std::vector<std::pair<std::string, 
 bool mrvmUiMessageBox(const std::string &text);
 bool mrvmUiRenderFacadeRenderDeferredCommand(const MRMacroDeferredUiCommand &command);
 bool mrvmLoadMacroFile(const std::string &spec, std::string *errorMessage = nullptr);
+bool mrvmLoadMacroFileAndSelect(const std::string &spec, std::string &macroName, std::string *errorMessage = nullptr);
+bool mrvmUniqueMacroFileAlreadyRun(const std::string &spec);
 bool mrvmReadMacroExecutionProfile(const std::string &spec, MRMacroExecutionProfile &profile);
-bool mrvmRunMacroSpec(const std::string &spec, std::string *errorMessage = nullptr, std::vector<std::string> *logLines = nullptr);
+bool mrvmRunMacroSpec(const std::string &spec, std::string *errorMessage = nullptr, std::vector<std::string> *logLines = nullptr, MREditWindow *targetWindow = nullptr);
 bool mrvmRunAssignedMacroForKey(unsigned short keyCode, unsigned short controlKeyState, std::string &executedMacroName, std::vector<std::string> *logLines = nullptr);
 
 #endif

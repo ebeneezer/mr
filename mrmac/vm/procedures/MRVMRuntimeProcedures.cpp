@@ -106,6 +106,7 @@ VirtualMachine::InstructionFlow VirtualMachine::RuntimeProcedures::execute(MRVMP
 			int millis = 0;
 			BackgroundEditSession *session = nullptr;
 			if (args.size() != 1 || args[0].type != TYPE_INT) throw std::runtime_error("DELAY expects one integer argument.");
+			if (mrvmRuntimeStateInt("macroInvocation", "targetBufferId") > 0) throw std::runtime_error("DELAY cannot run in a file hook.");
 			millis = vm.normalizeDelayMillis(mrvmValueAsInt(args[0]));
 			if (millis == 0) {
 				setRuntimeErrorLevel(0);

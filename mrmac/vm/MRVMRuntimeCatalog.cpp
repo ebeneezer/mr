@@ -274,6 +274,7 @@ void writeMacroRefHash(MRVMRuntimeKv &runtimeKv, const Value &hash, const MacroR
 	hashWriteInt(runtimeKv, hash, "transientAttr", macroRef.transientAttr ? 1 : 0);
 	hashWriteInt(runtimeKv, hash, "dumpAttr", macroRef.dumpAttr ? 1 : 0);
 	hashWriteInt(runtimeKv, hash, "permAttr", macroRef.permAttr ? 1 : 0);
+	hashWriteInt(runtimeKv, hash, "uniqueAttr", macroRef.uniqueAttr ? 1 : 0);
 	hashWriteInt(runtimeKv, hash, "closureUnit", macroRef.closureUnit ? 1 : 0);
 	hashWriteUint(runtimeKv, hash, "tickMs", macroRef.tickMs);
 	hashWriteUint(runtimeKv, hash, "scheduledConsumerId", macroRef.scheduledConsumerId);
@@ -294,6 +295,7 @@ bool readMacroRefHash(MRVMRuntimeKv &runtimeKv, const Value &hash, MacroRef &mac
 	macroRef.transientAttr = hashReadInt(runtimeKv, hash, "transientAttr", 0) != 0;
 	macroRef.dumpAttr = hashReadInt(runtimeKv, hash, "dumpAttr", 0) != 0;
 	macroRef.permAttr = hashReadInt(runtimeKv, hash, "permAttr", 0) != 0;
+	macroRef.uniqueAttr = hashReadInt(runtimeKv, hash, "uniqueAttr", 0) != 0;
 	macroRef.closureUnit = hashReadInt(runtimeKv, hash, "closureUnit", 0) != 0;
 	macroRef.tickMs = hashReadUint(runtimeKv, hash, "tickMs", 0);
 	macroRef.scheduledConsumerId = static_cast<MRRuntimeScheduledConsumerId>(hashReadUint(runtimeKv, hash, "scheduledConsumerId", 0));
@@ -341,7 +343,7 @@ bool findLoadedMacroHash(MRVMRuntimeKv &runtimeKv, const std::string &macroKey, 
 }
 } // namespace
 
-MacroRef::MacroRef() : entryOffset(0), fromMode(MACRO_MODE_EDIT), hasAssignedKey(false), firstRunPending(true), transientAttr(false), dumpAttr(false), permAttr(false), closureUnit(false), tickMs(0), scheduledConsumerId(0) {
+MacroRef::MacroRef() : entryOffset(0), fromMode(MACRO_MODE_EDIT), hasAssignedKey(false), firstRunPending(true), transientAttr(false), dumpAttr(false), permAttr(false), uniqueAttr(false), closureUnit(false), tickMs(0), scheduledConsumerId(0) {
 }
 
 MRMacroSourceMapEntry::MRMacroSourceMapEntry() : bytecodeOffset(0), sourceStartOffset(0), sourceEndOffset(0), line(0), column(0), macroName(), debuggableKind(0) {

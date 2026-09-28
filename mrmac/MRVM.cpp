@@ -63,6 +63,7 @@
 #include <ctime>
 #include <deque>
 #include <fstream>
+#include <filesystem>
 #include <glob.h>
 #include <initializer_list>
 #include <limits>
@@ -226,7 +227,7 @@ std::vector<std::string> mrvmProcessArguments() {
 VirtualMachine::Value::Value() : type(TYPE_INT), i(0), r(0.0), c(0), hashHandle(0), arrayElementType(TYPE_INT), arrayValues(), globalStorage(false) {
 }
 
-VirtualMachine::VirtualMachine() : mHashStore(std::make_unique<MRVMHashStore>()), mClosureId(), mClosureVariableNames(), mExecutionSessionId(0), mSessionVariableNames(), verboseLogging(true), logTruncated(false), delayState(), debugState(), cancelledExecution(false) {
+VirtualMachine::VirtualMachine() : mHashStore(std::make_unique<MRVMHashStore>()), mClosureId(), mClosureVariableNames(), mExecutionSessionId(0), mSessionVariableNames(), verboseLogging(true), logTruncated(false), executionFailed(false), delayState(), debugState(), cancelledExecution(false) {
 }
 
 VirtualMachine::~VirtualMachine() = default;
@@ -361,6 +362,23 @@ bool mrvmLoadMacroFile(const std::string &spec, std::string *errorMessage) {
 	return true;
 }
 
+bool mrvmLoadMacroFileAndSelect(const std::string &spec, std::string &macroName, std::string *errorMessage) {
+	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	LoadedMacroFile file;
+	macroName.clear();
+	if (!mrvmLoadMacroFile(spec, errorMessage)) return false;
+	if (!readLoadedMacroFileByKey(mrvmMakeMacroFileKey(spec), file) || file.macroNames.empty()) {
+		if (errorMessage != nullptr) *errorMessage = "No macros found in file.";
+		return false;
+	}
+	const std::string preferredName = mrvmUpperKey(std::filesystem::path(spec).stem().string());
+	macroName = file.macroNames.front();
+	for (const std::string &name : file.macroNames)
+		if (name == preferredName) { macroName = name; break; }
+	if (errorMessage != nullptr) errorMessage->clear();
+	return true;
+}
+
 bool mrvmReadMacroExecutionProfile(const std::string &spec, MRMacroExecutionProfile &profile) {
 	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
 	std::string filePart;
@@ -378,8 +396,21 @@ bool mrvmReadMacroExecutionProfile(const std::string &spec, MRMacroExecutionProf
 	return true;
 }
 
-bool mrvmRunMacroSpec(const std::string &spec, std::string *errorMessage, std::vector<std::string> *logLines) {
+bool mrvmRunMacroSpec(const std::string &spec, std::string *errorMessage, std::vector<std::string> *logLines, MREditWindow *targetWindow) {
 	std::lock_guard<std::recursive_mutex> executionLock(g_vmExecutionMutex);
+	struct TargetGuard {
+		int previous = 0;
+		bool active = false;
+		explicit TargetGuard(MREditWindow *window) {
+			if (window == nullptr) return;
+			previous = mrvmRuntimeStateInt("macroInvocation", "targetBufferId");
+			mrvmStoreRuntimeStateInt("macroInvocation", "targetBufferId", window->bufferId());
+			active = true;
+		}
+		~TargetGuard() {
+			if (active) mrvmStoreRuntimeStateInt("macroInvocation", "targetBufferId", previous);
+		}
+	} targetGuard(targetWindow);
 
 	if (logLines != nullptr) logLines->clear();
 	if (executeRuntimeMacroSpec(spec, logLines)) {

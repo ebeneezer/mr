@@ -1266,6 +1266,17 @@ expansion. \key{Tab} and \key{Shift+Tab} move among placeholders;
 \key{Ctrl+Enter} or \key{Alt+Enter} commits, while \key{Esc} cancels. The
 parent document changes only at commit.\index{Snippet SideKick}
 
+Enable \field{Snippets} in the matching file-extension profile. Load a
+snippet database through an Autoexec macro or the profile's
+\field{Post-load macro}; the supplied \texttt{CSnippets.mrmac} provides the C
+starting set. Type a trigger such as \texttt{for} and press \key{Ctrl+Space}
+to open the expansion. The trigger is looked up only on that key press.
+The database is editable MRMAC: add a hash entry under
+\texttt{SNIPPETS['C']} with an uppercase trigger key, a \texttt{body}, and
+optional \texttt{name} and \texttt{placeholders} values. A placeholder's
+\texttt{default} replaces a matching \texttt{//1}, \texttt{//2}, and so on in
+the body. Saving a newer macro file lets \texttt{UNIQUE} reload the database.
+
 This separation matters: a macro can prepare a complex expansion without
 mutating the document behind every intermediate keystroke.
 
@@ -2260,6 +2271,11 @@ wrong build command even when language highlighting looks correct.
 loaded. \field{Pre-save macro} runs before it is saved. Typical uses include
 project-specific normalization or generated annotations, but these hooks are
 executable policy: keep them small, deterministic, and reviewable.
+Hook errors are logged and shown as errors on the message line; loading or
+saving still proceeds. An autosave for a window without focus logs a failed
+pre-save macro without showing a message. Hook macros cannot use
+\texttt{DELAY}. A \texttt{UNIQUE} macro is skipped until its source file has a
+newer timestamp.
 \index{post-load macro}\index{pre-save macro}
 
 \field{Default path} supplies the initial directory for relevant file

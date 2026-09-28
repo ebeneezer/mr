@@ -1,6 +1,9 @@
 #include "MRFileEditor.hpp"
 #include "../../app/MRPrivilegedFileBroker.hpp"
 #include "../../config/settings/MRSettingsStorage.hpp"
+#include "../../mrmac/MRMacroRunner.hpp"
+#include "../../app/commands/MRWindowCommands.hpp"
+#include "../MREditWindow.hpp"
 
 #include <cerrno>
 #include <chrono>
@@ -165,6 +168,14 @@ bool MRFileEditor::writeDocumentToPath(const char *targetPath, bool interactive)
 	MRTextSaveOptions saveOptions;
 	MREditSetupSettings settings;
 	effectiveEditSetupSettingsForPath(targetPath != nullptr ? targetPath : "", settings);
+	if (!mPreSaveMacroActive && !settings.preSaveMacro.empty()) {
+		MREditWindow *targetWindow = dynamic_cast<MREditWindow *>(owner);
+		MREditWindow *focusedWindow = currentEditWindow();
+		const bool showMessage = interactive || (targetWindow != nullptr && focusedWindow != nullptr && focusedWindow->editorCommandTarget() == targetWindow);
+		mPreSaveMacroActive = true;
+		static_cast<void>(runFileProfileMacro(settings.preSaveMacro, targetWindow, "Pre-save", showMessage));
+		mPreSaveMacroActive = false;
+	}
 	const std::size_t pieceCount = mBufferModel.document().pieceCount();
 	const bool backupEnabled = settings.backupFiles && settings.backupMethod != "OFF" &&
 	                           (settings.backupFrequency == "EVERY_SAVE" || !samePath(mLastSavedPath.c_str(), targetPath));

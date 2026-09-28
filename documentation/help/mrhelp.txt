@@ -895,7 +895,8 @@ files.
 Colortheme selects the palette file. Post-load macro runs after a matching
 file is loaded; Pre-save macro runs before it is saved. Default path supplies
 the initial directory. Editor and language controls define indentation,
-formatting, display, block, mode, and related per-profile behavior.
+formatting, display, block, mode, and related per-profile behavior. Snippets
+enables Ctrl+Space expansion from a macro-loaded snippet database.
 
 New, Copy, and Delete manage profile drafts. Help explains the draft without
 applying it.
@@ -1045,6 +1046,8 @@ The SideKick editor previews and edits snippet expansion. Tab and Shift-Tab
 move through placeholders. Enter inserts a line break. Ctrl-Enter or
 Alt-Enter commits the edited expansion; Esc cancels the snippet session.
 The parent document changes only through this explicit commit path.
+Enable Snippets in the matching filename-extension profile, load the database
+through Autoexec or Post-load macro, then press Ctrl+Space on a trigger.
 
 More detail
 
@@ -2730,6 +2733,14 @@ expansion. Tab and Shift+Tab move among placeholders; Ctrl+Enter or
 Alt+Enter commits, while Esc cancels. The parent document changes only at
 commit.
 
+Enable Snippets in the matching filename-extension profile. Load a snippet
+database through Autoexec or Post-load macro; CSnippets.mrmac supplies the C
+starting set. Type a trigger such as for and press Ctrl+Space. Lookup occurs
+only on that key press.
+Edit CSnippets.mrmac to add entries under SNIPPETS['C']. Entries carry a
+body and may define a name and numbered placeholder defaults. A newer macro
+file timestamp lets UNIQUE load the changed database.
+
 This separation matters: a macro can prepare a complex expansion without
 mutating the document behind every intermediate keystroke.
 
@@ -4101,6 +4112,10 @@ Post-load macro names a MRMAC file to run after a matching file has
 loaded. Pre-save macro runs before it is saved. Typical uses include
 project-specific normalization or generated annotations, but these hooks
 are executable policy: keep them small, deterministic, and reviewable.
+Hook failures are logged and shown as errors on the message line, but the
+file operation proceeds. Unfocused autosave logs a failed pre-save macro
+silently. DELAY is unavailable in file hooks. UNIQUE macros wait for a newer
+source-file timestamp before another load and run.
 
 Default path supplies the initial directory for relevant file operations.
 Colortheme selects the palette associated with the profile.

@@ -8,6 +8,7 @@
 #include "../../ui/widgets/MRDropList.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -50,7 +51,7 @@ enum {
 	kGuttersFieldSize = 8
 };
 
-enum : ushort {
+enum : std::uint32_t {
 	kOptionTruncateSpaces = 0x0001,
 	kOptionEofCtrlZ = 0x0002,
 	kOptionEofCrLf = 0x0004,
@@ -66,7 +67,8 @@ enum : ushort {
 	kOptionCodeColoring = 0x1000,
 	kOptionAutoPairBrackets = 0x2000,
 	kOptionBackupFiles = 0x4000,
-	kOptionApiReference = 0x8000
+	kOptionApiReference = 0x8000,
+	kOptionSnippets = 0x10000
 };
 
 enum : ushort {
@@ -80,7 +82,8 @@ enum : ushort {
 	kLeftOptionFormatRuler = 0x0080,
 	kLeftOptionCodeColoring = 0x0100,
 	kLeftOptionApiReference = 0x0200,
-	kLeftOptionAutoPairBrackets = 0x0400
+	kLeftOptionAutoPairBrackets = 0x0400,
+	kLeftOptionSnippets = 0x0800
 };
 
 enum : ushort {
@@ -151,7 +154,7 @@ struct FileExtensionEditorSettingsDialogRecord {
 	char miniMapWidth[kMiniMapWidthFieldSize];
 	char miniMapMarkerGlyph[kMiniMapMarkerGlyphFieldSize];
 	char gutters[kGuttersFieldSize];
-	ushort optionsMask;
+	std::uint32_t optionsMask;
 	ushort tabExpandChoice;
 	ushort indentStyleChoice;
 	ushort fileTypeChoice;
@@ -198,8 +201,8 @@ class FileExtensionEditorSettingsPanel {
 	void syncDynamicStates();
 
   private:
-	[[nodiscard]] ushort currentOptionsMask() const noexcept;
-	void setOptionsMask(ushort options);
+	[[nodiscard]] std::uint32_t currentOptionsMask() const noexcept;
+	void setOptionsMask(std::uint32_t options);
 	static void setInputLineValue(TInputLine *inputLine, const char *value, std::size_t capacity);
 	static void readInputLineValue(TInputLine *inputLine, char *dest, std::size_t destSize);
 
@@ -212,7 +215,7 @@ class FileExtensionEditorSettingsPanel {
 	TInputLine *leftMarginField = nullptr;
 	TInputLine *rightMarginField = nullptr;
 	TInputLine *binaryRecordLengthField = nullptr;
-	ushort preservedOptionsMask = 0;
+	std::uint32_t preservedOptionsMask = 0;
 	TInputLine *postLoadMacroField = nullptr;
 	TInputLine *preSaveMacroField = nullptr;
 	TInputLine *defaultPathField = nullptr;

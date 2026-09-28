@@ -1095,6 +1095,7 @@ class MRFileEditor : public TScroller {
 
 	TIndicator *mIndicator;
 	bool mReadOnly;
+	bool mPreSaveMacroActive = false;
 	bool mForceBinarySave;
 	bool mCustomWindowEofMarkerColorOverrideValid = false;
 	TColorAttr mCustomWindowEofMarkerColorOverride = 0;

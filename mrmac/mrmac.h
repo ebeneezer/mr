@@ -73,6 +73,7 @@
 #define MACRO_ATTR_TRANS 0x01
 #define MACRO_ATTR_DUMP 0x02
 #define MACRO_ATTR_PERM 0x04
+#define MACRO_ATTR_UNIQUE 0x08
 
 /* Macro invocation modes used by $MACRO ... FROM ... */
 #define MACRO_MODE_EDIT 0
