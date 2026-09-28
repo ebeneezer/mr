@@ -471,7 +471,7 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 			const ushort snippetModifiers = event.keyDown.controlKeyState;
 			const ushort snippetKeyCode = event.keyDown.keyCode;
 			const bool ctrlSpace = (snippetModifiers & kbCtrlShift) != 0 && (snippetModifiers & (kbAltShift | kbSuperShift | kbPaste)) == 0 &&
-			                       (snippetKeyCode == kbNoKey || snippetKeyCode == static_cast<ushort>(' '));
+			                       (snippetKeyCode == kbNoKey || snippetKeyCode == static_cast<ushort>(' ') || snippetKeyCode == static_cast<ushort>('@'));
 			if (ctrlSpace && editor != nullptr && !isReadOnly()) {
 				MREditSetupSettings editSettings;
 				effectiveEditSetupSettingsForPath(currentFileName(), editSettings);
