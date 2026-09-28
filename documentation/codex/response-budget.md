@@ -91,10 +91,12 @@ Protected architecture: yes
 Affected contract:
 Affected files/functions:
 Reason:
-Required maintainer decision:
+Authorization: accepted correction / maintainer decision required
 ```
 
-Do not continue implementation when protected architecture is touched incidentally.
+For a new or expanded task, stop when protected architecture is touched
+incidentally. For a defect in an approved implementation tranche, report the
+impact and continue with the correction under the root `AGENTS.md` rule.
 
 ## Audit responses
 

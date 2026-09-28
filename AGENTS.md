@@ -119,7 +119,12 @@ Before planning or implementing, report:
    - which invariants must remain intact,
    - which manual tests are required.
 
-If protected architecture is touched incidentally, stop and report. Do not implement.
+If protected architecture is touched incidentally, stop and report before
+implementing a new or expanded task. A defect in the agent's previously
+approved implementation tranche is part of that tranche: report the protected
+impact and correct the defect without requesting another approval. The
+correction must preserve the accepted behavior and remain limited to what is
+needed to make that behavior work.
 
 ## Protected areas
 
@@ -154,6 +159,11 @@ No implementation before an accepted plan.
 Plan contents and implementation discipline are defined by
 [workflow.md](documentation/codex/workflow.md). Protected changes additionally
 require the protected-architecture report defined above.
+Acceptance of an implementation tranche includes correcting defects in that
+tranche, including defects found after handoff. Update the plan and required
+manual tests for the correction, then proceed without asking the maintainer
+to approve the repair again. A distinct feature or architecture change still
+needs its own accepted plan.
 
 Creating a new directory anywhere inside the repository requires explicit
 maintainer approval, regardless of whether it is tracked, ignored or intended

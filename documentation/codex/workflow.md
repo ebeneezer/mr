@@ -21,7 +21,8 @@ Every task must be treated as one of these categories:
 
 5. Review
    - check diff against contracts,
-   - no new changes unless separately approved.
+   - correct defects in the approved tranche without separate approval;
+     unrelated changes need their own accepted plan.
 
 ## Required preflight
 
@@ -38,11 +39,17 @@ Before implementation, complete the protected-architecture check in root
 - regression risk estimate,
 - build and manual test plan.
 
-If protected architecture or scope expansion is discovered incidentally, stop.
+If protected architecture or scope expansion is discovered incidentally, stop
+and report before starting a new task. For a defect in an approved tranche,
+update the protected-architecture report and correction plan, then continue
+within the accepted behavior without a new approval request.
 
 ## Implementation discipline
 
 Implementation must match the approved plan exactly.
+Corrections needed to fulfill an approved tranche remain authorized. Update
+the plan when the defect reveals a necessary implementation path; do not treat
+the agent's mistake as a new maintainer approval gate.
 
 Do not perform:
 
