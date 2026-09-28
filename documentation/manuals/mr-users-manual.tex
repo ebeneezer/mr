@@ -122,9 +122,11 @@ its payload and runtime dependencies before installing files, and requests
 files are preserved. Each additional user runs the installer to initialise
 that user's macro directory.
 
-Installation requires a UTF-8 locale. Check \texttt{locale charmap} and the
-values of \texttt{LANG}, \texttt{LC\_CTYPE}, and especially \texttt{LC\_ALL}
-if the installer rejects the character map. Fontconfig's \texttt{fc-list}
+Installation requires a UTF-8 locale. If the active character map is not
+UTF-8, the installer and its launcher use \texttt{C.UTF-8} when available.
+Otherwise the installer offers to generate that locale, installing its system
+support files first when needed. A failed generation still stops installation
+before copying mr files. Fontconfig's \texttt{fc-list}
 must also find fonts covering the tape, magnifier, and clock symbols used by
 the interface. The installer lists missing codepoints and suggests
 \texttt{fontconfig} with \texttt{fonts-noto-color-emoji} on Debian-family

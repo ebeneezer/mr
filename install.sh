@@ -89,12 +89,15 @@ if [ ! -d "$macro_source" ]; then
 fi
 
 character_map=$(locale charmap 2>/dev/null || true)
+missing_utf8_locale=
 if [ "$character_map" != "UTF-8" ]; then
-	printf 'mr cannot be installed.\n\nA UTF-8 locale is required.\n' >&2
-	printf 'Current character map: %s\n' "${character_map:-unknown}" >&2
-	printf 'Check LANG, LC_CTYPE and especially LC_ALL.\n\n' >&2
-	printf 'No files were installed.\n' >&2
-	exit 1
+	if [ "$(LC_ALL=C.UTF-8 locale charmap 2>/dev/null || true)" = "UTF-8" ]; then
+		LC_ALL=C.UTF-8
+		export LC_ALL
+		printf 'Using C.UTF-8 for mr (current character map: %s).\n' "${character_map:-unknown}"
+	else
+		missing_utf8_locale=1
+	fi
 fi
 
 missing_emoji_codepoints=
@@ -113,8 +116,9 @@ ldd_report=$(ldd -r "$script_directory/bin/mr" 2>&1 || true)
 missing_libraries=$(printf '%s\n' "$ldd_report" | sed -n 's/^[[:space:]]*\([^[:space:]]*\)[[:space:]]*=>[[:space:]]*not found.*/\1/p' | sort -u)
 missing_terminal_probe=
 if [ ! -x /usr/bin/tput ]; then missing_terminal_probe=1; fi
-if [ -n "$missing_libraries" ] || [ -n "$missing_emoji_codepoints" ] || [ -n "$missing_terminal_probe" ]; then
+if [ -n "$missing_libraries" ] || [ -n "$missing_emoji_codepoints" ] || [ -n "$missing_terminal_probe" ] || [ -n "$missing_utf8_locale" ]; then
 	printf '\nDependencies needed\n' >&2
+	if [ -n "$missing_utf8_locale" ]; then printf '  C.UTF-8 locale must be generated.\n' >&2; fi
 	if [ -n "$missing_libraries" ]; then
 		printf '  Missing libraries:\n' >&2
 		printf '%s\n' "$missing_libraries" | sed 's/^/    /' >&2
@@ -137,6 +141,12 @@ if [ -n "$missing_libraries" ] || [ -n "$missing_emoji_codepoints" ] || [ -n "$m
 	apt_packages=
 	pacman_packages=
 	unmapped_libraries=
+	locale_support_package=
+	if [ -n "$missing_utf8_locale" ] && { ! command -v localedef >/dev/null 2>&1 || [ ! -f /usr/share/i18n/locales/C ] || [ ! -f /usr/share/i18n/charmaps/UTF-8.gz ]; }; then
+		locale_support_package=1
+		apt_packages=locales
+		pacman_packages=glibc
+	fi
 	for missing_library in $missing_libraries; do
 		case "$missing_library" in
 			libpcre2-8.so.0) apt_package=libpcre2-8-0; pacman_package=pcre2 ;;
@@ -184,37 +194,60 @@ noto-fonts-emoji"
 		pacman_packages="${pacman_packages}${pacman_packages:+
 }ncurses"
 	fi
-	if [ -z "$package_manager" ] || [ -n "$unmapped_libraries" ]; then
+	if [ -n "$unmapped_libraries" ] || { [ -z "$package_manager" ] && [ -n "$missing_libraries$missing_emoji_codepoints$missing_terminal_probe$locale_support_package" ]; }; then
 		printf '\nCannot install all missing dependencies automatically.\n' >&2
 		if [ -n "$unmapped_libraries" ]; then printf '%s\n' "$unmapped_libraries" | sed 's/^/  /' >&2; fi
 		printf 'No mr files were installed.\n' >&2
 		exit 1
 	fi
 	if [ "$package_manager" = apt ]; then packages=$(printf '%s\n' "$apt_packages" | sort -u)
-	else packages=$(printf '%s\n' "$pacman_packages" | sort -u)
+	elif [ "$package_manager" = pacman ]; then packages=$(printf '%s\n' "$pacman_packages" | sort -u)
+	else packages=
 	fi
 	set -- $packages
-	printf '\nPackages to install\n' >&2
-	for package do printf '  %s\n' "$package" >&2; done
-	printf 'Install all packages now (sudo if needed)? [y/N] ' >&2
+	if [ "$#" -gt 0 ]; then
+		printf '\nPackages to install\n' >&2
+		for package do printf '  %s\n' "$package" >&2; done
+	fi
+	printf 'Apply these changes now (sudo if needed)? [y/N] ' >&2
 	if ! IFS= read -r install_answer </dev/tty; then install_answer=; fi
 	case "$install_answer" in
 		y|Y|yes|YES) ;;
 		*) printf 'Installation cancelled. No mr files were installed.\n' >&2; exit 1 ;;
 	esac
-	printf '\nInstalling dependencies...\n' >&2
-	if [ "$(id -u)" -eq 0 ]; then
-		if [ "$package_manager" = apt ]; then apt-get install -y -- "$@"
-		else pacman -S --needed --noconfirm -- "$@"
+	if [ "$(id -u)" -ne 0 ] && ! command -v sudo >/dev/null 2>&1; then
+		printf 'sudo is required to prepare the missing dependencies. No mr files were installed.\n' >&2
+		exit 1
+	fi
+	if [ "$#" -gt 0 ]; then
+		printf '\nInstalling dependencies...\n' >&2
+		if [ "$(id -u)" -eq 0 ]; then
+			if [ "$package_manager" = apt ]; then apt-get install -y -- "$@"
+			else pacman -S --needed --noconfirm -- "$@"
+			fi
+		else
+			if [ "$package_manager" = apt ]; then sudo apt-get install -y -- "$@"
+			else sudo pacman -S --needed --noconfirm -- "$@"
+			fi
 		fi
-	else
-		if ! command -v sudo >/dev/null 2>&1; then
-			printf 'sudo is required to install the missing packages. No mr files were installed.\n' >&2
+	fi
+	if [ -n "$missing_utf8_locale" ]; then
+		printf '\nGenerating C.UTF-8...\n' >&2
+		if [ "$(id -u)" -eq 0 ]; then
+			if ! localedef -i C -f UTF-8 C.UTF-8; then
+				printf 'mr cannot be installed. C.UTF-8 generation failed. No mr files were installed.\n' >&2
+				exit 1
+			fi
+		elif ! sudo localedef -i C -f UTF-8 C.UTF-8; then
+			printf 'mr cannot be installed. C.UTF-8 generation failed. No mr files were installed.\n' >&2
 			exit 1
 		fi
-		if [ "$package_manager" = apt ]; then sudo apt-get install -y -- "$@"
-		else sudo pacman -S --needed --noconfirm -- "$@"
+		if [ "$(LC_ALL=C.UTF-8 locale charmap 2>/dev/null || true)" != "UTF-8" ]; then
+			printf 'mr cannot be installed. C.UTF-8 remains unavailable. No mr files were installed.\n' >&2
+			exit 1
 		fi
+		LC_ALL=C.UTF-8
+		export LC_ALL
 	fi
 	ldd_report=$(ldd -r "$script_directory/bin/mr" 2>&1 || true)
 	missing_libraries=$(printf '%s\n' "$ldd_report" | sed -n 's/^[[:space:]]*\([^[:space:]]*\)[[:space:]]*=>[[:space:]]*not found.*/\1/p' | sort -u)
@@ -340,6 +373,14 @@ case "$launcher_path" in
 	*/*) binary_path=${launcher_path%/*}/mr.real ;;
 	*) printf 'mr: cannot locate the installed executable.\n' >&2; exit 1 ;;
 esac
+if [ "$(locale charmap 2>/dev/null || true)" != "UTF-8" ]; then
+	if [ "$(LC_ALL=C.UTF-8 locale charmap 2>/dev/null || true)" != "UTF-8" ]; then
+		printf 'mr: C.UTF-8 locale is unavailable.\n' >&2
+		exit 1
+	fi
+	LC_ALL=C.UTF-8
+	export LC_ALL
+fi
 if [ "${1:-}" != --internal-apply-update ]; then
 	terminal_colors=$(/usr/bin/tput colors 2>/dev/null || true)
 	case "$terminal_colors" in
