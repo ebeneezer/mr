@@ -75,26 +75,8 @@ class SnippetSidekickHintGuard {
 	}
 };
 
-class MRSnippetSidekickFrame : public MRFrame {
-  public:
-	explicit MRSnippetSidekickFrame(const TRect &bounds) noexcept : MRFrame(bounds) {
-	}
-
-	void draw() override {
-		MRFrame::draw();
-		if (size.x < 2 || size.y < 1) return;
-		TDrawBuffer buffer;
-		const TColorAttr color = sidekickColor(kMrPaletteSnippetSidekickFrame, 0x3F);
-
-		buffer.moveStr(0, "╚═", color, 2);
-		writeLine(0, size.y - 1, 2, 1, buffer);
-		buffer.moveStr(0, "═╝", color, 2);
-		writeLine(size.x - 2, size.y - 1, 2, 1, buffer);
-	}
-};
-
 TFrame *initSnippetSidekickFrame(TRect bounds) {
-	return new MRSnippetSidekickFrame(bounds);
+	return new MRFrame(bounds);
 }
 
 class MRSnippetHelpButton final : public TButton {

@@ -9,6 +9,7 @@
 #include "MREditWindow.hpp"
 #include "MRWindowLayout.hpp"
 #include "../app/MRCommands.hpp"
+#include "../app/MRHelpTopics.generated.hpp"
 #include "../app/MRMenuFactory.hpp"
 #include "../config/settings/MRSettingsRuntime.hpp"
 
@@ -385,7 +386,7 @@ void MRFrame::draw() {
 	TWindow *window = static_cast<TWindow *>(owner);
 	bool isFocused = isFrameFocused(this);
 
-	if ((this->state & sfDragging) != 0) {
+	if ((this->state & sfDragging) != 0 && (!isFocused || window == nullptr || window->helpCtx != hcDialogSnippetSidekick)) {
 		cFrame = 0x0505;
 		cTitle = 0x0005;
 		f = 0;

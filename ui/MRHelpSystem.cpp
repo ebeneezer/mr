@@ -159,8 +159,8 @@ class MRHelpViewer final : public THelpViewer {
 namespace {
 class MRHelpWindow final : public TWindow {
   public:
-	MRHelpWindow(const TRect &bounds, THelpFile *helpFile, int context, MRHelpSystem &helpSystem) noexcept
-	    : TWindowInit(&MRHelpWindow::initFrame), TWindow(bounds, "MR HELP", wnNoNumber), viewer(nullptr) {
+	MRHelpWindow(const TRect &bounds, THelpFile *helpFile, int context, MRHelpSystem &helpSystem, MRFrame *snippetFrame) noexcept
+	    : TWindowInit(&MRHelpWindow::initFrame), TWindow(bounds, "MR HELP", wnNoNumber), viewer(nullptr), snippetFrame(snippetFrame) {
 		TRect viewerBounds = getExtent();
 
 		viewerBounds.grow(-2, -1);
@@ -177,12 +177,18 @@ class MRHelpWindow final : public TWindow {
 		return viewer;
 	}
 
+	ushort execute() override {
+		if (snippetFrame != nullptr) snippetFrame->drawView();
+		return TWindow::execute();
+	}
+
   private:
 	static TFrame *initFrame(TRect bounds) {
 		return new MRFrame(bounds);
 	}
 
 	MRHelpViewer *viewer;
+	MRFrame *snippetFrame;
 };
 } // namespace
 
@@ -237,6 +243,8 @@ bool MRHelpSystem::showTopicWithoutHistory(int context) {
 	int desktopWidth;
 	int helpWidth;
 	int helpLeft;
+	TWindow *snippetWindow;
+	MRFrame *snippetFrame;
 
 	if (TProgram::application == nullptr || TProgram::deskTop == nullptr || path.empty() || !hasValidHelpHeader(path)) {
 		postHelpError("Unable to load TVision help file: " + path);
@@ -253,13 +261,16 @@ bool MRHelpSystem::showTopicWithoutHistory(int context) {
 	desktopWidth = desktopBounds.b.x - desktopBounds.a.x;
 	helpWidth = desktopWidth * 3 / 4;
 	helpLeft = desktopBounds.a.x + (desktopWidth - helpWidth) / 2;
-	window = new MRHelpWindow(TRect(helpLeft, desktopBounds.a.y + 2, helpLeft + helpWidth, desktopBounds.b.y - 2), helpFile, context, *this);
+	snippetWindow = dynamic_cast<TWindow *>(TProgram::deskTop->current);
+	snippetFrame = snippetWindow != nullptr && snippetWindow->helpCtx == hcDialogSnippetSidekick ? dynamic_cast<MRFrame *>(snippetWindow->frame) : nullptr;
+	window = new MRHelpWindow(TRect(helpLeft, desktopBounds.a.y + 2, helpLeft + helpWidth, desktopBounds.b.y - 2), helpFile, context, *this, snippetFrame);
 	window = static_cast<MRHelpWindow *>(TProgram::application->validView(window));
 	if (window == nullptr) return false;
 	activeViewer = window->helpViewer();
 
 	helpOpen = true;
 	TProgram::application->execView(window);
+	if (snippetFrame != nullptr) snippetFrame->drawView();
 	helpOpen = false;
 	TObject::destroy(window);
 	return true;
