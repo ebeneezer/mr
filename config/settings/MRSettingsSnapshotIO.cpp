@@ -709,10 +709,10 @@ std::string buildSettingsMacroSource(const MRSettingsSnapshot &snapshot) {
 	source += "MRSETUP('PRE_SAVE_MACRO', '" + escapeMrmacSingleQuotedLiteral(edit.preSaveMacro) + "');\n";
 	source += "MRSETUP('DEFAULT_PATH', '" + escapeMrmacSingleQuotedLiteral(edit.defaultPath) + "');\n";
 	source += "MRSETUP('FORMAT_LINE', '" + escapeMrmacSingleQuotedLiteral(edit.formatLine) + "');\n";
+	source += "MRSETUP('BACKUP_DIRECTORY', '" + escapeMrmacSingleQuotedLiteral(edit.backupDirectory) + "');\n";
+	source += "MRSETUP('BACKUP_EXTENSION', '" + escapeMrmacSingleQuotedLiteral(edit.backupExtension) + "');\n";
 	source += "MRSETUP('BACKUP_METHOD', '" + escapeMrmacSingleQuotedLiteral(edit.backupMethod) + "');\n";
 	source += "MRSETUP('BACKUP_FREQUENCY', '" + escapeMrmacSingleQuotedLiteral(edit.backupFrequency) + "');\n";
-	source += "MRSETUP('BACKUP_EXTENSION', '" + escapeMrmacSingleQuotedLiteral(edit.backupExtension) + "');\n";
-	source += "MRSETUP('BACKUP_DIRECTORY', '" + escapeMrmacSingleQuotedLiteral(edit.backupDirectory) + "');\n";
 	source += "MRSETUP('AUTOSAVE_INACTIVITY_SECONDS', '" + std::to_string(edit.autosaveInactivitySeconds) + "');\n";
 	source += "MRSETUP('AUTOSAVE_INTERVAL_SECONDS', '" + std::to_string(edit.autosaveIntervalSeconds) + "');\n";
 	source += "MRSETUP('BACKUP_FILES', '" + escapeMrmacSingleQuotedLiteral(formatEditSetupBoolean(edit.backupFiles)) + "');\n";

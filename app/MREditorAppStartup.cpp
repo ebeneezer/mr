@@ -135,9 +135,9 @@ bool applySettingsSourceViaVm(const std::string &settingsPath, const std::string
 				return false;
 			}
 			vm.executeAt(bytecode, bytecodeSize, static_cast<size_t>(entry), std::string(), macroName != nullptr ? macroName : std::string(), i == 0, true);
-			if (hasVmErrorLineSince(vm.log, logStart, vmError)) {
+			if (hasVmErrorLineSince(vm.log, logStart, vmError) || vm.hasExecutionFailed()) {
 				std::free(bytecode);
-				if (errorMessage != nullptr) *errorMessage = "Settings load failed (runtime): " + vmError;
+				if (errorMessage != nullptr) *errorMessage = "Settings load failed (runtime): " + (vmError.empty() ? "VM execution failed." : vmError);
 				return false;
 			}
 			if (!mrvmFlushPendingStartupKeymapBatch(&vmError)) {
