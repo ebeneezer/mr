@@ -50,7 +50,7 @@ TFrame *initMrDialogFrame(TRect bounds) {
 }
 
 enum : ushort {
-	cmMRWindowListDelete = 200,
+	cmMRWindowListDelete = 0x6A30,
 	cmMRWindowListSave,
 	cmMRWindowListHide,
 	cmMRWindowListHideAll,
