@@ -26,6 +26,7 @@
 
 #include "../../config/settings/MRSettingsRuntime.hpp"
 #include "../../config/settings/MRSettingsStorage.hpp"
+#include "../../mrmac/MRMacroRunner.hpp"
 #include "../../mrmac/mrmac.h"
 #include "../../ui/MRMessageLineController.hpp"
 #include "../../ui/MREditWindow.hpp"
@@ -442,7 +443,7 @@ bool loadWorkspaceSourceWindow(const std::string &path, int virtualDesktop, MREd
 	return true;
 }
 
-MRBentoBox *restoreFileCompareWorkspaceEntry(const WorkspaceEntry &entry, int virtualDesktop) {
+MRBentoBox *restoreFileCompareWorkspaceEntry(const WorkspaceEntry &entry, int virtualDesktop, std::vector<int> &entryFileIds) {
 	MREditWindow *originalWindow = nullptr;
 	MREditWindow *compareWindow = nullptr;
 	MRBentoBox *bentoBox = nullptr;
@@ -478,6 +479,8 @@ MRBentoBox *restoreFileCompareWorkspaceEntry(const WorkspaceEntry &entry, int vi
 		return nullptr;
 	}
 	static_cast<void>(mrActivateEditWindow(bentoBox));
+	entryFileIds.push_back(originalWindow->bufferId());
+	entryFileIds.push_back(compareWindow->bufferId());
 	return bentoBox;
 }
 
@@ -749,6 +752,7 @@ void mrLoadWorkspace(const std::string &filename) {
 	bool loadedMainFile = false;
 	int parsedWorkspaceEntries = 0;
 	int loadedWorkspaceEntries = 0;
+	std::vector<int> restoredFileIds;
 	MRWindowOpenBatch openBatch;
 	storeApplicationUiString(mrvmRuntimeKv(), kWorkspaceBranch, "mainFilePath", std::string());
 	{
@@ -760,6 +764,7 @@ void mrLoadWorkspace(const std::string &filename) {
 			MRFileEditor *editor = nullptr;
 			std::string err;
 			int resolvedVirtualDesktop = 1;
+			std::vector<int> entryFileIds;
 			long long createUs = 0;
 			long long fileLoadUs = 0;
 			long long bentoUs = 0;
@@ -784,7 +789,7 @@ void mrLoadWorkspace(const std::string &filename) {
 
 			if (entry.hasBentoSnapshot && entry.bentoSnapshot.mode == bbmFileCompare) {
 				const auto subStartedAt = std::chrono::steady_clock::now();
-				win = restoreFileCompareWorkspaceEntry(entry, resolvedVirtualDesktop);
+				win = restoreFileCompareWorkspaceEntry(entry, resolvedVirtualDesktop, entryFileIds);
 				bentoUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - subStartedAt).count();
 				editor = win != nullptr ? win->getEditor() : nullptr;
 				if (win == nullptr || editor == nullptr) {
@@ -863,6 +868,8 @@ void mrLoadWorkspace(const std::string &filename) {
 				loadedMainFile = true;
 			}
 			++loadedWorkspaceEntries;
+			if (!entry.hasBentoSnapshot || entry.bentoSnapshot.mode != bbmFileCompare) entryFileIds.push_back(win->bufferId());
+			restoredFileIds.insert(restoredFileIds.end(), entryFileIds.begin(), entryFileIds.end());
 			{
 				const long long entryUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - entryStartedAt).count();
 				std::ostringstream detail;
@@ -918,5 +925,13 @@ void mrLoadWorkspace(const std::string &filename) {
 			if (skippedWorkspaceEntries != 0) text += " " + std::to_string(skippedWorkspaceEntries) + " skipped.";
 		}
 		mr::messageline::postAutoTimed(mr::messageline::Owner::WorkspaceRestore, text, entriesSkipped ? mr::messageline::Kind::Warning : mr::messageline::Kind::Info, entriesSkipped ? mr::messageline::kPriorityHigh : mr::messageline::kPriorityMedium);
+	}
+	for (int bufferId : restoredFileIds) {
+		MREditWindow *window = findEditWindowByBufferId(bufferId);
+		MREditSetupSettings editSettings;
+
+		if (window == nullptr) continue;
+		effectiveEditSetupSettingsForPath(window->currentFileName(), editSettings);
+		static_cast<void>(runFileProfileMacro(editSettings.postLoadMacro, window, "Post-load", true));
 	}
 }
