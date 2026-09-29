@@ -334,16 +334,27 @@ $MACRO macroName UNIQUE FROM EDIT;
 \end{verbatim}
 Parameters: macroName names the macro.
 
-Runs the macro at most once for a given source-file timestamp during the
-application session. A failed execution attempt counts as a run. If the file
-timestamp is unchanged or older, subsequent file invocations skip loading
-and execution. A newer timestamp allows a fresh compilation and run. The
-timestamp is retained in the central runtime key/value store.
+This attribute applies to an MRMAC macro regardless of the edited file's
+language. It runs the macro at most once for a given timestamp of its
+\texttt{.mrmac} source file during the application session. The run is
+recorded immediately before execution, so a
+failed attempt also counts. Loading or invoking the same macro again with an
+unchanged or older timestamp skips its body; a newer source timestamp permits
+compilation and execution again. The stamp is kept in the central runtime
+key/value store for this application session, not in \texttt{settings.mrmac}.
+This makes \texttt{UNIQUE} suitable for a Post-load macro that registers a
+snippet pack: opening another file with the same extension does not repeat
+the registration, while saving a revised pack permits its next load to run.
 
 \paragraph{Example macro.}
 \begin{verbatim}
-$MACRO REGISTER_C_SNIPPETS UNIQUE FROM EDIT;
-SET_GLOBAL_INT('C_SNIPPETS_READY', 1);
+$MACRO REGISTER_EXAMPLE_PACK UNIQUE FROM EDIT;
+DEF_HASH(Snippets, MrSnippets, EndSnippet);
+Snippets := GLOBAL_HASH('SNIPPETS');
+EndSnippet['body'] := 'END;';
+MrSnippets['END'] := EndSnippet;
+Snippets['MRMAC'] := MrSnippets;
+SET_GLOBAL_HASH('SNIPPETS', Snippets);
 END_MACRO;
 \end{verbatim}
 \end{mrmacextension}
@@ -3492,6 +3503,59 @@ END_MACRO;
 \end{verbatim}
 
 
+\chapter{String Literals and Here-Documents}
+
+String values can be written as quoted literals or as here-documents. A
+here-document is useful when the text spans several lines or contains quotation
+marks. It produces a string value wherever a string expression is accepted.
+
+\section{Source-Form Map}
+\begin{longtable}{@{}L{0.38\textwidth}L{0.14\textwidth}L{0.27\textwidth}L{0.10\textwidth}@{}}
+\toprule
+Form & Role & Purpose & Reference \\
+\midrule
+\endhead
+\primitiveoverview{here-document}{form-here-document}{string literal}{Multiline string value.}
+\bottomrule
+\end{longtable}
+
+\section{Reference Entry}
+
+\begin{mrmacextension}
+\phantomsection\label{prim:form-here-document}
+\subsection*{Here-Document}\index{here-document!string literal@\textsc{string literal}}
+\begin{verbatim}
+<<MARKER
+literal text
+MARKER;
+\end{verbatim}
+The opening marker is an identifier of at most 20 characters, written
+immediately after the two opening angle brackets. Only spaces or tabs may
+follow it before the required line break. The closing marker must start in the
+first column, match the opening marker exactly, and be followed only by spaces
+or tabs before the statement's semicolon. The text between these lines becomes
+one string literal. Its line breaks and other characters are preserved; the
+closing marker and its line break are excluded. The string literal can contain
+at most 254 bytes. An absent closing marker is a compilation error.
+
+The same two angle brackets denote a left-shift operator in an ordinary binary
+expression. A here-document is recognized only when the opening marker and
+line break have the form shown above.
+
+\paragraph{Example macro.}
+\begin{verbatim}
+$MACRO REFERENCE_HEREDOC FROM EDIT;
+    DEF_STR(Text);
+    Text := <<END_TEXT
+first line
+second line
+END_TEXT;
+    MAKE_MESSAGE(Text);
+END_MACRO;
+\end{verbatim}
+The value of Text contains both lines, including the line break after each.
+\end{mrmacextension}
+
 \chapter{Expressions and Conversion}
 
 An expression computes a value from literals, variables, collection access, operators and intrinsics. Expressions are used in assignments, conditions and procedure arguments. The following entries document the intrinsic operations that create, inspect, convert and search values.
@@ -3510,6 +3574,13 @@ Primitive & Role & Purpose & Reference \\
 Primitive & Role & Purpose & Reference \\
 \midrule
 \endhead
+\primitiveoverview{OR}{operator-or}{operator}{Logical inclusive OR.}
+\primitiveoverview{AND}{operator-and}{operator}{Logical AND.}
+\primitiveoverview{BOR}{operator-bor}{operator}{Bitwise inclusive OR.}
+\primitiveoverview{BXOR}{operator-bxor}{operator}{Bitwise exclusive OR.}
+\primitiveoverview{BAND}{operator-band}{operator}{Bitwise AND.}
+\primitiveoverview{MOD}{operator-mod}{operator}{Integer remainder.}
+\primitiveoverview{NOT}{operator-not}{operator}{Logical negation.}
 \primitiveoverview{RVAL}{intrinsic-rval}{intrinsic}{Expression operation.}
 \primitiveoverview{VAL}{intrinsic-val}{intrinsic}{Expression operation.}
 \primitiveoverview{ASCII}{intrinsic-ascii}{intrinsic}{Expression operation.}
@@ -3544,6 +3615,140 @@ Primitive & Role & Purpose & Reference \\
 \primitiveoverview{XPOS}{intrinsic-xpos}{intrinsic}{Expression operation.}
 \bottomrule
 \end{longtable}
+
+\section{Expression Operators}
+
+Binary operators of equal precedence associate from left to right. From
+lowest to highest precedence, the parser groups them as follows:
+\begin{verbatim}
+OR
+AND
+BOR
+BXOR
+BAND
+=  <>  <  >  <=  >=
+<<  >>
++  -
+*  /  MOD
+unary -  NOT
+\end{verbatim}
+Parentheses override these groups. Arithmetic accepts integers and reals;
+integer division truncates, while a real operand produces a real result.
+Addition also concatenates string-like operands. Equality accepts numeric
+or string-like pairs; ordering accepts numeric operands. Comparisons produce
+an integer zero or one. Shift and bitwise operations require integer
+operands. Both operands of a binary operator are evaluated; logical
+operators do not short-circuit. Division and remainder by zero fail at
+runtime. The operator keywords below each have an alphabetical index entry.
+
+\Needspace{11\baselineskip}
+\phantomsection\label{prim:operator-or}
+\subsection*{OR}\index{OR!operator@\textsc{operator}}
+\begin{verbatim}
+left OR right
+\end{verbatim}
+Both operands are integers. The result is one when either operand is nonzero,
+otherwise zero. It has the lowest binary precedence.
+\begin{verbatim}
+$MACRO REFERENCE_OR FROM EDIT;
+    DEF_INT(Result);
+    Result := (0 OR 7);
+END_MACRO;
+\end{verbatim}
+
+\Needspace{11\baselineskip}
+\phantomsection\label{prim:operator-and}
+\subsection*{AND}\index{AND!operator@\textsc{operator}}
+\begin{verbatim}
+left AND right
+\end{verbatim}
+Both operands are integers. The result is one only when both operands are
+nonzero, otherwise zero.
+\begin{verbatim}
+$MACRO REFERENCE_AND FROM EDIT;
+    DEF_INT(Result);
+    Result := (3 AND 8);
+END_MACRO;
+\end{verbatim}
+
+\Needspace{11\baselineskip}
+\begin{mrmacextension}
+\phantomsection\label{prim:operator-bor}
+\subsection*{BOR}\index{BOR!operator@\textsc{operator}}
+\begin{verbatim}
+left BOR right
+\end{verbatim}
+Both operands are integers. The result is their bitwise inclusive OR.
+\begin{verbatim}
+$MACRO REFERENCE_BOR FROM EDIT;
+    DEF_INT(Mask);
+    Mask := (1 BOR 4);
+END_MACRO;
+\end{verbatim}
+\end{mrmacextension}
+
+\Needspace{11\baselineskip}
+\begin{mrmacextension}
+\phantomsection\label{prim:operator-bxor}
+\subsection*{BXOR}\index{BXOR!operator@\textsc{operator}}
+\begin{verbatim}
+left BXOR right
+\end{verbatim}
+Both operands are integers. The result has each bit set where exactly one
+operand has that bit set.
+\begin{verbatim}
+$MACRO REFERENCE_BXOR FROM EDIT;
+    DEF_INT(Mask);
+    Mask := (7 BXOR 3);
+END_MACRO;
+\end{verbatim}
+\end{mrmacextension}
+
+\Needspace{11\baselineskip}
+\begin{mrmacextension}
+\phantomsection\label{prim:operator-band}
+\subsection*{BAND}\index{BAND!operator@\textsc{operator}}
+\begin{verbatim}
+left BAND right
+\end{verbatim}
+Both operands are integers. The result has only bits set in both operands.
+\begin{verbatim}
+$MACRO REFERENCE_BAND FROM EDIT;
+    DEF_INT(Mask);
+    Mask := (7 BAND 3);
+END_MACRO;
+\end{verbatim}
+\end{mrmacextension}
+
+\Needspace{11\baselineskip}
+\phantomsection\label{prim:operator-mod}
+\subsection*{MOD}\index{MOD!operator@\textsc{operator}}
+\begin{verbatim}
+left MOD right
+\end{verbatim}
+Both operands are integers. The result is the remainder after integer
+division; a zero right operand raises a runtime error.
+\begin{verbatim}
+$MACRO REFERENCE_MOD FROM EDIT;
+    DEF_INT(Remainder);
+    Remainder := (17 MOD 5);
+END_MACRO;
+\end{verbatim}
+
+\Needspace{11\baselineskip}
+\phantomsection\label{prim:operator-not}
+\subsection*{NOT}\index{NOT!operator@\textsc{operator}}
+\begin{verbatim}
+NOT operand
+\end{verbatim}
+The operand is an integer. The result is one if it is zero, otherwise zero.
+This is a unary logical operation, not a bitwise complement.
+\begin{verbatim}
+$MACRO REFERENCE_NOT FROM EDIT;
+    DEF_INT(Result);
+    Result := NOT 0;
+END_MACRO;
+\end{verbatim}
 
 \section{Reference Entries}
 
@@ -8845,6 +9050,238 @@ END_MACRO;
 \end{verbatim}
 
 
+
+\chapter{Bindable Actions}
+
+\begin{mrmacextension}
+Action targets are names accepted by the Key Manager and by
+\hyperref[prim:procedure-keymap-bind]{KEYMAP\_BIND} with
+\texttt{type=ACTION}. They are dispatched as editor or application commands;
+they are not MRMAC procedures and cannot be called with procedure syntax.
+A key binding also specifies a profile, context, and key sequence. A target
+only runs where its command and editor context apply. The tables below are
+the complete action-target map in the current catalog. An unavailable target
+is retained for compatibility but has no active operation; binding it cannot
+provide the named legacy behavior. The six unavailable targets are marked
+explicitly.
+\end{mrmacextension}
+
+\begin{mrmacextension}
+\section{MRMAC action targets}
+\begin{longtable}{@{}L{0.50\textwidth}@{\hspace{0.8em}}L{0.40\textwidth}@{}}
+\toprule
+Target & Function \\
+\midrule
+\endhead
+\texttt{MRMAC\_CURSOR\_LEFT}\index{MRMAC\_CURSOR\_LEFT} & Move the cursor one character left. \\
+\texttt{MRMAC\_CURSOR\_RIGHT}\index{MRMAC\_CURSOR\_RIGHT} & Move the cursor one character right. \\
+\texttt{MRMAC\_CURSOR\_UP}\index{MRMAC\_CURSOR\_UP} & Move the cursor one line up. \\
+\texttt{MRMAC\_CURSOR\_DOWN}\index{MRMAC\_CURSOR\_DOWN} & Move the cursor one line down. \\
+\texttt{MRMAC\_CURSOR\_HOME}\index{MRMAC\_CURSOR\_HOME} & Move to the start of the current line. \\
+\texttt{MRMAC\_CURSOR\_END\_OF\_LINE}\index{MRMAC\_CURSOR\_END\_OF\_LINE} & Move to the end of the current line. \\
+\texttt{MRMAC\_VIEW\_PAGE\_UP}\index{MRMAC\_VIEW\_PAGE\_UP} & Move one displayed page up. \\
+\texttt{MRMAC\_VIEW\_PAGE\_DOWN}\index{MRMAC\_VIEW\_PAGE\_DOWN} & Move one displayed page down. \\
+\texttt{MRMAC\_CURSOR\_TOP\_OF\_FILE}\index{MRMAC\_CURSOR\_TOP\_OF\_FILE} & Move the cursor to the start of the file. \\
+\texttt{MRMAC\_CURSOR\_BOTTOM\_OF\_FILE}\index{MRMAC\_CURSOR\_BOTTOM\_OF\_FILE} & Move the cursor to the end of the file. \\
+\texttt{MRMAC\_CURSOR\_NEXT\_PAGE\_BREAK}\index{MRMAC\_CURSOR\_NEXT\_PAGE\_BREAK} & Move to the next page break. \\
+\texttt{MRMAC\_CURSOR\_PREV\_PAGE\_BREAK}\index{MRMAC\_CURSOR\_PREV\_PAGE\_BREAK} & Move to the previous page break. \\
+\texttt{MRMAC\_CURSOR\_WORD\_LEFT}\index{MRMAC\_CURSOR\_WORD\_LEFT} & Move to the previous word. \\
+\texttt{MRMAC\_CURSOR\_WORD\_RIGHT}\index{MRMAC\_CURSOR\_WORD\_RIGHT} & Move to the next word. \\
+\texttt{MRMAC\_CURSOR\_TOP\_OF\_WINDOW}\index{MRMAC\_CURSOR\_TOP\_OF\_WINDOW} & Move to the top visible line. \\
+\texttt{MRMAC\_CURSOR\_BOTTOM\_OF\_WINDOW}\index{MRMAC\_CURSOR\_BOTTOM\_OF\_WINDOW} & Move to the bottom visible line. \\
+\texttt{MRMAC\_VIEW\_SCROLL\_UP}\index{MRMAC\_VIEW\_SCROLL\_UP} & Scroll the view up without changing the cursor position. \\
+\texttt{MRMAC\_VIEW\_SCROLL\_DOWN}\index{MRMAC\_VIEW\_SCROLL\_DOWN} & Scroll the view down without changing the cursor position. \\
+\texttt{MRMAC\_CURSOR\_START\_OF\_BLOCK}\index{MRMAC\_CURSOR\_START\_OF\_BLOCK} & Move to the start of the marked block. \\
+\texttt{MRMAC\_CURSOR\_END\_OF\_BLOCK}\index{MRMAC\_CURSOR\_END\_OF\_BLOCK} & Move to the end of the marked block. \\
+\texttt{MRMAC\_CURSOR\_GOTO\_LINE}\index{MRMAC\_CURSOR\_GOTO\_LINE} & Open the go-to-line dialog. \\
+\texttt{MRMAC\_CURSOR\_INDENT}\index{MRMAC\_CURSOR\_INDENT} & Indent at the cursor position. \\
+\texttt{MRMAC\_CURSOR\_TAB\_RIGHT}\index{MRMAC\_CURSOR\_TAB\_RIGHT} & Move to the next tab stop. \\
+\texttt{MRMAC\_CURSOR\_TAB\_LEFT}\index{MRMAC\_CURSOR\_TAB\_LEFT} & Move to the preceding tab stop. \\
+\texttt{MRMAC\_CURSOR\_UNDENT}\index{MRMAC\_CURSOR\_UNDENT} & Remove indentation at the cursor position. \\
+\texttt{MRMAC\_MARK\_PUSH\_POSITION}\index{MRMAC\_MARK\_PUSH\_POSITION} & Push the cursor position onto the mark stack. \\
+\texttt{MRMAC\_MARK\_POP\_POSITION}\index{MRMAC\_MARK\_POP\_POSITION} & Restore a position from the mark stack. \\
+\texttt{MRMAC\_MARK\_SET\_RANDOM\_ACCESS}\index{MRMAC\_MARK\_SET\_RANDOM\_ACCESS} & Store a random-access mark at the cursor. \\
+\texttt{MRMAC\_VIEW\_CENTER\_LINE}\index{MRMAC\_VIEW\_CENTER\_LINE} & Center the cursor line in the view. \\
+\texttt{MRMAC\_MARK\_GET\_RANDOM\_ACCESS}\index{MRMAC\_MARK\_GET\_RANDOM\_ACCESS} & Move to the stored random-access mark. \\
+\texttt{MRMAC\_DELETE\_TO\_EOL}\index{MRMAC\_DELETE\_TO\_EOL} & Delete from the cursor to the end of the line. \\
+\texttt{MRMAC\_DELETE\_FORWARD\_CHAR\_OR\_BLOCK}\index{MRMAC\_DELETE\_FORWARD\_CHAR\_OR\_BLOCK} & Delete the selected block, or the character at the cursor. \\
+\texttt{MRMAC\_DELETE\_FORWARD\_WORD}\index{MRMAC\_DELETE\_FORWARD\_WORD} & Delete the next word. \\
+\texttt{MRMAC\_DELETE\_BACKWARD\_CHAR}\index{MRMAC\_DELETE\_BACKWARD\_CHAR} & Delete the character before the cursor. \\
+\texttt{MRMAC\_DELETE\_BACKWARD\_WORD}\index{MRMAC\_DELETE\_BACKWARD\_WORD} & Delete the word before the cursor. \\
+\texttt{MRMAC\_DELETE\_LINE}\index{MRMAC\_DELETE\_LINE} & Delete the current line. \\
+\texttt{MRMAC\_DELETE\_BACKWARD\_TO\_HOME}\index{MRMAC\_DELETE\_BACKWARD\_TO\_HOME} & Delete back to the start of the line. \\
+\texttt{MRMAC\_UNDO}\index{MRMAC\_UNDO} & Undo the last edit. \\
+\texttt{MRMAC\_REDO\_LAST\_UNDO}\index{MRMAC\_REDO\_LAST\_UNDO} & Redo the last undone edit. \\
+\texttt{MRMAC\_SEARCH\_FORWARD}\index{MRMAC\_SEARCH\_FORWARD} & Open forward text search. \\
+\texttt{MRMAC\_SEARCH\_REPLACE}\index{MRMAC\_SEARCH\_REPLACE} & Open search and replace. \\
+\texttt{MRMAC\_SEARCH\_REPEAT\_LAST}\index{MRMAC\_SEARCH\_REPEAT\_LAST} & Repeat the last search or replacement. \\
+\texttt{MRMAC\_SEARCH\_MULTI\_FILE}\index{MRMAC\_SEARCH\_MULTI\_FILE} & Search across multiple files. \\
+\texttt{MRMAC\_SEARCH\_LIST\_MATCHED\_FILES}\index{MRMAC\_SEARCH\_LIST\_MATCHED\_FILES} & List files matched by the last search. \\
+\texttt{MRMAC\_BLOCK\_COPY\_TO\_CLIPBOARD}\index{MRMAC\_BLOCK\_COPY\_TO\_CLIPBOARD} & Copy the marked block to the system clipboard. \\
+\texttt{MRMAC\_BLOCK\_PASTE\_FROM\_CLIPBOARD}\index{MRMAC\_BLOCK\_PASTE\_FROM\_CLIPBOARD} & Paste text from the system clipboard. \\
+\texttt{MRMAC\_BLOCK\_MARK\_STREAM}\index{MRMAC\_BLOCK\_MARK\_STREAM} & Start a stream block mark. \\
+\texttt{MRMAC\_BLOCK\_SET\_BEGIN}\index{MRMAC\_BLOCK\_SET\_BEGIN} & Set the block start at the cursor. \\
+\texttt{MRMAC\_BLOCK\_SET\_END}\index{MRMAC\_BLOCK\_SET\_END} & Set the block end at the cursor. \\
+\texttt{MRMAC\_BLOCK\_SET\_COLUMN\_BEGIN}\index{MRMAC\_BLOCK\_SET\_COLUMN\_BEGIN} & Start a column block at the cursor. \\
+\texttt{MRMAC\_BLOCK\_MARK\_WORD\_RIGHT}\index{MRMAC\_BLOCK\_MARK\_WORD\_RIGHT} & Extend the block mark one word to the right. \\
+\texttt{MRMAC\_BLOCK\_CLEAR}\index{MRMAC\_BLOCK\_CLEAR} & Clear the current block mark. \\
+\texttt{MRMAC\_BLOCK\_TOGGLE\_VISIBILITY}\index{MRMAC\_BLOCK\_TOGGLE\_VISIBILITY} & Hide or show the block mark. \\
+\texttt{MRMAC\_BLOCK\_UNDENT}\index{MRMAC\_BLOCK\_UNDENT} & Reduce indentation of the marked block. \\
+\texttt{MRMAC\_BLOCK\_INDENT}\index{MRMAC\_BLOCK\_INDENT} & Increase indentation of the marked block. \\
+\texttt{MRMAC\_BLOCK\_COPY}\index{MRMAC\_BLOCK\_COPY} & Copy the marked block. \\
+\texttt{MRMAC\_BLOCK\_MOVE}\index{MRMAC\_BLOCK\_MOVE} & Move the marked block. \\
+\texttt{MRMAC\_BLOCK\_DELETE}\index{MRMAC\_BLOCK\_DELETE} & Delete the marked block. \\
+\texttt{MRMAC\_BLOCK\_COPY\_INTERWINDOW}\index{MRMAC\_BLOCK\_COPY\_INTERWINDOW} & Copy the marked block to another window. \\
+\texttt{MRMAC\_BLOCK\_MOVE\_INTERWINDOW}\index{MRMAC\_BLOCK\_MOVE\_INTERWINDOW} & Move the marked block to another window. \\
+\texttt{MRMAC\_BLOCK\_MOVE\_TO\_BUFFER}\index{MRMAC\_BLOCK\_MOVE\_TO\_BUFFER} & Unavailable: this legacy buffer transfer target has no active command. \\
+\texttt{MRMAC\_BLOCK\_APPEND\_TO\_BUFFER}\index{MRMAC\_BLOCK\_APPEND\_TO\_BUFFER} & Unavailable: this legacy buffer append target has no active command. \\
+\texttt{MRMAC\_BLOCK\_CUT\_APPEND\_TO\_BUFFER}\index{MRMAC\_BLOCK\_CUT\_APPEND\_TO\_BUFFER} & Unavailable: this legacy cut-and-append target has no active command. \\
+\texttt{MRMAC\_BLOCK\_COPY\_FROM\_BUFFER}\index{MRMAC\_BLOCK\_COPY\_FROM\_BUFFER} & Unavailable: this legacy buffer copy target has no active command. \\
+\texttt{MRMAC\_BLOCK\_EXTEND\_BY\_MOTION}\index{MRMAC\_BLOCK\_EXTEND\_BY\_MOTION} & Unavailable: this legacy block extension target has no active command. \\
+\texttt{MRMAC\_FILE\_SAVE}\index{MRMAC\_FILE\_SAVE} & Save the current file. \\
+\bottomrule
+\end{longtable}
+\end{mrmacextension}
+
+\begin{mrmacextension}
+\section{MR action targets}
+\begin{longtable}{@{}L{0.50\textwidth}@{\hspace{0.8em}}L{0.40\textwidth}@{}}
+\toprule
+Target & Function \\
+\midrule
+\endhead
+\texttt{MR\_BLOCK\_MARK\_LINES}\index{MR\_BLOCK\_MARK\_LINES} & Start a line block mark. \\
+\texttt{MR\_BLOCK\_TOGGLE\_MARKING}\index{MR\_BLOCK\_TOGGLE\_MARKING} & Start or stop marking a line block. \\
+\texttt{MR\_BLOCK\_TOGGLE\_VISIBILITY}\index{MR\_BLOCK\_TOGGLE\_VISIBILITY} & Hide or show the block mark. \\
+\texttt{MR\_FILE\_SAVE\_ALL}\index{MR\_FILE\_SAVE\_ALL} & Save all dirty files. \\
+\texttt{MR\_FILE\_REVERT}\index{MR\_FILE\_REVERT} & Reload the file from disk, discarding current edits after confirmation. \\
+\texttt{MR\_SAVE\_BLOCK\_TO\_FILE}\index{MR\_SAVE\_BLOCK\_TO\_FILE} & Save the marked block to a file. \\
+\texttt{MR\_LOAD\_BLOCK\_FROM\_FILE}\index{MR\_LOAD\_BLOCK\_FROM\_FILE} & Insert block data from a file. \\
+\texttt{MR\_BLOCK\_MARK\_ALL}\index{MR\_BLOCK\_MARK\_ALL} & Mark the entire document as a line block. \\
+\texttt{MR\_EDIT\_MARK\_ALL}\index{MR\_EDIT\_MARK\_ALL} & Compatibility alias for marking the entire document as a line block. \\
+\texttt{MR\_EDIT\_TOGGLE\_INSERT\_MODE}\index{MR\_EDIT\_TOGGLE\_INSERT\_MODE} & Switch between insert and overwrite modes. \\
+\texttt{MR\_TEXT\_TOGGLE\_LINE\_DRAWING}\index{MR\_TEXT\_TOGGLE\_LINE\_DRAWING} & Enable or disable line drawing mode. \\
+\texttt{MR\_TEXT\_TOGGLE\_DOUBLE\_LINES}\index{MR\_TEXT\_TOGGLE\_DOUBLE\_LINES} & Switch line drawing between single and double lines. \\
+\texttt{MR\_TEXT\_CENTER\_LINE}\index{MR\_TEXT\_CENTER\_LINE} & Center the current line within the margins. \\
+\texttt{MR\_TEXT\_REFORMAT\_PARAGRAPH}\index{MR\_TEXT\_REFORMAT\_PARAGRAPH} & Reformat the current paragraph. \\
+\texttt{MR\_TEXT\_REFORMAT\_DOCUMENT}\index{MR\_TEXT\_REFORMAT\_DOCUMENT} & Reformat the current document. \\
+\texttt{PRETTIFY\_BLOCK\_OR\_FILE}\index{PRETTIFY\_BLOCK\_OR\_FILE} & Format the selected block or current source file. \\
+\texttt{API\_REFERENCE}\index{API\_REFERENCE} & Look up the C symbol under the cursor in local API documentation. \\
+\texttt{MR\_TEXT\_FILE\_COMPARE}\index{MR\_TEXT\_FILE\_COMPARE} & Compare the current file with another file. \\
+\texttt{MR\_TOGGLE\_FORMAT\_RULER}\index{MR\_TOGGLE\_FORMAT\_RULER} & Show or hide the format ruler. \\
+\texttt{MR\_TOGGLE\_WORD\_WRAP}\index{MR\_TOGGLE\_WORD\_WRAP} & Enable or disable word wrapping. \\
+\texttt{MR\_SET\_LEFT\_MARGIN}\index{MR\_SET\_LEFT\_MARGIN} & Set the left text margin. \\
+\texttt{MR\_SET\_RIGHT\_MARGIN}\index{MR\_SET\_RIGHT\_MARGIN} & Set the right text margin. \\
+\texttt{MR\_JUSTIFY\_PARAGRAPH}\index{MR\_JUSTIFY\_PARAGRAPH} & Justify the current paragraph. \\
+\texttt{MR\_SORT\_COLUMN\_BLOCK\_TOGGLE}\index{MR\_SORT\_COLUMN\_BLOCK\_TOGGLE} & Unavailable: column-block sorting is not dispatched by this target. \\
+\texttt{MR\_FILE\_FORCE\_SAVE}\index{MR\_FILE\_FORCE\_SAVE} & Force a save of the current file. \\
+\texttt{MR\_EXIT\_DIRTY\_SAVE\_ALL}\index{MR\_EXIT\_DIRTY\_SAVE\_ALL} & Exit through the save-all prompt for modified files. \\
+\texttt{MR\_WINDOW\_OPEN}\index{MR\_WINDOW\_OPEN} & Open a window. \\
+\texttt{MR\_WINDOW\_NEXT}\index{MR\_WINDOW\_NEXT} & Activate the next window. \\
+\texttt{MR\_WINDOW\_PREVIOUS}\index{MR\_WINDOW\_PREVIOUS} & Activate the previous window. \\
+\texttt{MR\_WINDOW\_LIST}\index{MR\_WINDOW\_LIST} & Open the window list. \\
+\texttt{MR\_WINDOW\_CLOSE}\index{MR\_WINDOW\_CLOSE} & Close the active window. \\
+\texttt{MR\_WINDOW\_ZOOM}\index{MR\_WINDOW\_ZOOM} & Zoom or restore the active window. \\
+\texttt{MR\_WINDOW\_CASCADE}\index{MR\_WINDOW\_CASCADE} & Arrange windows in a cascade. \\
+\texttt{MR\_WINDOW\_TILE}\index{MR\_WINDOW\_TILE} & Tile open windows. \\
+\texttt{MR\_WINDOW\_SPLIT\_VERTICAL}\index{MR\_WINDOW\_SPLIT\_VERTICAL} & Split the active window vertically. \\
+\texttt{MR\_WINDOW\_SPLIT\_HORIZONTAL}\index{MR\_WINDOW\_SPLIT\_HORIZONTAL} & Split the active window horizontally. \\
+\texttt{MR\_DESKTOP\_VIEWPORT\_LEFT}\index{MR\_DESKTOP\_VIEWPORT\_LEFT} & Move viewport left. \\
+\texttt{MR\_DESKTOP\_VIEWPORT\_RIGHT}\index{MR\_DESKTOP\_VIEWPORT\_RIGHT} & Move viewport right. \\
+\texttt{MR\_DESKTOP\_MOVE\_WINDOW\_LEFT}\index{MR\_DESKTOP\_MOVE\_WINDOW\_LEFT} & Move window to left desktop. \\
+\texttt{MR\_DESKTOP\_MOVE\_WINDOW\_RIGHT}\index{MR\_DESKTOP\_MOVE\_WINDOW\_RIGHT} & Move window to right desktop. \\
+\texttt{MR\_BUILD\_CURRENT\_FILE}\index{MR\_BUILD\_CURRENT\_FILE} & Build the current file using its compiler profile. \\
+\texttt{MR\_DEBUGGER\_START}\index{MR\_DEBUGGER\_START} & Start debugging the current compiled program. \\
+\texttt{MR\_DEBUGGER\_EVALUATE}\index{MR\_DEBUGGER\_EVALUATE} & Evaluate an expression in the compiled-program debugger. \\
+\texttt{MR\_DEBUGGER\_CONTINUE\_PAUSE}\index{MR\_DEBUGGER\_CONTINUE\_PAUSE} & Continue or pause the compiled-program debugger. \\
+\texttt{MR\_DEBUGGER\_RUN\_HERE}\index{MR\_DEBUGGER\_RUN\_HERE} & Run the debugger to the selected source line. \\
+\texttt{MR\_DEBUGGER\_ADD\_WATCH}\index{MR\_DEBUGGER\_ADD\_WATCH} & Add a debugger watch expression. \\
+\texttt{MR\_DEBUGGER\_ERASE\_WATCH}\index{MR\_DEBUGGER\_ERASE\_WATCH} & Remove a debugger watch expression. \\
+\texttt{MR\_DEBUGGER\_STOP\_RESET}\index{MR\_DEBUGGER\_STOP\_RESET} & Stop and reset the compiled-program debugger. \\
+\texttt{MR\_DEBUGGER\_TOGGLE\_BREAKPOINT}\index{MR\_DEBUGGER\_TOGGLE\_BREAKPOINT} & Add or remove a compiled-program breakpoint. \\
+\texttt{MR\_DEBUGGER\_STEP\_INTO}\index{MR\_DEBUGGER\_STEP\_INTO} & Step into the current call. \\
+\texttt{MR\_DEBUGGER\_STEP}\index{MR\_DEBUGGER\_STEP} & Step over the current source line. \\
+\texttt{MR\_DEBUGGER\_STEP\_OUT}\index{MR\_DEBUGGER\_STEP\_OUT} & Step out of the current call. \\
+\texttt{MR\_DEBUGGER\_CLEAR\_PROGRAM\_TERMINAL}\index{MR\_DEBUGGER\_CLEAR\_PROGRAM\_TERMINAL} & Clear the debugger Program Terminal. \\
+\texttt{MR\_MACRO\_DEBUGGER\_TOGGLE\_BREAKPOINT\_ENABLED}\index{MR\_MACRO\_DEBUGGER\_TOGGLE\_BREAKPOINT\_ENABLED} & Enable or disable the selected macro breakpoint. \\
+\texttt{MR\_MACRO\_DEBUGGER\_TOGGLE\_ALL\_BREAKPOINTS}\index{MR\_MACRO\_DEBUGGER\_TOGGLE\_ALL\_BREAKPOINTS} & Enable or disable all macro breakpoints. \\
+\texttt{MR\_MACRO\_DEBUGGER\_CLEAR\_ALL\_BREAKPOINTS}\index{MR\_MACRO\_DEBUGGER\_CLEAR\_ALL\_BREAKPOINTS} & Remove all macro breakpoints. \\
+\texttt{MR\_SEARCH\_RESULTS\_NEXT}\index{MR\_SEARCH\_RESULTS\_NEXT} & Jump to the next search result. \\
+\texttt{MR\_SEARCH\_MULTI\_FILE\_REPLACE}\index{MR\_SEARCH\_MULTI\_FILE\_REPLACE} & Search and replace across multiple files. \\
+\texttt{MR\_COMPILER\_PROBLEMS\_NEXT}\index{MR\_COMPILER\_PROBLEMS\_NEXT} & Jump to the next compiler problem. \\
+\texttt{MR\_COMPILER\_PROBLEMS\_PREVIOUS}\index{MR\_COMPILER\_PROBLEMS\_PREVIOUS} & Jump to the previous compiler problem. \\
+\texttt{MR\_MATCH\_PARENTHESIS}\index{MR\_MATCH\_PARENTHESIS} & Move to the matching parenthesis or brace. \\
+\texttt{MR\_FIND\_REFERENCES}\index{MR\_FIND\_REFERENCES} & Find references to the symbol at the cursor. \\
+\texttt{MR\_RENAME}\index{MR\_RENAME} & Rename the symbol at the cursor. \\
+\texttt{MR\_SNIPPET\_PLACEHOLDER\_NEXT}\index{MR\_SNIPPET\_PLACEHOLDER\_NEXT} & Select the next active snippet placeholder. \\
+\texttt{MR\_SNIPPET\_PLACEHOLDER\_PREVIOUS}\index{MR\_SNIPPET\_PLACEHOLDER\_PREVIOUS} & Select the previous active snippet placeholder. \\
+\texttt{MR\_MACRO\_TOGGLE\_RECORDING}\index{MR\_MACRO\_TOGGLE\_RECORDING} & Start or stop keystroke macro recording. \\
+\texttt{MR\_SETUP\_EDIT\_SETTINGS}\index{MR\_SETUP\_EDIT\_SETTINGS} & Open editor settings. \\
+\texttt{MR\_SETUP\_COLOR}\index{MR\_SETUP\_COLOR} & Open color setup. \\
+\texttt{MR\_SETUP\_KEYMAP}\index{MR\_SETUP\_KEYMAP} & Open the Key Manager. \\
+\texttt{MR\_SETUP\_FILENAME\_EXTENSIONS}\index{MR\_SETUP\_FILENAME\_EXTENSIONS} & Open filename-extension profiles. \\
+\texttt{MR\_SETUP\_COMPILER\_PROFILES}\index{MR\_SETUP\_COMPILER\_PROFILES} & Open compiler profiles. \\
+\texttt{MR\_SETUP\_PATHS}\index{MR\_SETUP\_PATHS} & Open path settings. \\
+\texttt{MR\_SETUP\_BACKUPS\_AUTOSAVE}\index{MR\_SETUP\_BACKUPS\_AUTOSAVE} & Open backup and autosave settings. \\
+\texttt{MR\_SETUP\_USER\_INTERFACE}\index{MR\_SETUP\_USER\_INTERFACE} & Open user-interface settings. \\
+\texttt{MR\_SETUP\_LIVE\_LOGS}\index{MR\_SETUP\_LIVE\_LOGS} & Open live-log settings. \\
+\bottomrule
+\end{longtable}
+\end{mrmacextension}
+
+\section{Binding an action}
+
+\begin{mrmacextension}
+Use the full target name in the binding; the Key Manager may show a shorter
+label. The named profile must already exist. For example:
+\begin{verbatim}
+$MACRO REFERENCE_BUILD_ACTION FROM EDIT;
+    KEYMAP_BIND('name="MY_KEYS" context=EDIT type=ACTION ' +
+                'target="MR_BUILD_CURRENT_FILE" sequence="<Ctrl+B>"');
+END_MACRO;
+\end{verbatim}
+A macro binding uses \texttt{type=MACRO} and a macro specification instead;
+it does not use an action target.
+\end{mrmacextension}
+
+\section{API Reference Action}
+\begin{mrmacextension}
+\phantomsection
+\label{prim:action-api-reference}
+\subsection*{API\_REFERENCE}
+\index{API\_REFERENCE}
+\index{API\_REFERENCE\_PLACEMENT}
+
+\texttt{API\_REFERENCE} names a bindable editor action and a separate boolean
+editor setting. The setting is initially false. A
+filename-extension profile may override it. Enable it for a C profile in the
+controlled startup settings source, for example:
+\begin{verbatim}
+MRFEPROFILE('SET', 'C_DOC', 'API_REFERENCE', 'TRUE');
+MRSETUP('API_REFERENCE_PLACEMENT', 'RIGHT_MARGIN');
+\end{verbatim}
+Here \texttt{C\_DOC} denotes a previously defined profile for the
+\texttt{c} extension. The global placement also accepts
+\texttt{UNDER\_CODE}; its default is \texttt{RIGHT\_MARGIN}. The Setup
+dialogs can save these values without hand-editing \texttt{settings.mrmac}.
+
+Bind the action in Key Manager. In a serialized binding, set
+\texttt{type=ACTION} and \texttt{target="API\_REFERENCE"}, as in the example
+below. With a named C source file open, place the cursor on a C function name
+and invoke the bound key, choose \textsf{Text > API reference}, or use the editor context menu. The
+lookup runs asynchronously and displays a found local reference in a
+read-only SideKick. The command requires the profile setting and currently
+supports C files. This action cannot be called as an MRMAC procedure.
+
+\paragraph{Example keymap source.}
+The named keymap profile must already exist. This example assigns Ctrl+R to
+the action within that profile:
+\begin{verbatim}
+KEYMAP_BIND('name="MY_KEYS" context=EDIT type=ACTION ' +
+            'target="API_REFERENCE" sequence="<Ctrl+R>"');
+\end{verbatim}
+\end{mrmacextension}
+
 \chapter{Typed Dialogs and Collections}
 
 Typed dialogs are built from explicit controls and named collections. A macro declares a dialog, adds controls, fills list, tree or table data, then executes it. The resulting control id and values remain ordinary MRMAC values.
@@ -11299,15 +11736,48 @@ $MACRO REFERENCE_UNLOAD_MACRO FROM EDIT;
 END_MACRO;
 \end{verbatim}
 
+\Needspace{0.78\textheight}
+\begin{mrmacextension}
+\section{Language-specific snippet packs}
+\index{snippet packs}
+
+The supplied C, C++, Python, MRMAC, and Bash snippet databases are separate MRMAC files
+under \texttt{snippets/} in the configured macro directory. Their filenames
+are \texttt{CSnippets.mrmac}, \texttt{CPPSnippets.mrmac},
+\texttt{PythonSnippets.mrmac}, \texttt{MRMACSnippets.mrmac}, and
+\texttt{BashSnippets.mrmac}. Each file registers only its language branch in
+the process-wide, volatile snippet hash. A file-extension profile can select
+its matching pack as a Post-load macro; the packs can therefore be edited and
+reloaded independently.
+
+The installer copies the directory hierarchy and preserves existing personal
+macro files. It does not rewrite existing Post-load macro paths. After an
+upgrade from a top-level C pack, select
+\texttt{snippets/CSnippets.mrmac} from the configured macro directory in the
+C profile. Store the full path in Post-load macro; a relative path is resolved
+from the process working directory. Select the corresponding full path for
+the C++, Python, MRMAC, and Bash profiles when enabling those packs.
+
+Figure~\ref{fig:reference-snippet-bash} shows the Bash pack's \texttt{if}
+entry in the Snippet SideKick. The highlighted test expression is the active
+placeholder; Tab and Shift+Tab navigate placeholders, Alt+Enter inserts the
+edited expansion, and Esc cancels it.
+\begin{center}
+\includegraphics[width=0.95\textwidth,height=0.48\textheight,keepaspectratio]{assets/mr-users-snippet-bash.png}
+\captionof{figure}{A Bash snippet expansion in the SideKick, with its first
+placeholder selected and the available editing commands on the bottom line.}
+\label{fig:reference-snippet-bash}
+\end{center}
+\end{mrmacextension}
+
 
 \chapter{Settings, Keymaps and Themes}
 
 Settings and serialized UI descriptions cross a controlled VM boundary. They are not a macro-owned configuration store. This chapter documents the accepted settings, keymap and theme source forms.
 
 \section{Primitive Map}
-The map is a local index for this chapter. The final column is a generated page
-reference and hyperlink to the full entry, where the source form, parameters,
-semantics and a complete example macro appear.
+The map is a local index for this chapter. The final column links to the full
+entry, including its form, prerequisites, behavior, and example.
 
 \begin{longtable}{@{}L{0.38\textwidth}L{0.14\textwidth}L{0.27\textwidth}L{0.10\textwidth}@{}}
 \toprule
@@ -11673,6 +12143,8 @@ These lines belong in a complete canonical startup settings source, not in an
 ordinary edit macro. See the bracket-pairing semantics under
 \hyperref[prim:procedure-mrsetup]{MRSETUP}.
 \end{mrmacextension}
+
+
 
 \begin{mrmacextension}
 \phantomsection

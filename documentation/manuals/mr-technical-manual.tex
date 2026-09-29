@@ -6,6 +6,9 @@
 \usepackage[margin=22mm,inner=21mm,outer=19mm]{geometry}
 \usepackage{microtype}
 \usepackage{graphicx}
+\usepackage{capt-of}
+\usepackage{needspace}
+\usepackage{placeins}
 \usepackage[font=footnotesize,skip=2pt]{caption}
 \usepackage{hyperref}
 
@@ -991,7 +994,7 @@ does not come from an approximate diff; it comes from moving acquisition,
 Myers computation, and display projection outside the UI thread while keeping
 adoption exact.
 
-\begin{figure}[tb]
+\begin{figure}[p]
   \centering
   \includegraphics[width=\textwidth]{assets/mr-file-compare-pipeline.pdf}
   \caption{File Compare's finite \(2\rightarrow1\rightarrow2\) generation.
@@ -1002,6 +1005,11 @@ adoption exact.
   \label{fig:file-compare-pipeline}
 \end{figure}
 
+\FloatBarrier
+\Needspace{0.80\textheight}
+\noindent
+\begin{minipage}{\textwidth}
+\setlength{\parindent}{1em}
 Bento is not the whole editor family, and that distinction is deliberate.
 \texttt{MRSidekickEditor} does not inherit from Bento; it is a \texttt{TView}
 for short-lived, code-relative editing. In snippet mode it edits a proposed
@@ -1012,6 +1020,22 @@ that context; it neither owns a durable workspace nor needs a layout tree. The
 two forms demonstrate an important design judgement: a persistent task with
 several simultaneous perspectives needs Bento, while a brief local edit or
 explanation needs an anchored editor of its own.
+
+Language-specific snippet packs live in separate MRMAC files under
+\texttt{mrmac/macros/snippets}; each registers its language branch in the
+volatile VM snippet hash when the matching profile loads it.
+
+Figure~\ref{fig:technical-snippet-sidekick} shows the resulting C expansion
+in its local editing surface. The selected placeholder and the bottom-line
+commands belong to the SideKick; the source buffer receives the replacement
+only when the user commits it.
+
+\centering
+\includegraphics[width=0.95\linewidth,height=0.48\textheight,keepaspectratio]{assets/mr-users-snippet-c.png}
+\captionof{figure}{The Snippet SideKick anchored over a C source buffer, with the first
+placeholder selected before the replacement is committed.}
+\label{fig:technical-snippet-sidekick}
+\end{minipage}
 
 \part{MRMAC as an integrated runtime}
 
@@ -1974,6 +1998,20 @@ failure command while preserving the build status. UI-thread result adoption
 then performs the matching audio notification and post-build \mrmac{} hook.
 Thus shell policy remains inside the finite external task, while VM mutation
 and visible adoption remain on their authorised side of the boundary.
+
+The compiler profile's post-build macro specification selects a concrete
+routine, not a toolchain-wide dispatcher. The build runner writes typed
+\texttt{MR\_BUILD\_*} globals and executes the selected routine after result
+adoption, including failure and cancellation. The shipped
+LaTeXmk routine is selected by this macro specification:
+\begin{verbatim}
+compilersupport/MRCompilerMiddleware.mrmac^LatexMKPostBuild
+\end{verbatim}
+It reports the error or opens the finished PDF with
+\texttt{zathura}. A profile for any other supported language can select a
+different routine that consumes the same build context and implements that
+language's artifact handling. This extends build completion behavior through
+profile configuration and MRMAC source without changing the runner.
 
 \part{Syntax as a shared core}
 

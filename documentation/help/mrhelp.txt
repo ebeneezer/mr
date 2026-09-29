@@ -738,6 +738,12 @@ cmd run after the corresponding result. Their audio fields name sound files.
 Pre build macro and Post build macro name MRMAC files. Includes, Libraries,
 and Runtime carry toolchain-specific arguments.
 
+Post build macro uses a file-and-routine name such as
+compilersupport/MRCompilerMiddleware.mrmac^LatexMKPostBuild. Automatic Setup
+assigns that routine to detected LATEXMK profiles. It reports a failed
+LaTeXmk build or opens a successful PDF in zathura. For another language,
+assign a routine written for that profile's output and workflow.
+
 Add creates a profile, Copy duplicates the selected profile, Delete removes
 it, and Automatic Setup probes supported local compilers.
 
@@ -1048,6 +1054,8 @@ Alt-Enter commits the edited expansion; Esc cancels the snippet session.
 The parent document changes only through this explicit commit path.
 Enable Snippets in the matching filename-extension profile, load the database
 through Autoexec or Post-load macro, then press Ctrl+Space on a trigger.
+The supplied language packs are under snippets/ in the macro directory.
+Use the profile's file selector to store the full Post-load path.
 
 More detail
 
@@ -1351,6 +1359,9 @@ payload and runtime dependencies before installing files, and requests
 sudo when the system destination requires it. Existing personal macro
 files are preserved. Each additional user runs the installer to initialise
 that user's macro directory.
+Snippet packs are installed under macros/snippets. An upgrade does not
+change existing Post-load macro paths in filename-extension profiles;
+select the new pack path in each affected profile.
 
 Installation requires a UTF-8 locale. Check locale charmap and the values
 of LANG, LC_CTYPE, and especially LC_ALL if the installer rejects the
@@ -2734,11 +2745,17 @@ Alt+Enter commits, while Esc cancels. The parent document changes only at
 commit.
 
 Enable Snippets in the matching filename-extension profile. Load a snippet
-database through Autoexec or Post-load macro; CSnippets.mrmac supplies the C
-starting set. Type a trigger such as for and press Ctrl+Space. Lookup occurs
-only on that key press.
-Edit CSnippets.mrmac to add entries under SNIPPETS['C']. Entries carry a
-body and may define a name and numbered placeholder defaults. A newer macro
+database through Autoexec or Post-load macro. The supplied packs are
+snippets/CSnippets.mrmac for C, snippets/CPPSnippets.mrmac for C++,
+snippets/PythonSnippets.mrmac for Python,
+snippets/MRMACSnippets.mrmac for MRMAC, and
+snippets/BashSnippets.mrmac for Bash below the configured macro
+directory. Use the profile's file selector to store the full path; a relative
+Post-load path is resolved from the process working directory. Type a trigger
+such as for and press Ctrl+Space. Lookup occurs only on that key press.
+Edit the language's pack to add entries under its SNIPPETS language key.
+Entries use an uppercase trigger key and carry a body; they may also define
+a name and numbered placeholder defaults. A newer macro
 file timestamp lets UNIQUE load the changed database.
 
 This separation matters: a macro can prepare a complex expansion without
@@ -4336,6 +4353,23 @@ Completion audio and the post-build MRMAC hook are adopted with the final
 result. Build context values identify the source, output, profile,
 toolchain, and exit status to hooks without requiring them to reconstruct
 the command line.
+
+The Post build macro field selects one routine with the form
+relative/path.mrmac^RoutineName. It runs after a completed, failed, or
+cancelled build. Before calling it, MR sets typed MRMAC globals including
+MR_BUILD_SOURCE_PATH, MR_BUILD_OUTPUT_PATH, MR_BUILD_PDF_PATH,
+MR_BUILD_PROFILE_ID, MR_BUILD_TOOLCHAIN, MR_BUILD_EXIT_STATUS,
+MR_BUILD_STATUS_TEXT, and MR_BUILD_ERROR_TEXT. Check the exit status before
+using an output artifact. If a pre-build macro fails, the post-build macro
+receives a failed status even though the external build was not submitted.
+
+For an automatically detected LATEXMK profile, the bundled example is
+compilersupport/MRCompilerMiddleware.mrmac^LatexMKPostBuild. On failure it
+reports the LaTeXmk error. On success it launches zathura for the generated
+PDF and reports the launch result. This routine is specific to LaTeXmk.
+Other language profiles can point to their own MRMAC routines to inspect a
+build result, report it, or start a follow-up tool without changing the
+compiler runner. The User Manual shows the profile field and build result.
 
 The build Bento keeps the source beside Compiler Output and Problems.
 Click the close button inside the Source pane to return to the source

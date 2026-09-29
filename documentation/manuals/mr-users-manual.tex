@@ -122,6 +122,11 @@ its payload and runtime dependencies before installing files, and requests
 files are preserved. Each additional user runs the installer to initialise
 that user's macro directory.
 
+The supplied snippet packs are installed below its
+\texttt{snippets/} subdirectory. An upgrade does not change existing
+\field{Post-load macro} paths in file-extension profiles; select the new
+pack path in each affected profile after upgrading.
+
 Installation requires a UTF-8 locale. If the active character map is not
 UTF-8, the installer offers to set \texttt{C.UTF-8} as the system locale with
 \texttt{update-locale} on Debian or \texttt{localectl} on Arch. It generates the
@@ -1266,17 +1271,43 @@ the terminal's compose or input method.
 \section{Snippets and macro-generated text}
 
 The Snippet SideKick is a controlled editing surface for macro-generated
-expansion. \key{Tab} and \key{Shift+Tab} move among placeholders;
-\key{Ctrl+Enter} or \key{Alt+Enter} commits, while \key{Esc} cancels. The
-parent document changes only at commit.\index{Snippet SideKick}
+expansion. Type a trigger in the source editor and press \key{Ctrl+Space}.
+The SideKick opens with its first placeholder selected, as shown in
+Figure~\ref{fig:users-snippet-c}. Typing replaces the selected placeholder;
+\key{Tab} moves to the next one and \key{Shift+Tab} returns to the previous
+one. \key{Enter} inserts a line break inside the SideKick.\index{Snippet SideKick}
+
+\manualscreenshot{mr-users-snippet-c.png}{fig:users-snippet-c}{The C
+\texttt{for} expansion opens in the Snippet SideKick. The first placeholder is
+highlighted; the command line lists Insert, Cancel, Next, and Previous.}
+
+Edit the placeholders and the surrounding text as needed. The SideKick is a
+temporary replacement buffer: the parent document changes only when you
+press \key{Alt+Enter} or \key{Ctrl+Enter} to insert it. Press \key{Esc} to
+discard the expansion. Figure~\ref{fig:users-snippet-bash} shows that the
+Bash pack uses the same controls with its own placeholders.
+
+\manualscreenshot{mr-users-snippet-bash.png}{fig:users-snippet-bash}{The Bash
+\texttt{if} expansion has a selected test expression. Tab advances to its
+branch body; Insert commits the edited expansion to the source document.}
 
 Enable \field{Snippets} in the matching file-extension profile. Load a
 snippet database through an Autoexec macro or the profile's
-\field{Post-load macro}; the supplied \texttt{CSnippets.mrmac} provides the C
-starting set. Type a trigger such as \texttt{for} and press \key{Ctrl+Space}
-to open the expansion. The trigger is looked up only on that key press.
-The database is editable MRMAC: add a hash entry under
-\texttt{SNIPPETS['C']} with an uppercase trigger key, a \texttt{body}, and
+\field{Post-load macro}. The supplied packs are below the configured macro
+directory:
+\begin{itemize}
+\item C: \texttt{snippets/CSnippets.mrmac}
+\item C++: \texttt{snippets/CPPSnippets.mrmac}
+\item Python: \texttt{snippets/PythonSnippets.mrmac}
+\item MRMAC: \texttt{snippets/MRMACSnippets.mrmac}
+\item Bash: \texttt{snippets/BashSnippets.mrmac}
+\end{itemize}
+Use the profile's file selector to store the full path to the matching pack;
+a relative Post-load path is resolved from the process working directory.
+The trigger is looked up only when you press \key{Ctrl+Space}.
+
+Each database is editable MRMAC: add a hash entry under its language key in
+\texttt{SNIPPETS} with an uppercase trigger key, a \texttt{body}, and
 optional \texttt{name} and \texttt{placeholders} values. A placeholder's
 \texttt{default} replaces a matching \texttt{//1}, \texttt{//2}, and so on in
 the body. Saving a newer macro file lets \texttt{UNIQUE} reload the database.
@@ -2442,6 +2473,50 @@ success or failure command then follows the compiler result. Completion audio
 and the post-build \mrmac{} hook are adopted with the final result. Build
 context values identify the source, output, profile, toolchain, and exit
 status to hooks without requiring them to reconstruct the command line.
+
+\subsection*{Using a post-build macro}
+
+The \field{Post build macro} field names one routine in a macro file, using
+\texttt{relative/path.mrmac\^{}RoutineName}. The path is relative to the
+configured macro directory. A compiler profile owns this choice: the build
+runner supplies the result and invokes that routine after the external job
+finishes. The macro can report a domain-specific result, open an artifact,
+or start a follow-up tool. This applies to any supported compiler profile;
+the profile's toolchain and the macro's behavior remain explicit.
+
+Automatic Setup assigns the following post-build routine to discovered
+\texttt{LATEXMK} profiles:
+\begin{verbatim}
+compilersupport/MRCompilerMiddleware.mrmac^LatexMKPostBuild
+\end{verbatim}
+The bundled \texttt{LatexMKPostBuild} routine reads the build exit status and
+PDF path. On failure it reports the LaTeXmk error; on success it starts
+\texttt{zathura} with the generated PDF and reports whether that launch
+succeeded. This is a concrete example, not a generic dispatcher for other
+toolchains. To give a C, C++, Rust, or other profile its own follow-up behavior,
+write a routine for that workflow and enter its exact file-and-routine name
+in that profile's \field{Post build macro} field. No change to the build
+runner is needed.\index{compiler profile!post-build macro}
+
+\manualscreenshot{mr-users-compiler-post-build-profile.png}{fig:users-compiler-post-build-profile}{
+The Compiler Profiles dialog with the LaTeXmk profile selected. Its Post build
+macro field names the bundled routine that handles the completed PDF build.}
+
+The runner sets typed MRMAC globals before calling a build hook. Useful values
+include \texttt{MR\_BUILD\_SOURCE\_PATH}, \texttt{MR\_BUILD\_OUTPUT\_PATH},
+\texttt{MR\_BUILD\_PDF\_PATH}, \texttt{MR\_BUILD\_PROFILE\_ID},
+\texttt{MR\_BUILD\_TOOLCHAIN}, \texttt{MR\_BUILD\_EXIT\_STATUS},
+\texttt{MR\_BUILD\_STATUS\_TEXT}, and \texttt{MR\_BUILD\_ERROR\_TEXT}.
+A post-build routine should check the exit status before acting on an output
+file. The post-build hook also runs for failed and cancelled external jobs;
+its status text distinguishes \texttt{SUCCESS}, \texttt{FAILED}, and
+\texttt{CANCELLED}. A failing pre-build macro calls the post-build macro
+with a failed status before the build is submitted.
+
+\manualscreenshot{mr-users-compiler-post-build-result.png}{fig:users-compiler-post-build-result}{
+An intentionally invalid TeX source after the LaTeXmk build. The Problems pane
+shows the compiler diagnostic; the red message reports the post-build macro's
+failure branch. No PDF viewer is started on this branch.}
 
 The build Bento keeps the source beside Compiler Output and Problems. Click
 the close button inside the Source pane to leave the build layout and return
