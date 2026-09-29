@@ -14,6 +14,7 @@
 
 #include "MRSidekickEditor.hpp"
 #include "MRSidekickInternal.hpp"
+#include "MRSnippet.hpp"
 
 #include "MREditWindow.hpp"
 #include "MRFrame.hpp"
@@ -43,10 +44,7 @@ using mr::sidekick_internal::readOnlyTextWithMarker;
 using mr::sidekick_internal::romBelow;
 using mr::sidekick_internal::sidekickColor;
 using mr::sidekick_internal::sidekickMaxLineLength;
-using mr::sidekick_internal::snippetSidekickBoundsFor;
-using mr::sidekick_internal::snippetSidekickDialogColor;
 using mr::sidekick_internal::splitLines;
-using mr::sidekick_internal::expandSidekickTabs;
 
 namespace {
 
@@ -64,135 +62,18 @@ class MRSidekickScrollBar final : public TScrollBar {
 	}
 };
 
-class SnippetSidekickHintGuard {
-  public:
-	SnippetSidekickHintGuard() {
-		mrSetSnippetSidekickHintsActive(true);
-	}
-
-	~SnippetSidekickHintGuard() {
-		mrSetSnippetSidekickHintsActive(false);
-	}
-};
-
-TFrame *initSnippetSidekickFrame(TRect bounds) {
-	return new MRFrame(bounds);
-}
-
-class MRSnippetHelpButton final : public TButton {
-  public:
-	explicit MRSnippetHelpButton(const TRect &bounds) noexcept : TButton(bounds, "~H~elp", cmHelp, bfNormal) {
-	}
-
-	void draw() override {
-		TAttrPair color = getColor(0x0501);
-		if ((state & sfDisabled) != 0) color = getColor(0x0404);
-		else if ((state & sfActive) != 0) {
-			if ((state & sfSelected) != 0) color = getColor(0x0703);
-			else if (amDefault) color = getColor(0x0602);
-		}
-		TDrawBuffer buffer;
-		buffer.moveChar(0, ' ', color[0], size.x);
-		buffer.moveCStr(std::max(0, (size.x - cstrlen(title)) / 2), title, color, size.x);
-		writeLine(0, 0, size.x, 1, buffer);
-	}
-
-	void handleEvent(TEvent &event) override {
-		if (event.what == evMouseDown) {
-			const TRect hit = getExtent();
-			bool inside = false;
-			do {
-				inside = hit.contains(makeLocal(event.mouse.where));
-			} while (mouseEvent(event, evMouseMove));
-			if (inside && (state & sfDisabled) == 0) press();
-			clearEvent(event);
-			return;
-		}
-		if (event.what == evKeyDown) {
-			const char hot = hotKey(title);
-			const bool activated = event.keyDown.keyCode != 0 &&
-			                       (event.keyDown.keyCode == getAltCode(hot) ||
-			                        (owner->phase == phPostProcess && hot != 0 && hot == std::toupper(static_cast<unsigned char>(event.keyDown.charScan.charCode))) ||
-			                        ((state & sfFocused) != 0 && event.keyDown.charScan.charCode == ' '));
-			if (activated) {
-				if ((state & sfDisabled) == 0) press();
-				clearEvent(event);
-				return;
-			}
-		}
-		if (event.what == evBroadcast && event.message.command == cmDefault && amDefault && (state & sfDisabled) == 0) {
-			press();
-			clearEvent(event);
-			return;
-		}
-		TButton::handleEvent(event);
-	}
-};
-
-class MRSnippetSidekickDialog : public TDialog {
-  public:
-	MRSnippetSidekickDialog(const TRect &bounds, int parentBufferId, std::size_t replaceStart, std::size_t replaceEnd, const std::string &text, const std::string &title, const std::vector<MRSidekickSpan> &placeholders)
-	    : TWindowInit(initSnippetSidekickFrame), TDialog(bounds, title.c_str()), mEditor(nullptr) {
-		TButton *helpButton;
-
-		flags |= wfMove | wfGrow | wfClose;
-		growMode = gfGrowHiX | gfGrowHiY;
-		helpCtx = hcDialogSnippetSidekick;
-		mEditor = new MRSidekickEditor(TRect(1, 1, std::max<short>(2, size.x - 1), std::max<short>(2, size.y - 4)), parentBufferId, replaceStart, replaceEnd, text, title, placeholders, false, true, true);
-		if (mEditor != nullptr) {
-			mEditor->growMode = gfGrowHiX | gfGrowHiY;
-			mEditor->insertInto(*this);
-		}
-		helpButton = new MRSnippetHelpButton(TRect(std::max<short>(2, size.x - 12), std::max<short>(2, size.y - 2), std::max<short>(3, size.x - 1), std::max<short>(3, size.y - 1)));
-		helpButton->growMode = gfGrowAll;
-		insert(helpButton);
-		if (mEditor != nullptr) mEditor->select();
-	}
-
-	[[nodiscard]] MRSidekickEditor *snippetSidekick() const noexcept {
-		return mEditor;
-	}
-
-	void sizeLimits(TPoint &min, TPoint &max) override {
-		TDialog::sizeLimits(min, max);
-		min.x = std::max<short>(min.x, std::min<short>(32, size.x));
-		min.y = std::max<short>(min.y, std::min<short>(12, size.y));
-	}
-
-	TPalette &getPalette() const override {
-		static TPalette palette(cpGrayDialog, sizeof(cpGrayDialog) - 1);
-
-		for (uchar index = 1; index <= 8; ++index)
-			palette[index] = snippetSidekickDialogColor(index);
-		return palette;
-	}
-
-	TColorAttr mapColor(uchar index) override {
-		if (index >= 1 && index <= 8) return snippetSidekickDialogColor(index);
-		if (index == 15) {
-			const TColorAttr background = snippetSidekickDialogColor(1) & 0xF0;
-			return background | (background >> 4);
-		}
-		return TDialog::mapColor(index);
-	}
-
-  private:
-	MRSidekickEditor *mEditor;
-};
-
-
 } // namespace
 
-MRSidekickEditor::MRSidekickEditor(const TRect &bounds, int parentBufferId, std::size_t replaceStart, std::size_t replaceEnd, std::string text, std::string title, std::vector<MRSidekickSpan> placeholders, bool readOnly, bool modalClose, bool snippetSidekick, MRSidekickPalette palette)
-    : TScroller(bounds, nullptr, nullptr), mParentBufferId(parentBufferId), mReplaceStart(replaceStart), mReplaceEnd(replaceEnd), mTitle(std::move(title)), mLines(), mPlaceholders(std::move(placeholders)), mPlaceholderTouched(mPlaceholders.size(), 0), mPlaceholderIndex(-1), mPlaceholderEndEdge(false), mCursorRow(0), mCursorCol(0), mReadOnly(readOnly), mModalClose(modalClose), mSnippetSidekick(snippetSidekick), mPalette(palette), mOuterBounds(bounds), mHorizontalScrollBar(nullptr), mVerticalScrollBar(nullptr) {
+MRSidekickEditor::MRSidekickEditor(const TRect &bounds, int parentBufferId, std::string text, std::string title, bool readOnly, bool modalClose, MRSidekickPalette palette)
+    : TScroller(bounds, nullptr, nullptr), mParentBufferId(parentBufferId), mTitle(std::move(title)), mLines(), mCursorRow(0), mCursorCol(0), mReadOnly(readOnly), mModalClose(modalClose), mPalette(palette), mOuterBounds(bounds), mHorizontalScrollBar(nullptr), mVerticalScrollBar(nullptr) {
 	if (mReadOnly) options &= ~ofSelectable;
 	growMode = gfGrowHiX | gfGrowHiY;
 	eventMask |= evKeyDown | evMouseDown | evMouseWheel;
 	setText(std::move(text));
-	if (!mPlaceholders.empty()) moveToPlaceholder(1);
 }
 
 MRSidekickEditor::~MRSidekickEditor() {
+	MRSnippet::instance().detach(this);
 	if (gActiveSidekick == this) gActiveSidekick = nullptr;
 }
 
@@ -303,17 +184,6 @@ bool MRSidekickEditor::isReadOnly() const noexcept {
 	return mReadOnly;
 }
 
-bool MRSidekickEditor::isSnippetSidekick() const noexcept {
-	return mSnippetSidekick;
-}
-
-bool MRSidekickEditor::moveSnippetPlaceholder(int direction) {
-	if (mReadOnly || !mSnippetSidekick || mPlaceholders.empty()) return false;
-	moveToPlaceholder(direction);
-	drawView();
-	return true;
-}
-
 void MRSidekickEditor::setText(std::string textValue) {
 	mLines = splitLines(textValue);
 	if (mLines.empty()) mLines.push_back(std::string());
@@ -343,10 +213,10 @@ std::string MRSidekickEditor::text() const {
 }
 
 void MRSidekickEditor::draw() {
-	TColorAttr textColor = getColor(1);
-	if (mPalette == MRSidekickPalette::Sidekick) textColor = sidekickColor(mSnippetSidekick ? kMrPaletteSnippetSidekickText : kMrPaletteSidekickEditorText, 0x30);
-	const TColorAttr highlightColor = sidekickColor(mSnippetSidekick ? kMrPaletteSnippetActivePlaceholder : kMrPaletteSidekickEditorHighlight, 0xE0);
-	const TColorAttr defaultTextColor = sidekickColor(kMrPaletteSnippetDefaultText, 0x38);
+	MRSnippet &snippet = MRSnippet::instance();
+	const bool snippetEditor = snippet.isEditor(this);
+	const MRSnippet::DrawColors colors = snippet.drawColors(*this, getColor(1));
+	const TColorAttr textColor = colors.text;
 	std::size_t lineStartOffset = 0;
 	for (int y = 0; y < delta.y && y < static_cast<int>(mLines.size()); ++y)
 		lineStartOffset += mLines[static_cast<std::size_t>(y)].size() + 1;
@@ -366,17 +236,7 @@ void MRSidekickEditor::draw() {
 					if (textColumn < 0 || textColumn >= static_cast<int>(line.size())) continue;
 					const std::size_t offset = lineStartOffset + static_cast<std::size_t>(textColumn);
 					TColorAttr charColor = textColor;
-					if (mSnippetSidekick) {
-						for (std::size_t index = 0; index < mPlaceholders.size(); ++index) {
-							const MRSidekickSpan &span = mPlaceholders[index];
-							if (offset < span.start || offset >= span.end) continue;
-							const bool touched = index < mPlaceholderTouched.size() && mPlaceholderTouched[index] != 0;
-							if (static_cast<int>(index) == mPlaceholderIndex && !touched) charColor = highlightColor;
-							else if (!touched) charColor = defaultTextColor;
-							else charColor = textColor;
-							break;
-						}
-					}
+					if (snippetEditor) charColor = snippet.placeholderColor(offset, colors);
 					const unsigned char raw = static_cast<unsigned char>(line[static_cast<std::size_t>(textColumn)]);
 					buffer.moveChar(static_cast<ushort>(screenX), raw < 32 ? ' ' : line[static_cast<std::size_t>(textColumn)], charColor, 1);
 				}
@@ -435,7 +295,7 @@ void MRSidekickEditor::handleEvent(TEvent &event) {
 
 	if (ctrlEnterPressed || altEnterPressed) {
 		clearEvent(event);
-		if (!mReadOnly) commitAndClose();
+		if (!mReadOnly) MRSnippet::instance().commit(*this);
 		return;
 	}
 	if (shiftTabPressed || tabPressed) {
@@ -443,9 +303,7 @@ void MRSidekickEditor::handleEvent(TEvent &event) {
 			clearEvent(event);
 			return;
 		}
-		if (!mPlaceholders.empty())
-			moveToPlaceholder(shiftTabPressed ? -1 : 1);
-		else if (tabPressed)
+		if (!MRSnippet::instance().movePlaceholder(*this, shiftTabPressed ? -1 : 1) && tabPressed)
 			insertChar('\t');
 		drawView();
 		clearEvent(event);
@@ -457,7 +315,7 @@ void MRSidekickEditor::handleEvent(TEvent &event) {
 		clearEvent(event);
 		return;
 	}
-	if (handleRuntimeKeymap(event)) {
+	if (MRSnippet::instance().handleRuntimeKeymap(*this, event)) {
 		drawView();
 		return;
 	}
@@ -528,18 +386,6 @@ void MRSidekickEditor::closeSidekick(ushort command) {
 	TObject::destroy(this);
 }
 
-void MRSidekickEditor::commitAndClose() {
-	MREditWindow *parent = findEditWindowByBufferId(mParentBufferId);
-	MRFileEditor *editor = parent != nullptr ? parent->getEditor() : nullptr;
-	const std::string replacement = text();
-
-	if (editor != nullptr && !editor->isReadOnly() && editor->replaceRangeAndSelect(static_cast<uint>(mReplaceStart), static_cast<uint>(mReplaceEnd), replacement.c_str(), static_cast<uint>(replacement.size()))) {
-		const std::size_t cursor = std::min<std::size_t>(mReplaceStart + replacement.size(), editor->bufferLength());
-		editor->setSelectionOffsets(cursor, cursor, False);
-	}
-	closeSidekick(cmOK);
-}
-
 bool mrOpenReadOnlySidekickAt(MREditWindow *parent, const std::string &text, const std::string &title, int anchorViewColumn, int anchorViewRow, int preferredViewColumn, MRReadOnlySidekickPlacement placement, std::size_t apiReferenceAnchorOffset) {
 	if (parent == nullptr || parent->getEditor() == nullptr || TProgram::deskTop == nullptr) return false;
 	ReadOnlyMarker marker = romBelow;
@@ -557,7 +403,7 @@ bool mrOpenReadOnlySidekickAt(MREditWindow *parent, const std::string &text, con
 		sidekick->updateReadOnlyText(markedText, title, bounds);
 	else {
 		mrDropActiveSidekick();
-		sidekick = new MRSidekickEditor(bounds, parent->bufferId(), 0, 0, markedText, title, std::vector<MRSidekickSpan>(), true);
+		sidekick = new MRSidekickEditor(bounds, parent->bufferId(), markedText, title, true);
 		if (sidekick == nullptr) return false;
 		gActiveSidekick = sidekick;
 	}
@@ -605,30 +451,6 @@ void mrSyncApiReferenceSidekickForParent(MREditWindow *parent, bool sourceScroll
 	static_cast<void>(mrOpenReadOnlySidekickAt(parent, text, title, viewColumn, viewRow, 0, placement, anchorOffset));
 }
 
-bool mrOpenSnippetSidekickAt(MREditWindow *parent, const std::string &text, const std::string &title, std::size_t replaceStart, std::size_t replaceEnd, const std::vector<MRSidekickSpan> &placeholders, int anchorViewColumn, int anchorViewRow, bool &committed) {
-	if (parent == nullptr || parent->getEditor() == nullptr || TProgram::deskTop == nullptr) return false;
-	const TRect bounds = snippetSidekickBoundsFor(parent, text, replaceStart, anchorViewColumn, anchorViewRow);
-
-	committed = false;
-	mrDropActiveSidekick();
-	MRSnippetSidekickDialog *dialog = new MRSnippetSidekickDialog(bounds, parent->bufferId(), replaceStart, replaceEnd, text, title, placeholders);
-	if (dialog == nullptr) return false;
-	if (dialog->snippetSidekick() == nullptr) {
-		TObject::destroy(dialog);
-		return false;
-	}
-	ushort result = cmCancel;
-	{
-		SnippetSidekickHintGuard hintGuard;
-		result = TProgram::deskTop->execView(dialog);
-	}
-	committed = result == cmOK;
-	TObject::destroy(dialog);
-	static_cast<void>(mrActivateEditWindow(parent));
-	if (parent->getEditor() != nullptr) parent->getEditor()->select();
-	return true;
-}
-
 bool mrHasReadOnlySidekickForParent(const MREditWindow *parent) {
 	return parent != nullptr && gActiveSidekick != nullptr && gActiveSidekick->parentBufferId() == parent->bufferId() && gActiveSidekick->isReadOnly();
 }
@@ -637,13 +459,6 @@ bool mrConsumeReadOnlySidekickDismissedForParent(const MREditWindow *parent) {
 	if (parent == nullptr || mrvmRuntimeStateInt("sidekick", "dismissedReadOnlyParentBufferId") != parent->bufferId()) return false;
 	mrvmStoreRuntimeStateInt("sidekick", "dismissedReadOnlyParentBufferId", 0);
 	return true;
-}
-
-bool mrMoveSnippetPlaceholderForParent(const MREditWindow *parent, int direction) {
-	if (parent == nullptr || gActiveSidekick == nullptr) return false;
-	if (gActiveSidekick->parentBufferId() != parent->bufferId()) return false;
-	if (!gActiveSidekick->isSnippetSidekick()) return false;
-	return gActiveSidekick->moveSnippetPlaceholder(direction);
 }
 
 void mrDropSidekickForParent(const MREditWindow *parent) {

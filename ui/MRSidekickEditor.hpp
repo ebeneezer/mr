@@ -9,6 +9,7 @@
 #include <vector>
 
 class MREditWindow;
+class MRSnippet;
 class TGroup;
 class TScrollBar;
 
@@ -29,7 +30,7 @@ enum class MRSidekickPalette : unsigned char {
 
 class MRSidekickEditor : public TScroller {
   public:
-	MRSidekickEditor(const TRect &bounds, int parentBufferId, std::size_t replaceStart, std::size_t replaceEnd, std::string text, std::string title, std::vector<MRSidekickSpan> placeholders, bool readOnly = false, bool modalClose = false, bool snippetSidekick = false, MRSidekickPalette palette = MRSidekickPalette::Sidekick);
+	MRSidekickEditor(const TRect &bounds, int parentBufferId, std::string text, std::string title, bool readOnly = false, bool modalClose = false, MRSidekickPalette palette = MRSidekickPalette::Sidekick);
 	~MRSidekickEditor() override;
 
 	void draw() override;
@@ -38,25 +39,16 @@ class MRSidekickEditor : public TScroller {
 
 	[[nodiscard]] int parentBufferId() const noexcept;
 	[[nodiscard]] bool isReadOnly() const noexcept;
-	[[nodiscard]] bool isSnippetSidekick() const noexcept;
-	bool moveSnippetPlaceholder(int direction);
 	void updateReadOnlyText(std::string text, std::string title, const TRect &bounds);
 
   private:
 	int mParentBufferId;
-	std::size_t mReplaceStart;
-	std::size_t mReplaceEnd;
 	std::string mTitle;
 	std::vector<std::string> mLines;
-	std::vector<MRSidekickSpan> mPlaceholders;
-	std::vector<unsigned char> mPlaceholderTouched;
-	int mPlaceholderIndex;
-	bool mPlaceholderEndEdge;
 	int mCursorRow;
 	int mCursorCol;
 	bool mReadOnly;
 	bool mModalClose;
-	bool mSnippetSidekick;
 	MRSidekickPalette mPalette;
 	TRect mOuterBounds;
 	TScrollBar *mHorizontalScrollBar;
@@ -76,7 +68,6 @@ class MRSidekickEditor : public TScroller {
 	void detachFromOwner();
 	void ensureCursorVisible();
 	void closeSidekick(ushort command = cmCancel);
-	void commitAndClose();
 	void insertChar(char ch);
 	void insertTextAtCursor(const std::string &value);
 	void insertNewLine();
@@ -87,10 +78,6 @@ class MRSidekickEditor : public TScroller {
 	void eraseToLineStart();
 	void eraseToLineEnd();
 	void eraseLine();
-	bool replaceActivePlaceholder(const std::string &replacement);
-	bool handleRuntimeKeymap(TEvent &event);
-	bool handleSnippetSidekickAction(const std::string &actionId);
-	bool loadBlockFromFileIntoSnippetSidekick();
 	void moveLeft();
 	void moveRight();
 	void moveUp();
@@ -99,15 +86,11 @@ class MRSidekickEditor : public TScroller {
 	void moveLineEnd() noexcept;
 	void moveWordLeft();
 	void moveWordRight();
-	void moveToPlaceholder(int direction);
-	void setCursorFromActivePlaceholder();
 	void setCursorFromOffset(std::size_t offset);
 	[[nodiscard]] std::size_t cursorOffset() const noexcept;
-	void adjustPlaceholdersAfterInsert(std::size_t offset, std::size_t length);
-	void adjustPlaceholdersAfterErase(std::size_t offset, std::size_t length);
-	void resizeSnippetSidekickForContent();
 	void clampCursor() noexcept;
 
+	friend class MRSnippet;
 	friend void mrDropActiveSidekick();
 	friend bool mrOpenReadOnlySidekickAt(MREditWindow *, const std::string &, const std::string &, int, int, int, MRReadOnlySidekickPlacement, std::size_t);
 	friend bool mrDismissApiReferenceSidekickForParent(const MREditWindow *);

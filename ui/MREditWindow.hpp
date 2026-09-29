@@ -44,7 +44,7 @@
 #include "../config/settings/MRSettingsRuntime.hpp"
 #include "../mrmac/MRVM.hpp"
 #include "../mrmac/MRMacroRunner.hpp"
-#include "../mrmac/vm/MRVMSnippet.hpp"
+#include "MRSnippet.hpp"
 
 void mrTraceCoprocessorTaskCancel(int bufferId, std::uint64_t taskId);
 class MREditWindow;
@@ -468,20 +468,9 @@ class MREditWindow : public TWindow, public MRDesktopWindow {
 				clearEvent(event);
 				return;
 			}
-			const ushort snippetModifiers = event.keyDown.controlKeyState;
-			const ushort snippetKeyCode = event.keyDown.keyCode;
-			// Konsole's Win32 input mode reports Ctrl+Space with the Space scan code and a NUL character.
-			const bool ctrlSpace = (snippetModifiers & kbCtrlShift) != 0 && (snippetModifiers & (kbAltShift | kbSuperShift | kbPaste)) == 0 &&
-			                       (snippetKeyCode == kbNoKey || snippetKeyCode == static_cast<ushort>(' ') || snippetKeyCode == static_cast<ushort>('@') ||
-			                        (event.keyDown.charScan.scanCode == 0x39 && (event.keyDown.charScan.charCode == 0 || event.keyDown.charScan.charCode == ' ')));
-			if (ctrlSpace && editor != nullptr && !isReadOnly()) {
-				MREditSetupSettings editSettings;
-				effectiveEditSetupSettingsForPath(currentFileName(), editSettings);
-				if (editSettings.snippets) {
-					static_cast<void>(mrvmOpenSnippetSidekick(this));
-					clearEvent(event);
-					return;
-				}
+			if (MRSnippet::instance().handleEditorKey(this, event)) {
+				clearEvent(event);
+				return;
 			}
 			if (event.keyDown.keyCode == kbShiftTab && editor != nullptr) {
 				const std::size_t cursorStart = editor->cursorOffset();

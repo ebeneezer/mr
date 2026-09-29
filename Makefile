@@ -486,6 +486,7 @@ CXX_SOURCES = \
 	ui/MRMenuBarDrawing.cpp \
 	ui/MRMessageLineController.cpp \
 	ui/MRPerformancePanel.cpp \
+	ui/MRSnippet.cpp \
 	ui/MRSidekickEditor.cpp \
 	ui/MRSidekickEditing.cpp \
 	ui/MRSidekickLayout.cpp \
