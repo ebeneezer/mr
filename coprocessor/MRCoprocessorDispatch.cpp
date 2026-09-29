@@ -718,7 +718,7 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 				setSplitDiagnosticsStatusForOutput(targetWindow, dividerStatus.c_str());
 				if (MRBentoBox *split = dynamic_cast<MRBentoBox *>(targetWindow->owner); split != nullptr && split->buildOutputPane() == targetWindow) {
 					static_cast<void>(split->refreshCompilerDiagnosticsFromOutput());
-					if (!finished->buildSourcePath.empty() && !finished->signaled && finished->exitCode == 0 && finished->outputByteCount == 0 && !split->hasCompilerProblems())
+					if (!finished->buildSourcePath.empty() && !result.cancelled() && !result.failed() && !finished->signaled && finished->exitCode == 0)
 						split->setBuildDiagnosticsCompact(true);
 				}
 			} else {

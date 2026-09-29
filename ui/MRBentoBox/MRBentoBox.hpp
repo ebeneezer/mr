@@ -576,6 +576,7 @@ class MRBentoBox : public MREditWindow {
 	int nextLeafId;
 	int maximizedLeafId;
 	int buildExpandedDividerPosition;
+	int buildCompactDividerNode;
 	bool buildDiagnosticsCompactPending;
 	MRBentoBoxMode bentoMode;
 	bool secondaryPaneVisible;

@@ -69,26 +69,42 @@ bool MRBentoBox::ensureBuildDiagnosticsPanes(MREditWindow *&outputWindow, MREdit
 
 void MRBentoBox::setBuildDiagnosticsCompact(bool compact) noexcept {
 	if (!compact) {
-		if (buildExpandedDividerPosition > 0 && hasPaneSplit()) setDividerPosition(rootNode, buildExpandedDividerPosition, false);
+		const int outputNode = nodeIndexForLeaf(leafIdForRole(bprCompilerOutput));
+		const int problemsNode = nodeIndexForLeaf(leafIdForRole(bprProblems));
+		const int diagnosticsNode = parentNodeOf(outputNode);
+		if (buildExpandedDividerPosition > 0 && buildCompactDividerNode >= 0 && hasPaneSplit() &&
+		    diagnosticsNode >= 0 && diagnosticsNode == parentNodeOf(problemsNode) && parentNodeOf(diagnosticsNode) == buildCompactDividerNode &&
+		    layoutTree[buildCompactDividerNode].secondChild == diagnosticsNode) {
+			setDividerPosition(buildCompactDividerNode, buildExpandedDividerPosition, false);
+			if (activeLeafId == 0 && getEditor() != nullptr) getEditor()->revealCursor(False);
+		}
 		buildExpandedDividerPosition = 0;
+		buildCompactDividerNode = -1;
 		buildDiagnosticsCompactPending = false;
 		return;
 	}
 	if (buildExpandedDividerPosition > 0 || !hasPaneSplit()) return;
-	const BentoLayoutNode &root = layoutTree[rootNode];
-	if (root.orientation != bsoHorizontal || root.firstChild != nodeIndexForLeaf(0) || leafIdForRole(bprCompilerOutput) < 0) return;
-	const TRect bounds = nodeBounds(rootNode);
-	if (bounds.b.y - bounds.a.y < minimumNodeHeight(root.firstChild) + minimumNodeHeight(root.secondChild)) {
+	const int outputNode = nodeIndexForLeaf(leafIdForRole(bprCompilerOutput));
+	const int problemsNode = nodeIndexForLeaf(leafIdForRole(bprProblems));
+	const int diagnosticsNode = parentNodeOf(outputNode);
+	if (diagnosticsNode < 0 || diagnosticsNode != parentNodeOf(problemsNode)) return;
+	const int dividerNode = parentNodeOf(diagnosticsNode);
+	if (dividerNode < 0) return;
+	const BentoLayoutNode &divider = layoutTree[dividerNode];
+	if (divider.orientation != bsoHorizontal || divider.secondChild != diagnosticsNode) return;
+	const TRect bounds = nodeBounds(dividerNode);
+	buildCompactDividerNode = dividerNode;
+	if (bounds.b.y - bounds.a.y < minimumNodeHeight(divider.firstChild) + minimumNodeHeight(divider.secondChild)) {
 		buildDiagnosticsCompactPending = true;
 		return;
 	}
 	buildDiagnosticsCompactPending = false;
-	buildExpandedDividerPosition = currentDividerPosition(rootNode);
-	setDividerPosition(rootNode, bounds.b.y - minimumNodeHeight(root.secondChild), false);
+	buildExpandedDividerPosition = currentDividerPosition(dividerNode);
+	setDividerPosition(dividerNode, bounds.b.y - minimumNodeHeight(divider.secondChild), false);
+	if (activeLeafId == 0 && getEditor() != nullptr) getEditor()->revealCursor(False);
 }
 
 bool MRBentoBox::ensureMacroDebuggerPanes(MREditWindow *&outputWindow, MREditWindow *&variablesWindow, MREditWindow *&watchesWindow) {
-	setBuildDiagnosticsCompact(false);
 	int outputLeaf = leafIdForRole(bprDebuggerOutput);
 
 	if (bentoMode == bbmDocumentViewports) {

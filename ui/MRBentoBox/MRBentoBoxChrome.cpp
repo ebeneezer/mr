@@ -433,6 +433,11 @@ bool MRBentoBox::dragDivider(TEvent &event, int nodeIndex, int paneLeafId) noexc
 		setDividerPosition(nodeIndex, position, false);
 	}
 	const bool changed = layoutChanged || currentDividerPosition(nodeIndex) != initialPosition;
+	if (changed && nodeIndex == buildCompactDividerNode) {
+		buildExpandedDividerPosition = 0;
+		buildCompactDividerNode = -1;
+		buildDiagnosticsCompactPending = false;
+	}
 	if (changed) mrMarkWorkspaceAutosaveDirty("bento divider", this);
 	return changed;
 }
@@ -443,8 +448,9 @@ void MRBentoBox::setDividerPosition(int position) noexcept {
 
 void MRBentoBox::setDividerPosition(int nodeIndex, int position, bool markWorkspace) noexcept {
 	if (!projectPaneDividerPosition(nodeIndex, position)) return;
-	if (markWorkspace && nodeIndex == rootNode) {
+	if (markWorkspace && nodeIndex == buildCompactDividerNode) {
 		buildExpandedDividerPosition = 0;
+		buildCompactDividerNode = -1;
 		buildDiagnosticsCompactPending = false;
 	}
 	layoutSplitPanes();
@@ -867,6 +873,9 @@ void MRBentoBox::collapseLeafNode(int leafId) {
 	if (leafNode < 0) return;
 	int parent = parentNodeOf(leafNode);
 	if (parent < 0) return;
+	buildExpandedDividerPosition = 0;
+	buildCompactDividerNode = -1;
+	buildDiagnosticsCompactPending = false;
 	MRPaneEditWindow *closingPane = paneWindowForLeaf(leafId);
 	if (closingPane != nullptr) cancelBentoProjectionForPane(closingPane->bufferId());
 	int survivor = layoutTree[parent].firstChild == leafNode ? layoutTree[parent].secondChild : layoutTree[parent].firstChild;
