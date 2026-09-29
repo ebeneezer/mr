@@ -1,0 +1,210 @@
+{ Bash triggers were cross-checked against honza/vim-snippets (MIT).
+  All templates below are written for MR's existing snippet format. }
+$MACRO REGISTER_BASH_SNIPPETS UNIQUE FROM EDIT;
+DEF_HASH(Snippets, BashSnippets);
+
+Snippets := GLOBAL_HASH('SNIPPETS');
+
+DEF_HASH(BashScript, BashScriptPhs, BashScriptBody);
+BashScriptBody['default'] := ':';
+BashScriptBody['hint'] := 'Script body';
+BashScriptPhs['1'] := BashScriptBody;
+BashScript['name'] := 'Bash script';
+BashScript['body'] := <<BODY
+#!/usr/bin/env bash
+
+//1
+BODY;
+BashScript['placeholders'] := BashScriptPhs;
+BashSnippets['SCRIPT'] := BashScript;
+
+DEF_HASH(BashIf, BashIfPhs, BashIfCondition, BashIfBody);
+BashIfCondition['default'] := '-f "$file"';
+BashIfCondition['hint'] := 'Bash test expression';
+BashIfBody['default'] := ':';
+BashIfBody['hint'] := 'True branch';
+BashIfPhs['1'] := BashIfCondition;
+BashIfPhs['2'] := BashIfBody;
+BashIf['name'] := 'Bash if';
+BashIf['body'] := <<BODY
+if [[ //1 ]]; then
+    //2
+fi
+BODY;
+BashIf['placeholders'] := BashIfPhs;
+BashSnippets['IF'] := BashIf;
+
+DEF_HASH(BashIfElse, BashIfElsePhs, BashIfElseCondition, BashIfElseTrue, BashIfElseFalse);
+BashIfElseCondition['default'] := '-f "$file"';
+BashIfElseCondition['hint'] := 'Bash test expression';
+BashIfElseTrue['default'] := ':';
+BashIfElseTrue['hint'] := 'True branch';
+BashIfElseFalse['default'] := ':';
+BashIfElseFalse['hint'] := 'False branch';
+BashIfElsePhs['1'] := BashIfElseCondition;
+BashIfElsePhs['2'] := BashIfElseTrue;
+BashIfElsePhs['3'] := BashIfElseFalse;
+BashIfElse['name'] := 'Bash if else';
+BashIfElse['body'] := <<BODY
+if [[ //1 ]]; then
+    //2
+else
+    //3
+fi
+BODY;
+BashIfElse['placeholders'] := BashIfElsePhs;
+BashSnippets['IFELSE'] := BashIfElse;
+
+DEF_HASH(BashFor, BashForPhs, BashForName, BashForValues, BashForBody);
+BashForName['default'] := 'item';
+BashForName['hint'] := 'Loop variable';
+BashForValues['default'] := '"$@"';
+BashForValues['hint'] := 'Values to iterate';
+BashForBody['default'] := ':';
+BashForBody['hint'] := 'Loop body';
+BashForPhs['1'] := BashForName;
+BashForPhs['2'] := BashForValues;
+BashForPhs['3'] := BashForBody;
+BashFor['name'] := 'Bash for';
+BashFor['body'] := <<BODY
+for //1 in //2; do
+    //3
+done
+BODY;
+BashFor['placeholders'] := BashForPhs;
+BashSnippets['FOR'] := BashFor;
+
+DEF_HASH(BashForIndex, BashForIndexPhs, BashForIndexLimit, BashForIndexBody);
+BashForIndexLimit['default'] := 'count';
+BashForIndexLimit['hint'] := 'Loop bound';
+BashForIndexBody['default'] := ':';
+BashForIndexBody['hint'] := 'Loop body';
+BashForIndexPhs['1'] := BashForIndexLimit;
+BashForIndexPhs['2'] := BashForIndexBody;
+BashForIndex['name'] := 'Bash indexed for';
+BashForIndex['body'] := <<BODY
+for ((i = 0; i < //1; ++i)); do
+    //2
+done
+BODY;
+BashForIndex['placeholders'] := BashForIndexPhs;
+BashSnippets['FORI'] := BashForIndex;
+
+DEF_HASH(BashWhile, BashWhilePhs, BashWhileCommand, BashWhileBody);
+BashWhileCommand['default'] := 'IFS= read -r line';
+BashWhileCommand['hint'] := 'Loop condition command';
+BashWhileBody['default'] := ':';
+BashWhileBody['hint'] := 'Loop body';
+BashWhilePhs['1'] := BashWhileCommand;
+BashWhilePhs['2'] := BashWhileBody;
+BashWhile['name'] := 'Bash while';
+BashWhile['body'] := <<BODY
+while //1; do
+    //2
+done
+BODY;
+BashWhile['placeholders'] := BashWhilePhs;
+BashSnippets['WHILE'] := BashWhile;
+
+DEF_HASH(BashCase, BashCasePhs, BashCaseValue, BashCasePattern, BashCaseBody, BashCaseDefault);
+BashCaseValue['default'] := '"$value"';
+BashCaseValue['hint'] := 'Value to match';
+BashCasePattern['default'] := 'pattern';
+BashCasePattern['hint'] := 'Case pattern';
+BashCaseBody['default'] := ':';
+BashCaseBody['hint'] := 'Matching branch';
+BashCaseDefault['default'] := ':';
+BashCaseDefault['hint'] := 'Default branch';
+BashCasePhs['1'] := BashCaseValue;
+BashCasePhs['2'] := BashCasePattern;
+BashCasePhs['3'] := BashCaseBody;
+BashCasePhs['4'] := BashCaseDefault;
+BashCase['name'] := 'Bash case';
+BashCase['body'] := <<BODY
+case //1 in
+    //2)
+        //3
+        ;;
+    *)
+        //4
+        ;;
+esac
+BODY;
+BashCase['placeholders'] := BashCasePhs;
+BashSnippets['CASE'] := BashCase;
+
+DEF_HASH(BashFunction, BashFunctionPhs, BashFunctionName, BashFunctionBody);
+BashFunctionName['default'] := 'main';
+BashFunctionName['hint'] := 'Function name';
+BashFunctionBody['default'] := ':';
+BashFunctionBody['hint'] := 'Function body';
+BashFunctionPhs['1'] := BashFunctionName;
+BashFunctionPhs['2'] := BashFunctionBody;
+BashFunction['name'] := 'Bash function';
+BashFunction['body'] := <<BODY
+//1() {
+    //2
+}
+BODY;
+BashFunction['placeholders'] := BashFunctionPhs;
+BashSnippets['FUNCTION'] := BashFunction;
+
+DEF_HASH(BashRead, BashReadPhs, BashReadName);
+BashReadName['default'] := 'line';
+BashReadName['hint'] := 'Destination variable';
+BashReadPhs['1'] := BashReadName;
+BashRead['name'] := 'Bash read line';
+BashRead['body'] := <<BODY
+IFS= read -r //1
+BODY;
+BashRead['placeholders'] := BashReadPhs;
+BashSnippets['READ'] := BashRead;
+
+DEF_HASH(BashTrap, BashTrapPhs, BashTrapBody);
+BashTrapBody['default'] := ':';
+BashTrapBody['hint'] := 'Cleanup statements';
+BashTrapPhs['1'] := BashTrapBody;
+BashTrap['name'] := 'Bash exit trap';
+BashTrap['body'] := <<BODY
+cleanup() {
+    //1
+}
+trap cleanup EXIT
+BODY;
+BashTrap['placeholders'] := BashTrapPhs;
+BashSnippets['TRAP'] := BashTrap;
+
+DEF_HASH(BashHereDoc, BashHereDocPhs, BashHereDocText);
+BashHereDocText['default'] := 'text';
+BashHereDocText['hint'] := 'Literal content';
+BashHereDocPhs['1'] := BashHereDocText;
+BashHereDoc['name'] := 'Bash heredoc';
+BashHereDoc['body'] := <<BODY
+cat <<'EOF'
+//1
+EOF
+BODY;
+BashHereDoc['placeholders'] := BashHereDocPhs;
+BashSnippets['HEREDOC'] := BashHereDoc;
+
+DEF_HASH(BashArray, BashArrayPhs, BashArrayValues, BashArrayBody);
+BashArrayValues['default'] := 'one two';
+BashArrayValues['hint'] := 'Array elements';
+BashArrayBody['default'] := ':';
+BashArrayBody['hint'] := 'Loop body';
+BashArrayPhs['1'] := BashArrayValues;
+BashArrayPhs['2'] := BashArrayBody;
+BashArray['name'] := 'Bash array loop';
+BashArray['body'] := <<BODY
+items=(//1)
+for item in "${items[@]}"; do
+    //2
+done
+BODY;
+BashArray['placeholders'] := BashArrayPhs;
+BashSnippets['ARRAY'] := BashArray;
+
+Snippets['BASH'] := BashSnippets;
+SET_GLOBAL_HASH('SNIPPETS', Snippets);
+
+END_MACRO;

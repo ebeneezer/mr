@@ -1,0 +1,188 @@
+$MACRO REGISTER_MRMAC_SNIPPETS UNIQUE FROM EDIT;
+DEF_HASH(Snippets, MrSnippets);
+
+Snippets := GLOBAL_HASH('SNIPPETS');
+
+DEF_HASH(MrMacro, MrMacroPhs, MrMacroName, MrMacroBody);
+MrMacroName['default'] := 'Example';
+MrMacroName['hint'] := 'Macro name';
+MrMacroBody['default'] := '{ body }';
+MrMacroBody['hint'] := 'Macro statements';
+MrMacroPhs['1'] := MrMacroName;
+MrMacroPhs['2'] := MrMacroBody;
+MrMacro['name'] := 'MRMAC macro';
+MrMacro['body'] := <<BODY
+$MACRO //1 FROM EDIT;
+//2
+END_MACRO;
+BODY;
+MrMacro['placeholders'] := MrMacroPhs;
+MrSnippets['MACRO'] := MrMacro;
+
+DEF_HASH(MrInt, MrIntPhs, MrIntName);
+MrIntName['default'] := 'Count';
+MrIntName['hint'] := 'Integer variable';
+MrIntPhs['1'] := MrIntName;
+MrInt['name'] := 'MRMAC integer declaration';
+MrInt['body'] := <<BODY
+DEF_INT(//1);
+BODY;
+MrInt['placeholders'] := MrIntPhs;
+MrSnippets['DEFINT'] := MrInt;
+
+DEF_HASH(MrStr, MrStrPhs, MrStrName);
+MrStrName['default'] := 'Text';
+MrStrName['hint'] := 'String variable';
+MrStrPhs['1'] := MrStrName;
+MrStr['name'] := 'MRMAC string declaration';
+MrStr['body'] := <<BODY
+DEF_STR(//1);
+BODY;
+MrStr['placeholders'] := MrStrPhs;
+MrSnippets['DEFSTR'] := MrStr;
+
+DEF_HASH(MrHash, MrHashPhs, MrHashName);
+MrHashName['default'] := 'Data';
+MrHashName['hint'] := 'Hash variable';
+MrHashPhs['1'] := MrHashName;
+MrHash['name'] := 'MRMAC hash declaration';
+MrHash['body'] := <<BODY
+DEF_HASH(//1);
+BODY;
+MrHash['placeholders'] := MrHashPhs;
+MrSnippets['DEFHASH'] := MrHash;
+
+DEF_HASH(MrIf, MrIfPhs, MrIfCondition, MrIfBody);
+MrIfCondition['default'] := 'TRUE';
+MrIfCondition['hint'] := 'Integer condition';
+MrIfBody['default'] := '{ body }';
+MrIfBody['hint'] := 'True branch';
+MrIfPhs['1'] := MrIfCondition;
+MrIfPhs['2'] := MrIfBody;
+MrIf['name'] := 'MRMAC if';
+MrIf['body'] := <<BODY
+IF //1 THEN
+    //2
+END;
+BODY;
+MrIf['placeholders'] := MrIfPhs;
+MrSnippets['IF'] := MrIf;
+
+DEF_HASH(MrIfElse, MrIfElsePhs, MrIfElseCondition, MrIfElseTrue, MrIfElseFalse);
+MrIfElseCondition['default'] := 'TRUE';
+MrIfElseCondition['hint'] := 'Integer condition';
+MrIfElseTrue['default'] := '{ true branch }';
+MrIfElseTrue['hint'] := 'True branch';
+MrIfElseFalse['default'] := '{ false branch }';
+MrIfElseFalse['hint'] := 'False branch';
+MrIfElsePhs['1'] := MrIfElseCondition;
+MrIfElsePhs['2'] := MrIfElseTrue;
+MrIfElsePhs['3'] := MrIfElseFalse;
+MrIfElse['name'] := 'MRMAC if else';
+MrIfElse['body'] := <<BODY
+IF //1 THEN
+    //2
+ELSE
+    //3
+END;
+BODY;
+MrIfElse['placeholders'] := MrIfElsePhs;
+MrSnippets['IFELSE'] := MrIfElse;
+
+DEF_HASH(MrWhile, MrWhilePhs, MrWhileCondition, MrWhileBody);
+MrWhileCondition['default'] := 'FALSE';
+MrWhileCondition['hint'] := 'Integer condition';
+MrWhileBody['default'] := '{ body }';
+MrWhileBody['hint'] := 'Loop statements';
+MrWhilePhs['1'] := MrWhileCondition;
+MrWhilePhs['2'] := MrWhileBody;
+MrWhile['name'] := 'MRMAC while';
+MrWhile['body'] := <<BODY
+WHILE //1 DO
+    //2
+END;
+BODY;
+MrWhile['placeholders'] := MrWhilePhs;
+MrSnippets['WHILE'] := MrWhile;
+
+DEF_HASH(MrHashEntry, MrHashEntryPhs, MrHashEntryKey, MrHashEntryValue);
+MrHashEntryKey['default'] := 'key';
+MrHashEntryKey['hint'] := 'Hash key';
+MrHashEntryValue['default'] := 'value';
+MrHashEntryValue['hint'] := 'String value';
+MrHashEntryPhs['1'] := MrHashEntryKey;
+MrHashEntryPhs['2'] := MrHashEntryValue;
+MrHashEntry['name'] := 'MRMAC hash entry';
+MrHashEntry['body'] := <<BODY
+DEF_HASH(Data);
+Data['//1'] := '//2';
+BODY;
+MrHashEntry['placeholders'] := MrHashEntryPhs;
+MrSnippets['HASHENTRY'] := MrHashEntry;
+
+DEF_HASH(MrGlobalStr, MrGlobalStrPhs, MrGlobalStrName, MrGlobalStrValue);
+MrGlobalStrName['default'] := 'STATUS';
+MrGlobalStrName['hint'] := 'Global name';
+MrGlobalStrValue['default'] := 'ready';
+MrGlobalStrValue['hint'] := 'String value';
+MrGlobalStrPhs['1'] := MrGlobalStrName;
+MrGlobalStrPhs['2'] := MrGlobalStrValue;
+MrGlobalStr['name'] := 'MRMAC global string';
+MrGlobalStr['body'] := <<BODY
+SET_GLOBAL_STR('//1', '//2');
+BODY;
+MrGlobalStr['placeholders'] := MrGlobalStrPhs;
+MrSnippets['GLOBALSTR'] := MrGlobalStr;
+
+DEF_HASH(MrGlobalHash, MrGlobalHashPhs, MrGlobalHashKey);
+MrGlobalHashKey['default'] := 'DATA';
+MrGlobalHashKey['hint'] := 'Global name';
+MrGlobalHashPhs['1'] := MrGlobalHashKey;
+MrGlobalHash['name'] := 'MRMAC global hash';
+MrGlobalHash['body'] := <<BODY
+DEF_HASH(Data);
+SET_GLOBAL_HASH('//1', Data);
+BODY;
+MrGlobalHash['placeholders'] := MrGlobalHashPhs;
+MrSnippets['GLOBALHASH'] := MrGlobalHash;
+
+DEF_HASH(MrRun, MrRunPhs, MrRunName);
+MrRunName['default'] := 'OtherMacro';
+MrRunName['hint'] := 'Macro name';
+MrRunPhs['1'] := MrRunName;
+MrRun['name'] := 'MRMAC run macro';
+MrRun['body'] := <<BODY
+RUN_MACRO('//1');
+BODY;
+MrRun['placeholders'] := MrRunPhs;
+MrSnippets['RUNMACRO'] := MrRun;
+
+DEF_HASH(MrMessage, MrMessagePhs, MrMessageText);
+MrMessageText['default'] := 'Ready';
+MrMessageText['hint'] := 'Message text';
+MrMessagePhs['1'] := MrMessageText;
+MrMessage['name'] := 'MRMAC message';
+MrMessage['body'] := <<BODY
+MAKE_MESSAGE('//1');
+BODY;
+MrMessage['placeholders'] := MrMessagePhs;
+MrSnippets['MESSAGE'] := MrMessage;
+
+DEF_HASH(MrHereDoc, MrHereDocPhs, MrHereDocText);
+MrHereDocText['default'] := 'text';
+MrHereDocText['hint'] := 'String content';
+MrHereDocPhs['1'] := MrHereDocText;
+MrHereDoc['name'] := 'MRMAC heredoc';
+MrHereDoc['body'] := <<BODY
+DEF_STR(Text);
+Text := <<TEXT
+//1
+TEXT;
+BODY;
+MrHereDoc['placeholders'] := MrHereDocPhs;
+MrSnippets['HEREDOC'] := MrHereDoc;
+
+Snippets['MRMAC'] := MrSnippets;
+SET_GLOBAL_HASH('SNIPPETS', Snippets);
+
+END_MACRO;

@@ -1,0 +1,208 @@
+{ Python patterns reviewed against https://github.com/rafamadriz/friendly-snippets
+  and https://github.com/honza/vim-snippets (MIT).
+  Syntax follows the Python 3 language reference; layout follows PEP 8. }
+$MACRO REGISTER_PYTHON_SNIPPETS UNIQUE FROM EDIT;
+DEF_HASH(Snippets, PythonSnippets);
+
+Snippets := GLOBAL_HASH('SNIPPETS');
+
+DEF_HASH(PyMain, PyMainPhs, PyMainBody);
+PyMainBody['default'] := 'main()';
+PyMainBody['hint'] := 'Entry point call';
+PyMainPhs['1'] := PyMainBody;
+PyMain['name'] := 'Python main guard';
+PyMain['body'] := <<BODY
+if __name__ == "__main__":
+    //1
+BODY;
+PyMain['placeholders'] := PyMainPhs;
+PythonSnippets['MAIN'] := PyMain;
+
+DEF_HASH(PyImport, PyImportPhs, PyImportModule);
+PyImportModule['default'] := 'pathlib';
+PyImportModule['hint'] := 'Module name';
+PyImportPhs['1'] := PyImportModule;
+PyImport['name'] := 'Python import';
+PyImport['body'] := <<BODY
+import //1
+BODY;
+PyImport['placeholders'] := PyImportPhs;
+PythonSnippets['IMPORT'] := PyImport;
+
+DEF_HASH(PyFromImport, PyFromImportPhs, PyFromModule, PyFromName);
+PyFromModule['default'] := 'pathlib';
+PyFromModule['hint'] := 'Module name';
+PyFromName['default'] := 'Path';
+PyFromName['hint'] := 'Imported name';
+PyFromImportPhs['1'] := PyFromModule;
+PyFromImportPhs['2'] := PyFromName;
+PyFromImport['name'] := 'Python from import';
+PyFromImport['body'] := <<BODY
+from //1 import //2
+BODY;
+PyFromImport['placeholders'] := PyFromImportPhs;
+PythonSnippets['FROMIMPORT'] := PyFromImport;
+
+DEF_HASH(PyDef, PyDefPhs, PyDefName, PyDefBody);
+PyDefName['default'] := 'process';
+PyDefName['hint'] := 'Function name';
+PyDefBody['default'] := 'pass';
+PyDefBody['hint'] := 'Function body';
+PyDefPhs['1'] := PyDefName;
+PyDefPhs['2'] := PyDefBody;
+PyDef['name'] := 'Python function';
+PyDef['body'] := <<BODY
+def //1():
+    //2
+BODY;
+PyDef['placeholders'] := PyDefPhs;
+PythonSnippets['DEF'] := PyDef;
+
+DEF_HASH(PyClass, PyClassPhs, PyClassName, PyClassBody);
+PyClassName['default'] := 'Example';
+PyClassName['hint'] := 'Class name';
+PyClassBody['default'] := 'pass';
+PyClassBody['hint'] := 'Class body';
+PyClassPhs['1'] := PyClassName;
+PyClassPhs['2'] := PyClassBody;
+PyClass['name'] := 'Python class';
+PyClass['body'] := <<BODY
+class //1:
+    //2
+BODY;
+PyClass['placeholders'] := PyClassPhs;
+PythonSnippets['CLASS'] := PyClass;
+
+DEF_HASH(PyIf, PyIfPhs, PyIfCondition, PyIfBody);
+PyIfCondition['default'] := 'condition';
+PyIfCondition['hint'] := 'Boolean expression';
+PyIfBody['default'] := 'pass';
+PyIfBody['hint'] := 'True branch';
+PyIfPhs['1'] := PyIfCondition;
+PyIfPhs['2'] := PyIfBody;
+PyIf['name'] := 'Python if';
+PyIf['body'] := <<BODY
+if //1:
+    //2
+BODY;
+PyIf['placeholders'] := PyIfPhs;
+PythonSnippets['IF'] := PyIf;
+
+DEF_HASH(PyIfElse, PyIfElsePhs, PyIfElseCondition, PyIfElseTrue, PyIfElseFalse);
+PyIfElseCondition['default'] := 'condition';
+PyIfElseCondition['hint'] := 'Boolean expression';
+PyIfElseTrue['default'] := 'pass';
+PyIfElseTrue['hint'] := 'True branch';
+PyIfElseFalse['default'] := 'pass';
+PyIfElseFalse['hint'] := 'False branch';
+PyIfElsePhs['1'] := PyIfElseCondition;
+PyIfElsePhs['2'] := PyIfElseTrue;
+PyIfElsePhs['3'] := PyIfElseFalse;
+PyIfElse['name'] := 'Python if else';
+PyIfElse['body'] := <<BODY
+if //1:
+    //2
+else:
+    //3
+BODY;
+PyIfElse['placeholders'] := PyIfElsePhs;
+PythonSnippets['IFELSE'] := PyIfElse;
+
+DEF_HASH(PyFor, PyForPhs, PyForItems, PyForBody);
+PyForItems['default'] := 'items';
+PyForItems['hint'] := 'Iterable expression';
+PyForBody['default'] := 'pass';
+PyForBody['hint'] := 'Loop body';
+PyForPhs['1'] := PyForItems;
+PyForPhs['2'] := PyForBody;
+PyFor['name'] := 'Python for';
+PyFor['body'] := <<BODY
+for item in //1:
+    //2
+BODY;
+PyFor['placeholders'] := PyForPhs;
+PythonSnippets['FOR'] := PyFor;
+
+DEF_HASH(PyWhile, PyWhilePhs, PyWhileCondition, PyWhileBody);
+PyWhileCondition['default'] := 'condition';
+PyWhileCondition['hint'] := 'Loop condition';
+PyWhileBody['default'] := 'pass';
+PyWhileBody['hint'] := 'Loop body';
+PyWhilePhs['1'] := PyWhileCondition;
+PyWhilePhs['2'] := PyWhileBody;
+PyWhile['name'] := 'Python while';
+PyWhile['body'] := <<BODY
+while //1:
+    //2
+BODY;
+PyWhile['placeholders'] := PyWhilePhs;
+PythonSnippets['WHILE'] := PyWhile;
+
+DEF_HASH(PyWith, PyWithPhs, PyWithContext, PyWithTarget, PyWithBody);
+PyWithContext['default'] := 'open("file.txt", encoding="utf-8")';
+PyWithContext['hint'] := 'Context manager expression';
+PyWithTarget['default'] := 'stream';
+PyWithTarget['hint'] := 'Bound name';
+PyWithBody['default'] := 'pass';
+PyWithBody['hint'] := 'With body';
+PyWithPhs['1'] := PyWithContext;
+PyWithPhs['2'] := PyWithTarget;
+PyWithPhs['3'] := PyWithBody;
+PyWith['name'] := 'Python with';
+PyWith['body'] := <<BODY
+with //1 as //2:
+    //3
+BODY;
+PyWith['placeholders'] := PyWithPhs;
+PythonSnippets['WITH'] := PyWith;
+
+DEF_HASH(PyTry, PyTryPhs, PyTryBody, PyExceptBody);
+PyTryBody['default'] := 'pass';
+PyTryBody['hint'] := 'Try block';
+PyExceptBody['default'] := 'raise';
+PyExceptBody['hint'] := 'Exception handler';
+PyTryPhs['1'] := PyTryBody;
+PyTryPhs['2'] := PyExceptBody;
+PyTry['name'] := 'Python try except';
+PyTry['body'] := <<BODY
+try:
+    //1
+except Exception as error:
+    //2
+BODY;
+PyTry['placeholders'] := PyTryPhs;
+PythonSnippets['TRY'] := PyTry;
+
+DEF_HASH(PyListComp, PyListCompPhs, PyListCompName, PyListCompItems);
+PyListCompName['default'] := 'result';
+PyListCompName['hint'] := 'Result name';
+PyListCompItems['default'] := 'items';
+PyListCompItems['hint'] := 'Iterable expression';
+PyListCompPhs['1'] := PyListCompName;
+PyListCompPhs['2'] := PyListCompItems;
+PyListComp['name'] := 'Python list comprehension';
+PyListComp['body'] := <<BODY
+//1 = [item for item in //2]
+BODY;
+PyListComp['placeholders'] := PyListCompPhs;
+PythonSnippets['LISTCOMP'] := PyListComp;
+
+DEF_HASH(PyAsyncDef, PyAsyncDefPhs, PyAsyncDefName, PyAsyncDefBody);
+PyAsyncDefName['default'] := 'fetch';
+PyAsyncDefName['hint'] := 'Coroutine name';
+PyAsyncDefBody['default'] := 'pass';
+PyAsyncDefBody['hint'] := 'Coroutine body';
+PyAsyncDefPhs['1'] := PyAsyncDefName;
+PyAsyncDefPhs['2'] := PyAsyncDefBody;
+PyAsyncDef['name'] := 'Python async function';
+PyAsyncDef['body'] := <<BODY
+async def //1():
+    //2
+BODY;
+PyAsyncDef['placeholders'] := PyAsyncDefPhs;
+PythonSnippets['ASYNCDEF'] := PyAsyncDef;
+
+Snippets['PYTHON'] := PythonSnippets;
+SET_GLOBAL_HASH('SNIPPETS', Snippets);
+
+END_MACRO;

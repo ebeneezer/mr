@@ -1,0 +1,221 @@
+{ C++ patterns reviewed against https://github.com/rafamadriz/friendly-snippets
+  and https://github.com/honza/vim-snippets (MIT).
+  The templates below are written for MR's snippet format. }
+$MACRO REGISTER_CPP_SNIPPETS UNIQUE FROM EDIT;
+DEF_HASH(Snippets, CppSnippets);
+
+Snippets := GLOBAL_HASH('SNIPPETS');
+
+DEF_HASH(CppMain, CppMainPhs, CppMainBody);
+CppMainBody['default'] := 'return 0;';
+CppMainBody['hint'] := 'Main function body';
+CppMainPhs['1'] := CppMainBody;
+CppMain['name'] := 'C++ main function';
+CppMain['body'] := <<BODY
+int main() {
+    //1
+}
+BODY;
+CppMain['placeholders'] := CppMainPhs;
+CppSnippets['MAIN'] := CppMain;
+
+DEF_HASH(CppInclude, CppIncludePhs, CppIncludeHeader);
+CppIncludeHeader['default'] := 'vector';
+CppIncludeHeader['hint'] := 'Standard library header';
+CppIncludePhs['1'] := CppIncludeHeader;
+CppInclude['name'] := 'C++ standard include';
+CppInclude['body'] := <<BODY
+#include <//1>
+BODY;
+CppInclude['placeholders'] := CppIncludePhs;
+CppSnippets['INCLUDE'] := CppInclude;
+
+DEF_HASH(CppNamespace, CppNamespacePhs, CppNamespaceName, CppNamespaceBody);
+CppNamespaceName['default'] := 'example';
+CppNamespaceName['hint'] := 'Namespace name';
+CppNamespaceBody['default'] := '/* declarations */';
+CppNamespaceBody['hint'] := 'Namespace contents';
+CppNamespacePhs['1'] := CppNamespaceName;
+CppNamespacePhs['2'] := CppNamespaceBody;
+CppNamespace['name'] := 'C++ namespace';
+CppNamespace['body'] := <<BODY
+namespace //1 {
+    //2
+}
+BODY;
+CppNamespace['placeholders'] := CppNamespacePhs;
+CppSnippets['NAMESPACE'] := CppNamespace;
+
+DEF_HASH(CppClass, CppClassPhs, CppClassName, CppClassMember);
+CppClassName['default'] := 'Widget';
+CppClassName['hint'] := 'Class name';
+CppClassMember['default'] := 'void run();';
+CppClassMember['hint'] := 'Public member declaration';
+CppClassPhs['1'] := CppClassName;
+CppClassPhs['2'] := CppClassMember;
+CppClass['name'] := 'C++ class';
+CppClass['body'] := <<BODY
+class //1 {
+public:
+    //2
+};
+BODY;
+CppClass['placeholders'] := CppClassPhs;
+CppSnippets['CLASS'] := CppClass;
+
+DEF_HASH(CppStruct, CppStructPhs, CppStructName, CppStructMember);
+CppStructName['default'] := 'Record';
+CppStructName['hint'] := 'Struct name';
+CppStructMember['default'] := 'int value = 0;';
+CppStructMember['hint'] := 'Member declaration';
+CppStructPhs['1'] := CppStructName;
+CppStructPhs['2'] := CppStructMember;
+CppStruct['name'] := 'C++ struct';
+CppStruct['body'] := <<BODY
+struct //1 {
+    //2
+};
+BODY;
+CppStruct['placeholders'] := CppStructPhs;
+CppSnippets['STRUCT'] := CppStruct;
+
+DEF_HASH(CppEnumClass, CppEnumClassPhs, CppEnumClassName, CppEnumClassValues);
+CppEnumClassName['default'] := 'Kind';
+CppEnumClassName['hint'] := 'Enum name';
+CppEnumClassValues['default'] := 'First';
+CppEnumClassValues['hint'] := 'Enumerators';
+CppEnumClassPhs['1'] := CppEnumClassName;
+CppEnumClassPhs['2'] := CppEnumClassValues;
+CppEnumClass['name'] := 'C++ scoped enum';
+CppEnumClass['body'] := <<BODY
+enum class //1 {
+    //2
+};
+BODY;
+CppEnumClass['placeholders'] := CppEnumClassPhs;
+CppSnippets['ENUMCLASS'] := CppEnumClass;
+
+DEF_HASH(CppFunction, CppFunctionPhs, CppFunctionName, CppFunctionBody);
+CppFunctionName['default'] := 'process';
+CppFunctionName['hint'] := 'Function name';
+CppFunctionBody['default'] := '/* body */';
+CppFunctionBody['hint'] := 'Function body';
+CppFunctionPhs['1'] := CppFunctionName;
+CppFunctionPhs['2'] := CppFunctionBody;
+CppFunction['name'] := 'C++ function';
+CppFunction['body'] := <<BODY
+void //1() {
+    //2
+}
+BODY;
+CppFunction['placeholders'] := CppFunctionPhs;
+CppSnippets['FUNCTION'] := CppFunction;
+
+DEF_HASH(CppIf, CppIfPhs, CppIfCondition, CppIfBody);
+CppIfCondition['default'] := 'condition';
+CppIfCondition['hint'] := 'Boolean expression';
+CppIfBody['default'] := '/* body */';
+CppIfBody['hint'] := 'True branch';
+CppIfPhs['1'] := CppIfCondition;
+CppIfPhs['2'] := CppIfBody;
+CppIf['name'] := 'C++ if';
+CppIf['body'] := <<BODY
+if (//1) {
+    //2
+}
+BODY;
+CppIf['placeholders'] := CppIfPhs;
+CppSnippets['IF'] := CppIf;
+
+DEF_HASH(CppFor, CppForPhs, CppForInit, CppForCondition, CppForStep, CppForBody);
+CppForInit['default'] := 'int i = 0';
+CppForInit['hint'] := 'Loop initializer';
+CppForCondition['default'] := 'i < count';
+CppForCondition['hint'] := 'Loop condition';
+CppForStep['default'] := '++i';
+CppForStep['hint'] := 'Loop increment';
+CppForBody['default'] := '/* body */';
+CppForBody['hint'] := 'Loop body';
+CppForPhs['1'] := CppForInit;
+CppForPhs['2'] := CppForCondition;
+CppForPhs['3'] := CppForStep;
+CppForPhs['4'] := CppForBody;
+CppFor['name'] := 'C++ indexed for';
+CppFor['body'] := <<BODY
+for (//1; //2; //3) {
+    //4
+}
+BODY;
+CppFor['placeholders'] := CppForPhs;
+CppSnippets['FOR'] := CppFor;
+
+DEF_HASH(CppRangeFor, CppRangeForPhs, CppRangeForRange, CppRangeForBody);
+CppRangeForRange['default'] := 'items';
+CppRangeForRange['hint'] := 'Range expression';
+CppRangeForBody['default'] := '/* use item */';
+CppRangeForBody['hint'] := 'Loop body';
+CppRangeForPhs['1'] := CppRangeForRange;
+CppRangeForPhs['2'] := CppRangeForBody;
+CppRangeFor['name'] := 'C++ range for';
+CppRangeFor['body'] := <<BODY
+for (const auto &item : //1) {
+    //2
+}
+BODY;
+CppRangeFor['placeholders'] := CppRangeForPhs;
+CppSnippets['RANGEFOR'] := CppRangeFor;
+
+DEF_HASH(CppWhile, CppWhilePhs, CppWhileCondition, CppWhileBody);
+CppWhileCondition['default'] := 'condition';
+CppWhileCondition['hint'] := 'Loop condition';
+CppWhileBody['default'] := '/* body */';
+CppWhileBody['hint'] := 'Loop body';
+CppWhilePhs['1'] := CppWhileCondition;
+CppWhilePhs['2'] := CppWhileBody;
+CppWhile['name'] := 'C++ while';
+CppWhile['body'] := <<BODY
+while (//1) {
+    //2
+}
+BODY;
+CppWhile['placeholders'] := CppWhilePhs;
+CppSnippets['WHILE'] := CppWhile;
+
+DEF_HASH(CppTry, CppTryPhs, CppTryBody, CppCatchBody);
+CppTryBody['default'] := '/* work */';
+CppTryBody['hint'] := 'Try block';
+CppCatchBody['default'] := '/* handle error */';
+CppCatchBody['hint'] := 'Catch block; include <exception>';
+CppTryPhs['1'] := CppTryBody;
+CppTryPhs['2'] := CppCatchBody;
+CppTry['name'] := 'C++ try catch';
+CppTry['body'] := <<BODY
+try {
+    //1
+} catch (const std::exception &error) {
+    //2
+}
+BODY;
+CppTry['placeholders'] := CppTryPhs;
+CppSnippets['TRY'] := CppTry;
+
+DEF_HASH(CppLambda, CppLambdaPhs, CppLambdaName, CppLambdaResult);
+CppLambdaName['default'] := 'identity';
+CppLambdaName['hint'] := 'Lambda variable';
+CppLambdaResult['default'] := 'value';
+CppLambdaResult['hint'] := 'Return expression';
+CppLambdaPhs['1'] := CppLambdaName;
+CppLambdaPhs['2'] := CppLambdaResult;
+CppLambda['name'] := 'C++ lambda';
+CppLambda['body'] := <<BODY
+auto //1 = [](int value) {
+    return //2;
+};
+BODY;
+CppLambda['placeholders'] := CppLambdaPhs;
+CppSnippets['LAMBDA'] := CppLambda;
+
+Snippets['CPP'] := CppSnippets;
+SET_GLOBAL_HASH('SNIPPETS', Snippets);
+
+END_MACRO;

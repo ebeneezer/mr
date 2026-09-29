@@ -250,7 +250,11 @@ MR_RELEASE_MANUALS = \
 	$(MANUAL_DIRECTORY)/mr-macro-reference.pdf \
 	$(MANUAL_DIRECTORY)/mr-technical-manual.pdf
 MR_RELEASE_MACROS = \
-	mrmac/macros/CSnippets.mrmac \
+	mrmac/macros/snippets/CSnippets.mrmac \
+	mrmac/macros/snippets/CPPSnippets.mrmac \
+	mrmac/macros/snippets/PythonSnippets.mrmac \
+	mrmac/macros/snippets/MRMACSnippets.mrmac \
+	mrmac/macros/snippets/BashSnippets.mrmac \
 	mrmac/macros/MRComfortExtensions.mrmac \
 	mrmac/macros/compilersupport/MRCompilerMiddleware.mrmac \
 	mrmac/macros/keymaps/MRDefaultKeymaps.mrmac \
