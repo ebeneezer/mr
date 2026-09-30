@@ -53,15 +53,15 @@ void MRBentoBox::handleCommittedSourceEditor(MRFileEditor *committedEditor) {
 
 	if (!sourceCommitted || bentoSourceMutationTrackingActive) return;
 	if (compilerDiagnosticsContextEstablished()) {
-		const int pendingNavigation = pendingCompilerProblemNavigation;
+		const CompilerProblemNavigation pendingNavigation = pendingCompilerProblemNavigation;
 		clearCompilerDiagnostics();
 		compilerDiagnosticsParseSourceSnapshot.reset();
 		compilerDiagnosticsParseRequired = false;
 		compilerDiagnosticsSourceInvalidated = true;
 		diagnosticsProjectionTask.projectionCurrent = false;
-		if (pendingNavigation != 0) {
+		if (pendingNavigation == CompilerProblemNavigation::Next || pendingNavigation == CompilerProblemNavigation::Previous) {
 			pendingCompilerProblemNavigation = pendingNavigation;
-			static_cast<void>(requestCompilerProblemNavigation(pendingNavigation > 0));
+			static_cast<void>(requestCompilerProblemNavigation(pendingNavigation == CompilerProblemNavigation::Next));
 		}
 	}
 	refreshOutlinePanes(false);

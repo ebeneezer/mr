@@ -87,7 +87,7 @@ void MRBentoBox::clearCompilerDiagnostics() {
 	const std::shared_ptr<const std::string> emptyText = std::make_shared<const std::string>();
 
 	cancelBentoProjectionTask(diagnosticsProjectionTask);
-	pendingCompilerProblemNavigation = 0;
+	pendingCompilerProblemNavigation = CompilerProblemNavigation::None;
 	compilerDiagnostics = std::make_shared<const std::vector<MRCompilerDiagnostic>>();
 	compilerDiagnosticSourceChanges.reset();
 	compilerDiagnosticsParseSourceSnapshot = std::make_shared<const MRTextBufferModel::ReadSnapshot>(buffer().readSnapshot());
@@ -349,9 +349,10 @@ void MRBentoBox::updateTrackedCompilerSidekick() {
 bool MRBentoBox::refreshCompilerDiagnosticsFromOutput() {
 	compilerDiagnosticsParseRequired = true;
 	if (compilerDiagnosticsSourceInvalidated) {
-		if (pendingCompilerProblemNavigation != 0) {
-			pendingCompilerProblemNavigation = 0;
-			postCompilerProblemNavigationUnavailable();
+		if (pendingCompilerProblemNavigation != CompilerProblemNavigation::None) {
+			const bool explicitNavigation = pendingCompilerProblemNavigation != CompilerProblemNavigation::FirstBuildError;
+			pendingCompilerProblemNavigation = CompilerProblemNavigation::None;
+			if (explicitNavigation) postCompilerProblemNavigationUnavailable();
 		}
 		return false;
 	}
@@ -359,30 +360,58 @@ bool MRBentoBox::refreshCompilerDiagnosticsFromOutput() {
 	if (outputWindow != nullptr && outputWindow->hasTrackedExternalIoTasks()) return true;
 	diagnosticsProjectionTask.retryBlocked = false;
 	const bool submitted = submitCompilerDiagnosticsProjection(bdprParseOutput);
-	if (!submitted && pendingCompilerProblemNavigation != 0) {
-		pendingCompilerProblemNavigation = 0;
-		postCompilerProblemNavigationUnavailable();
+	if (!submitted && pendingCompilerProblemNavigation != CompilerProblemNavigation::None) {
+		const bool explicitNavigation = pendingCompilerProblemNavigation != CompilerProblemNavigation::FirstBuildError;
+		pendingCompilerProblemNavigation = CompilerProblemNavigation::None;
+		if (explicitNavigation) postCompilerProblemNavigationUnavailable();
 	}
 	return submitted;
 }
 
-bool MRBentoBox::requestCompilerProblemNavigation(bool forward) {
-	pendingCompilerProblemNavigation = forward ? 1 : -1;
+void MRBentoBox::requestFirstBuildErrorNavigation() {
+	if (pendingCompilerProblemNavigation != CompilerProblemNavigation::None) return;
+	pendingCompilerProblemNavigation = CompilerProblemNavigation::FirstBuildError;
 	diagnosticsProjectionTask.retryBlocked = false;
 	if (!refreshCompilerProblemsPane()) {
-		if (pendingCompilerProblemNavigation != 0) {
-			pendingCompilerProblemNavigation = 0;
+		pendingCompilerProblemNavigation = CompilerProblemNavigation::None;
+		return;
+	}
+	if (compilerDiagnosticsCurrent()) completeCompilerProblemNavigation();
+}
+
+bool MRBentoBox::requestCompilerProblemNavigation(bool forward) {
+	pendingCompilerProblemNavigation = forward ? CompilerProblemNavigation::Next : CompilerProblemNavigation::Previous;
+	diagnosticsProjectionTask.retryBlocked = false;
+	if (!refreshCompilerProblemsPane()) {
+		if (pendingCompilerProblemNavigation != CompilerProblemNavigation::None) {
+			pendingCompilerProblemNavigation = CompilerProblemNavigation::None;
 			postCompilerProblemNavigationUnavailable();
 		}
 		return true;
 	}
 	if (!compilerDiagnosticsCurrent()) return true;
-
-	const int navigation = pendingCompilerProblemNavigation;
-	pendingCompilerProblemNavigation = 0;
-	const bool navigated = navigation > 0 ? jumpToNextProblem() : jumpToPreviousProblem();
-	if (!navigated) postCompilerProblemNavigationUnavailable();
+	completeCompilerProblemNavigation();
 	return true;
+}
+
+void MRBentoBox::completeCompilerProblemNavigation() {
+	const CompilerProblemNavigation navigation = pendingCompilerProblemNavigation;
+	pendingCompilerProblemNavigation = CompilerProblemNavigation::None;
+	bool navigated = false;
+	switch (navigation) {
+		case CompilerProblemNavigation::Next:
+			navigated = jumpToNextProblem();
+			break;
+		case CompilerProblemNavigation::Previous:
+			navigated = jumpToPreviousProblem();
+			break;
+		case CompilerProblemNavigation::FirstBuildError:
+			navigated = jumpToFirstCompilerError();
+			break;
+		case CompilerProblemNavigation::None:
+			return;
+	}
+	if (!navigated && navigation != CompilerProblemNavigation::FirstBuildError) postCompilerProblemNavigationUnavailable();
 }
 
 void MRBentoBox::syncCompilerDiagnosticsAfterSourceMutation(const MRTextBufferModel::ReadSnapshot &oldSnapshot, const MRTextBufferModel::DocumentChangeSet &changeSet) {
@@ -490,6 +519,18 @@ bool MRBentoBox::jumpToProblemAtCursor() {
 	trackCompilerSidekick(selectedIndex);
 	updateTrackedCompilerSidekick();
 	return true;
+}
+
+bool MRBentoBox::jumpToFirstCompilerError() {
+	MREditWindow *problemsWindow = problemsPane();
+	MRFileEditor *problemsEditor = problemsWindow != nullptr ? problemsWindow->getEditor() : nullptr;
+	if (problemsEditor == nullptr || compilerDiagnostics == nullptr || !compilerDiagnosticsCurrent()) return false;
+	for (const MRCompilerDiagnostic &diagnostic : *compilerDiagnostics) {
+		if (diagnostic.severity != "error" && diagnostic.severity != "fatal error") continue;
+		problemsEditor->setCursorOffset(diagnostic.problemOffset);
+		return jumpToProblemAtCursor();
+	}
+	return false;
 }
 
 bool MRBentoBox::jumpToNextProblem() {

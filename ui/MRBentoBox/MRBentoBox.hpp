@@ -282,6 +282,7 @@ class MRBentoBox : public MREditWindow {
 	void clearCompilerDiagnostics();
 	[[nodiscard]] bool hasCompilerProblems() const noexcept;
 		[[nodiscard]] bool refreshCompilerDiagnosticsFromOutput();
+		void requestFirstBuildErrorNavigation();
 		[[nodiscard]] bool requestCompilerProblemNavigation(bool forward);
 		[[nodiscard]] bool jumpToProblemAtCursor();
 	[[nodiscard]] bool jumpToNextProblem();
@@ -436,6 +437,8 @@ class MRBentoBox : public MREditWindow {
 	void handleCommittedSourceEditor(MRFileEditor *committedEditor);
 	bool compilerDiagnosticsContextEstablished() const noexcept;
 	bool compilerDiagnosticsCurrent() const;
+	bool jumpToFirstCompilerError();
+	void completeCompilerProblemNavigation();
 	void resumePendingBentoProjection(BentoProjectionTaskState &state, MRBentoPaneRole role);
 	[[nodiscard]] bool toggleMacroDebuggerBreakpointAtCursor();
 	[[nodiscard]] bool toggleMacroDebuggerBreakpointEnabledAtCursor();
@@ -647,7 +650,8 @@ class MRBentoBox : public MREditWindow {
 	std::uint64_t compilerProblemsTextHash;
 	bool compilerDiagnosticsParseRequired;
 	bool compilerDiagnosticsSourceInvalidated;
-	int pendingCompilerProblemNavigation;
+	enum class CompilerProblemNavigation : unsigned char { None, Next, Previous, FirstBuildError };
+	CompilerProblemNavigation pendingCompilerProblemNavigation;
 	MRBentoCompareSetup fileCompareSetup;
 	MRBentoFileComparePipelineState fileComparePipeline;
 	bool fileCompareSourcesRestored;

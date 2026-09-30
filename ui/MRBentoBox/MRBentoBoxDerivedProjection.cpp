@@ -701,7 +701,7 @@ void MRBentoBox::cancelBentoProjectionTask(BentoProjectionTaskState &state) noex
 
 void MRBentoBox::cancelAllBentoProjectionTasks() noexcept {
 	cancelBentoProjectionTask(diagnosticsProjectionTask);
-	pendingCompilerProblemNavigation = 0;
+	pendingCompilerProblemNavigation = CompilerProblemNavigation::None;
 	cancelBentoProjectionTask(structureProjectionTask);
 	cancelBentoProjectionTask(functionsProjectionTask);
 }
@@ -713,7 +713,7 @@ void MRBentoBox::cancelBentoProjectionForPane(int paneBufferId) {
 	if (diagnosticsInputClosed || diagnosticsTargetClosed) {
 		if (diagnosticsInputClosed) clearCompilerDiagnostics();
 		cancelBentoProjectionTask(diagnosticsProjectionTask);
-		pendingCompilerProblemNavigation = 0;
+		pendingCompilerProblemNavigation = CompilerProblemNavigation::None;
 		if (diagnosticsInputClosed) {
 			compilerDiagnosticSourceChanges.reset();
 			compilerDiagnosticsParseSourceSnapshot.reset();
@@ -909,7 +909,8 @@ bool MRBentoBox::applyBentoProjectionResult(const mr::coprocessor::Result &resul
 					compilerProblemsTextLength = payload->projectionText->size();
 					compilerProblemsTextHash = payload->textHash;
 					compilerProblemsStatus = payload->status;
-				clearTrackedCompilerSidekick(true);
+					const bool keepTrackedSidekick = completedDiagnosticsRequest == bdprFormatExisting && textAlreadyCurrent && !statusChanged;
+					if (!keepTrackedSidekick) clearTrackedCompilerSidekick(true);
 				targetEditor->clearFindMarkerRanges();
 				sourceEditor->adoptCompilerDiagnosticRanges(payload->sourceErrorRanges, payload->sourceWarningRanges);
 				targetWindow->setFileChanged(false);
@@ -931,6 +932,7 @@ bool MRBentoBox::applyBentoProjectionResult(const mr::coprocessor::Result &resul
 						compilerDiagnosticsParseSourceSnapshot.reset();
 					}
 					taskState->projectionCurrent = true;
+					if (keepTrackedSidekick) updateTrackedCompilerSidekick();
 					adopted = true;
 					projectionChanged = !textAlreadyCurrent || statusChanged;
 				}
@@ -1023,20 +1025,18 @@ bool MRBentoBox::applyBentoProjectionResult(const mr::coprocessor::Result &resul
 	}
 	else if (!pending) {
 		taskState->retryBlocked = result.failed();
-		if (role == bprProblems && pendingCompilerProblemNavigation != 0) {
-			pendingCompilerProblemNavigation = 0;
-			postCompilerNavigationUnavailable();
+		if (role == bprProblems && pendingCompilerProblemNavigation != CompilerProblemNavigation::None) {
+			const bool explicitNavigation = pendingCompilerProblemNavigation != CompilerProblemNavigation::FirstBuildError;
+			pendingCompilerProblemNavigation = CompilerProblemNavigation::None;
+			if (explicitNavigation) postCompilerNavigationUnavailable();
 		}
 	}
 	taskState->pending = pending;
 	taskState->pendingForce = pendingForce;
 	taskState->pendingDiagnosticsRequest = pendingDiagnosticsRequest;
-	if (role == bprProblems && adopted && !pending && pendingDiagnosticsRequest == bdprNone && pendingCompilerProblemNavigation != 0 &&
+	if (role == bprProblems && adopted && !pending && pendingDiagnosticsRequest == bdprNone && pendingCompilerProblemNavigation != CompilerProblemNavigation::None &&
 	    compilerDiagnosticsCurrent()) {
-		const int navigation = pendingCompilerProblemNavigation;
-		pendingCompilerProblemNavigation = 0;
-		const bool navigated = navigation > 0 ? jumpToNextProblem() : jumpToPreviousProblem();
-		if (!navigated) postCompilerNavigationUnavailable();
+		completeCompilerProblemNavigation();
 	}
 	resumePendingBentoProjection(*taskState, role);
 	bentoProjectionAdoptionActive = adoptionWasActive;
