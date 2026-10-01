@@ -88,6 +88,30 @@ if [ ! -d "$macro_source" ]; then
 	exit 1
 fi
 
+mr_collision_path=
+mr_search_path="${PATH:-}:"
+while [ -n "$mr_search_path" ]; do
+	mr_search_directory=${mr_search_path%%:*}
+	mr_search_path=${mr_search_path#*:}
+	if [ -z "$mr_search_directory" ]; then mr_search_directory=.; fi
+	mr_candidate="$mr_search_directory/mr"
+	if [ ! -f "$mr_candidate" ] || [ ! -x "$mr_candidate" ]; then continue; fi
+	mr_candidate_help=$(PERLDOC_PAGER=cat PERLDOC=-otext "$mr_candidate" --help 2>/dev/null | sed -n '1,40p' || true)
+	case "$mr_candidate_help" in
+		*"terminal-based programmer's editor"*) ;;
+		*) mr_collision_path="$mr_candidate"; break ;;
+	esac
+done
+if [ -n "$mr_collision_path" ]; then
+	printf '\nAnother mr command is present: %s\n' "$mr_collision_path" >&2
+	printf 'Install the MR editor as mr and use editor filename completion? [y/N] ' >&2
+	if ! IFS= read -r mr_collision_answer </dev/tty; then mr_collision_answer=; fi
+	case "$mr_collision_answer" in
+		y|Y|yes|YES) ;;
+		*) printf 'Installation cancelled. No files were installed.\n' >&2; exit 1 ;;
+	esac
+fi
+
 character_map=$(locale charmap 2>/dev/null || true)
 missing_utf8_locale=
 configure_utf8_locale=
@@ -400,6 +424,29 @@ if [ -n "$terminal_shell_requested" ] && [ -n "$terminal_needs_color" ]; then
 	fi
 fi
 
+bash_completion_startup=
+zsh_completion_startup=
+if [ -n "${HOME:-}" ]; then
+	if command -v bash >/dev/null 2>&1 && ! grep -Fqx '# MR editor filename completion' "$HOME/.bashrc" 2>/dev/null && ! grep -Fqx 'complete -o default mr' "$HOME/.bashrc" 2>/dev/null; then
+		bash_completion_startup="$HOME/.bashrc"
+	fi
+	if command -v zsh >/dev/null 2>&1 && ! grep -Fqx '# MR editor filename completion' "$HOME/.zshrc" 2>/dev/null && ! grep -Fqx 'compdef _files mr' "$HOME/.zshrc" 2>/dev/null; then
+		zsh_completion_startup="$HOME/.zshrc"
+	fi
+	for shell_startup in "$bash_completion_startup" "$zsh_completion_startup"; do
+		if [ -z "$shell_startup" ]; then continue; fi
+		if [ -e "$shell_startup" ]; then
+			if [ ! -f "$shell_startup" ] || [ ! -w "$shell_startup" ]; then
+				printf 'Shell startup file is not writable: %s\nNo mr files were installed.\n' "$shell_startup" >&2
+				exit 1
+			fi
+		elif [ ! -w "$HOME" ]; then
+			printf 'Home directory is not writable: %s\nNo mr files were installed.\n' "$HOME" >&2
+			exit 1
+		fi
+	done
+fi
+
 launcher_file=$(mktemp /tmp/mr-launcher.XXXXXX)
 trap 'rm -f -- "$launcher_file"' 0
 cat > "$launcher_file" <<'EOF'
@@ -540,6 +587,28 @@ if [ -x /usr/bin/tput ]; then
 	unset mr_terminal_colors
 fi
 EOF
+fi
+
+if [ -n "$bash_completion_startup" ]; then
+	cat >> "$bash_completion_startup" <<'EOF'
+
+# MR editor filename completion
+complete -o default mr
+EOF
+fi
+if [ -n "$zsh_completion_startup" ]; then
+	cat >> "$zsh_completion_startup" <<'EOF'
+
+# MR editor filename completion
+if ! (( ${+functions[compdef]} )); then
+	autoload -Uz compinit
+	compinit
+fi
+compdef _files mr
+EOF
+fi
+if [ -z "${HOME:-}" ]; then
+	printf 'Shell completion was not configured because HOME is unavailable.\n' >&2
 fi
 
 printf '\nInstalled mr %s (build %s).\n' "$release_version" "$release_epoch"
