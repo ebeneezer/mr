@@ -33,51 +33,51 @@ An explanation of MR's architecture and engineering decisions, including large-f
 
 ## Look at the size of that thing!
 
-- American Cybernetics (makers of Multi-Edit) went out of business in 2020 and stopped development of the TUI version of Multi-Edit years bevor
-- mr is a rewrite of the classic programmers editor Multi-Edit by American Cybernetics for Linux terminals
-- mr is constructed aroud a macro language processor, that compiles macro files based on the MEMAC script language. Now called MRMAC the language is backwards code compatible towards the MEMAC dialect but renewed and extended for modern systems. Compilation happens in-RAM through the custom mrmac compiler and supports both precompiled and on-demand compiled macro files for maximum speed. See screenshot: mr is running a utility calculator written in MRMAC
-- mr uses
-  - the Turbo Vision C++ rewrite TVISION from magiblot on GitHub.
-  - advanced data processing models like piecetables, addbuffers, tries and more to edit files larger than system memory and provide file I/O with blazing speed: It loads 1 GB text und under one single second und indexes the whole text in under 800 milliseconds (no BS)
-  - a build in coprocessor for handling mrmac bytecode macros that can manipulate text in parallel to the user in the same window. The coprocessor supports running multiple macro jobs in parallel in different windows or multiple macrojobs in one window or both at the same time. The coprocessor uses multiple computes lanes in parallel: I/O, COMPUTE, MACRO and MINIMAP
-  - a build in virtual machine to execute its macro language MRMAC in automated precompiled bytestream form
-  - ncursesw and is UTF8 capable
-- mr supports
-  - automated syntax highlighting, code folding and smart indenting for all known programming languages
-  - a macro manager for recording macros and binding them to hotkeys. You can create, manage, edit and bind .mrmac files from inside the manager
-  - virtual desktops
-  - workspaces: Loading, saving, autoloading,autosaving, workspace-wide multifile search & replace.
-  - a window manager that can tile, minimize, cascade, close, hide/unhide, save and discard  windows
-  - recursive multi file search & multi file search and replace
-  - full Perl regex PCRE2
-  - a sub character minimap display
-  - inter window copy & paste and copy & paste with the OS
-  - stream block, line blocks and colum blocks including sorting of the marked block
-  - a key mapping manager and loadable key mapping to emulate other stateless editors like Emacs, Nano or WordStar
-  - profiles per file extension or group of file extensions: You can setup the handling of code files depending of the code you edit
-  - color theme loading and saving from file extension profiles
-  - automatic language detection with syntax highlighting
-  - automatic multi-level graphical code folding
-  - smart indenting and undenting
-  - Myers file compare with colored hunks and bi-directional edit function
-  - internal git changes display
-  - printing via PDF exports
-  - line drawing inside your documents with boxes and single and double line auto connecting drawing
-  - acquire files from the output of shell commands or pipes
-  - compiler profiles with automatic setup and error tracking in code
-  - GDB integration for many languages with visual debugging inside mr including stepping, variable mutation, watches, integrated ANSI/VT terminal and many more
-  - MULTI-THREADED DEBUGGING: follow the execution path into threads, use scope aware variable and watches panes, context switching, threaded breakpoints and multiple side-by-side pane based synchronized source view for selected threads
-  - in editor library API reference
-  - coding snippets
-  - hex editors with synchonous hex, dec, oct, strings and binary view plus additional data inspector
-  - a vast range of configuration options for your UX
-  - and many, many more features
+- American Cybernetics (the makers of Multi-Edit) went out of business in 2020, having stopped development of the TUI version of Multi-Edit years earlier.
+- mr is a rewrite of American Cybernetics' classic programmer's editor, Multi-Edit, for Linux terminals.
+- mr is built around a macro language processor that compiles macro files based on the MEMAC scripting language. Now called MRMAC, the language retains source compatibility with the MEMAC dialect while being updated and extended for modern systems. Compilation takes place in RAM through the custom mrmac compiler, with support for both precompiled macros and macros compiled on demand for maximum speed. One of the screenshots shows mr running a calculator utility written in MRMAC.
+- mr uses:
+  - TVISION, magiblot's C++ rewrite of Turbo Vision on GitHub.
+  - Advanced data structures such as piece tables, add buffers, and tries to edit files larger than system memory and provide blazing-fast file I/O: it loads 1 GB of text in under one second and indexes the entire text in under 800 milliseconds (no BS).
+  - A built-in coprocessor for running mrmac bytecode macros that can manipulate text while the user edits text in the same window. The coprocessor supports multiple macro jobs running in parallel across different windows, within a single window, or both at the same time. It uses multiple execution lanes in parallel: I/O, COMPUTE, MACRO, and MINIMAP.
+  - A built-in virtual machine to execute MRMAC macros as precompiled bytecode.
+  - ncursesw, with support for UTF-8.
+- mr supports:
+  - Automatic syntax highlighting, code folding, and smart indentation for all known programming languages.
+  - A macro manager for recording macros and binding them to hotkeys. You can create, manage, edit, and bind .mrmac files within the manager.
+  - Virtual desktops.
+  - Workspaces: loading, saving, automatic loading and saving, and workspace-wide search and replace across multiple files.
+  - A window manager that can tile, minimize, cascade, close, hide, show, save, and discard windows.
+  - Recursive search and replace across multiple files.
+  - Full support for Perl-compatible regular expressions through PCRE2.
+  - A minimap display with subcharacter resolution.
+  - Copy and paste between windows and through the operating system clipboard.
+  - Stream, line, and column blocks, including sorting within the selected block.
+  - A key mapping manager and loadable key mappings to emulate editors such as Emacs, Nano, or WordStar.
+  - Profiles for individual file extensions or groups of extensions, allowing you to configure file handling for the code you edit.
+  - Loading and saving color themes through file extension profiles.
+  - Automatic language detection with syntax highlighting.
+  - Automatic graphical code folding at multiple levels.
+  - Smart indentation and unindentation.
+  - Myers file comparison with colored hunks and editing in both directions.
+  - An integrated display of Git changes.
+  - Printing through PDF export.
+  - Line drawing within documents, including boxes and single or double lines that connect automatically.
+  - File acquisition from the output of shell commands or pipes.
+  - Compiler profiles with automatic setup and error tracking in the source code.
+  - GDB integration for many languages, with visual debugging inside mr, including stepping, variable editing, watches, an integrated ANSI/VT terminal, and much more.
+  - MULTITHREADED DEBUGGING: follow execution into threads, use scope-aware Variables and Watches panes, switch contexts, use breakpoints while debugging threads, and view synchronized source panes side by side for selected threads.
+  - An in-editor library API reference.
+  - Code snippets.
+  - Hex editors with synchronized hexadecimal, decimal, octal, string, and binary views, plus an additional data inspector.
+  - A wide range of configuration options for your user experience.
+  - Many, many more features.
 
 ## Why? Who needs this?
 
-- noone needs this - there are many good TUI editors out there
-- everybody needs this - because none of the console editors around are this elegant and feature rich. Mr tries to be around in every situation you're in need of a TUI editor to manage your system, files and codebases or want an editor with IDE features in your terminal
-- why you ask? I always wanted Multi-Edit back - but only the TUI version inspired me back in the days. I had ideas for this project for years and after i retired in 2024 i had time to export all of these ideas out of my head and into code. I wanted to test what all the fuzz is about with AI and coding assistants - except I was and am not interested in vibe coding, I wanted assistance for the tedious parts. Tried several coding assistants and found Codex to best meet my needs and style of interacting
+- No one needs this: there are many good TUI editors out there.
+- Everybody needs this: none of the console editors around are this elegant and feature-rich. mr aims to be there whenever you need a TUI editor to manage your system, files, and codebases, or want IDE features in your terminal.
+- Why, you ask? I always wanted Multi-Edit back, and it was the TUI version that inspired me back in the day. I had ideas for this project for years. After I retired in 2024, I had time to get those ideas out of my head and into code. I wanted to see what all the fuss over AI and coding assistants was about. I wanted assistance with the tedious parts; I was not interested in vibe coding, and I still am not. I tried several coding assistants and found that Codex best matched my needs and preferred way of interacting.
 
 ## Showtime
 
@@ -107,7 +107,7 @@ An explanation of MR's architecture and engineering decisions, including large-f
     <td width="50%"><img src="documentation/pngsjpegs/readme-macro-debugger.png" alt="MRMAC debugger session" title="A paused MRMAC session with source position, execution state, call stack, variables, watches, and step controls." width="100%"></td>
   </tr>
   <tr>
-    <td width="50%"><img src="documentation/pngsjpegs/Bildschirmfoto_20260902_175215.png" alt="MRMAC GDB integration" title="MR debugs C inferior with variabl mutation, integrated terminal breakpoints and more" width="100%"></td>
+    <td width="50%"><img src="documentation/pngsjpegs/Bildschirmfoto_20260902_175215.png" alt="MRMAC GDB integration" title="MR debugs a C inferior with variable editing, an integrated terminal, breakpoints, and more." width="100%"></td>
 
   </tr>
 </table>
