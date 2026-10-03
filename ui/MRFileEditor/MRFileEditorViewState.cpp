@@ -108,12 +108,13 @@ void MRFileEditor::restoreCursorViewState(std::size_t lineIndex, int visualColum
 	const std::size_t lineStart = mBufferModel.lineStartByIndex(documentLine);
 	const std::size_t targetOffset = charPtrOffset(lineStart, targetColumn);
 
-	delta.x = std::max(0, delta.x);
-	delta.y = std::max(0, targetLine);
 	mBufferModel.setCursorAndSelection(targetOffset, targetOffset, targetOffset);
 	mSelectionAnchor = targetOffset;
 	mCursorVisualLine = cachedCursorLineIndex();
 	mCursorVisualColumn = actualCursorVisualColumn(targetOffset);
+	updateMetrics();
+	scrollTo(std::max(0, delta.x), std::max(0, targetLine));
+	updateIndicator();
 }
 
 void MRFileEditor::refreshViewState() {
