@@ -181,7 +181,21 @@ static PreparedSnippetText expandSnippetDefaults(const MRVMHashStore &localStore
 
 		if (placeholder.type != TYPE_HASH) continue;
 		if (!readHashStringCase(localStore, globalStore, placeholder, "default", defaultText)) continue;
+		const std::size_t added = defaultText.size() > marker.size() ? defaultText.size() - marker.size() : 0;
+		const std::size_t removed = marker.size() > defaultText.size() ? marker.size() - defaultText.size() : 0;
 		while ((pos = prepared.body.find(marker, pos)) != std::string::npos) {
+			const std::size_t markerEnd = pos + marker.size();
+			for (MRSidekickSpan &span : prepared.placeholders) {
+				if (span.start >= markerEnd) {
+					span.start += added;
+					span.start -= removed;
+					span.end += added;
+					span.end -= removed;
+				} else if (span.end >= markerEnd) {
+					span.end += added;
+					span.end -= removed;
+				}
+			}
 			prepared.body.replace(pos, marker.size(), defaultText);
 			prepared.placeholders.push_back(MRSidekickSpan{pos, pos + defaultText.size()});
 			pos += defaultText.size();

@@ -612,11 +612,37 @@ void MRSnippet::commit(MRSidekickEditor &view) {
 	if (!isEditor(&view)) return;
 	MREditWindow *parent = findEditWindowByBufferId(view.mParentBufferId);
 	MRFileEditor *editor = parent != nullptr ? parent->getEditor() : nullptr;
-	const std::string replacement = view.text();
+	if (editor != nullptr && !editor->isReadOnly()) {
+		MREditSetupSettings settings;
+		effectiveEditSetupSettingsForPath(parent->currentFileName(), settings);
+		std::string replacement;
+		int startColumn = editor->charColumn(editor->lineStartOffset(replaceStart), replaceStart) + 1;
 
-	if (editor != nullptr && !editor->isReadOnly() && editor->replaceRangeAndSelect(static_cast<uint>(replaceStart), static_cast<uint>(replaceEnd), replacement.c_str(), static_cast<uint>(replacement.size()))) {
-		const std::size_t cursor = std::min<std::size_t>(replaceStart + replacement.size(), editor->bufferLength());
-		editor->setSelectionOffsets(cursor, cursor, False);
+		for (std::size_t lineIndex = 0; lineIndex < view.mLines.size(); ++lineIndex) {
+			const std::string &line = view.mLines[lineIndex];
+			if (lineIndex != 0) {
+				replacement.push_back('\n');
+				startColumn = 1;
+			}
+			int targetColumn = startColumn;
+			std::size_t indentEnd = 0;
+			while (indentEnd < line.size()) {
+				if (line[indentEnd] == ' ')
+					++targetColumn;
+				else if (line[indentEnd] == '\t')
+					targetColumn = resolvedEditFormatTabDisplayColumn(settings.formatLine, settings.tabSize, settings.leftMargin, settings.rightMargin, targetColumn);
+				else
+					break;
+				++indentEnd;
+			}
+			replacement += buildEditIndentFill(settings, startColumn, targetColumn, settings.tabExpand);
+			replacement.append(line, indentEnd, std::string::npos);
+		}
+
+		if (editor->replaceRangeAndSelect(static_cast<uint>(replaceStart), static_cast<uint>(replaceEnd), replacement.c_str(), static_cast<uint>(replacement.size()))) {
+			const std::size_t cursor = std::min<std::size_t>(replaceStart + replacement.size(), editor->bufferLength());
+			editor->setSelectionOffsets(cursor, cursor, False);
+		}
 	}
 	view.closeSidekick(cmOK);
 }
