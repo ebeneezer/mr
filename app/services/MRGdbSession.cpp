@@ -275,8 +275,8 @@ std::vector<MRGdbMiVariable> GdbProcess::variables(bool watch) const {
 		variable.identity = store.read(item.hashHandle, "identity").s;
 		variable.name = store.read(item.hashHandle, "name").s;
 		variable.value = store.read(item.hashHandle, "value").s;
-		if (store.contains(item.hashHandle, "hexadecimal")) variable.formats += "  hex: " + store.read(item.hashHandle, "hexadecimal").s;
-		if (store.contains(item.hashHandle, "binary")) variable.formats += "  bin: 0b" + store.read(item.hashHandle, "binary").s;
+		if (store.contains(item.hashHandle, "hexadecimal")) variable.formats += "  " + store.read(item.hashHandle, "hexadecimal").s;
+		if (store.contains(item.hashHandle, "binary")) variable.formats += "  0b" + store.read(item.hashHandle, "binary").s;
 		variable.type = store.read(item.hashHandle, "type").s;
 		variable.objectName = store.read(item.hashHandle, "objectName").s;
 		variable.parentObjectName = store.read(item.hashHandle, "parentObjectName").s;
