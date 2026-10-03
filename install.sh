@@ -2,7 +2,7 @@
 
 set -eu
 
-release_version="0.3.3"
+release_version="0.3.4"
 release_epoch="@MR_RELEASE_EPOCH@"
 prefix="/usr/local"
 
