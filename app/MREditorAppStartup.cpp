@@ -48,6 +48,7 @@
 #include "MRFunctionKeyBindings.hpp"
 #include "MRMenuFactory.hpp"
 #include "MRUpdate.hpp"
+#include "MRVersion.hpp"
 #include "MRPrivilegedFileBroker.hpp"
 #include "MRRuntimeScheduler.hpp"
 #include <ctime>
@@ -710,4 +711,6 @@ MREditorApp::MREditorApp() : TProgInit(&MREditorApp::initMRStatusLine, &MREditor
 		line << "Bootstrap total took_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startupStartedAt).count() << ".";
 		mrLogMessage(line.str().c_str());
 	}
+	if (updateForcesWorkspaceRestore)
+		mr::messageline::postTimed(mr::messageline::Owner::ApplicationUpdate, "MR " + std::string(mrDisplayVersion()) + " ready.", mr::messageline::Kind::Success, std::chrono::seconds(7), mr::messageline::kPriorityHigh);
 }
