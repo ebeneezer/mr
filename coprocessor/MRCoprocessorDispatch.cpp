@@ -730,6 +730,8 @@ void handleCoprocessorResult(const mr::coprocessor::Result &result) {
 			if (!finished->signaled && finished->exitCode == 0) playAudioSignal(finished->successAudioUri);
 			else
 				playAudioSignal(finished->failureAudioUri);
+			if (!finished->buildSourcePath.empty() && !result.cancelled() && !result.failed() && !finished->signaled && finished->exitCode == 0)
+				mr::messageline::postAutoTimed(mr::messageline::Owner::Build, "build successful", mr::messageline::Kind::Success, mr::messageline::kPriorityHigh);
 			runExternalIoPostBuildMacro(result, *finished);
 			if (finished->debuggerContinuation != mr::coprocessor::BuildDebuggerContinuation::None && !result.cancelled() && !result.failed() && !finished->signaled && finished->exitCode == 0)
 				static_cast<void>(mrContinueDebuggerAfterBuild(*finished));

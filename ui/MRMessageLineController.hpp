@@ -29,6 +29,7 @@ enum class Owner : unsigned char {
 	HexEditor,
 	WorkspaceRestore,
 	ApplicationUpdate,
+	Build,
 	Count
 };
 
