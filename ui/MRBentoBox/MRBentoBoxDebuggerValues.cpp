@@ -392,6 +392,7 @@ std::vector<MRBentoBox::GdbDebuggerVariableRow> MRBentoBox::readGdbDebuggerRows(
 		row.expression = store.read(item.hashHandle, "expression").s;
 		row.objectName = store.read(item.hashHandle, "objectName").s;
 		row.value = store.read(item.hashHandle, "value").s;
+		if (store.contains(item.hashHandle, "formats")) row.formats = store.read(item.hashHandle, "formats").s;
 		row.changed = store.read(item.hashHandle, "changed").i != 0;
 		rows.push_back(std::move(row));
 	}
@@ -420,6 +421,7 @@ void MRBentoBox::writeGdbDebuggerRows(bool watches, const std::vector<GdbDebugge
 		store.write(item.hashHandle, "expression", mrvmMakeString(row.expression));
 		store.write(item.hashHandle, "objectName", mrvmMakeString(row.objectName));
 		store.write(item.hashHandle, "value", mrvmMakeString(row.value));
+		if (!row.formats.empty()) store.write(item.hashHandle, "formats", mrvmMakeString(row.formats));
 		store.write(item.hashHandle, "changed", mrvmMakeInt(row.changed));
 	}
 }
@@ -450,6 +452,7 @@ void MRBentoBox::refreshGdbDebuggerValues(const MRGdbEvent &event) {
 		row.expression = parent == std::string::npos ? (event.text + ":" + (watches ? variable.identity : variable.name)) : rows[parent].expression + "/" + variable.name;
 		row.objectName = variable.objectName;
 		row.value = variable.value;
+		row.formats = variable.formats;
 		if (row.arrayOwner != std::string::npos) {
 			const std::size_t quote = row.value.find(" '");
 			if (quote != std::string::npos && quote > 0 && row.value.find_first_not_of("-0123456789") == quote)
@@ -469,7 +472,7 @@ void MRBentoBox::refreshGdbDebuggerValues(const MRGdbEvent &event) {
 			row.start = old.start;
 			row.end = old.end;
 			row.valueStart = old.valueStart;
-			row.changed = old.value != row.value;
+			row.changed = old.value != row.value || old.formats != row.formats;
 		}
 		parents[depth] = rows.size();
 		parentArrays[depth] = variable.childCount > 0 && !variable.type.empty() && variable.type.back() == ']';
@@ -494,7 +497,7 @@ void MRBentoBox::layoutGdbDebuggerValues(bool watches, bool valuesChanged) {
 	std::vector<std::size_t> arrayIndexWidths(rows.size(), 0);
 	for (const GdbDebuggerVariableRow &row : rows) {
 		if (row.arrayOwner == std::string::npos) continue;
-		arrayValueWidths[row.arrayOwner] = std::max(arrayValueWidths[row.arrayOwner], strwidth(row.value.c_str()));
+		arrayValueWidths[row.arrayOwner] = std::max(arrayValueWidths[row.arrayOwner], strwidth(row.value.c_str()) + strwidth(row.formats.c_str()));
 		const std::size_t index = row.expression.rfind('/');
 		arrayIndexWidths[row.arrayOwner] = std::max(arrayIndexWidths[row.arrayOwner], row.expression.size() - index - 1);
 	}
@@ -522,6 +525,7 @@ void MRBentoBox::layoutGdbDebuggerValues(bool watches, bool valuesChanged) {
 			text += row.label;
 			row.valueStart = text.size();
 			text += row.value;
+			text += row.formats;
 			row.end = text.size();
 			if (row.changed) changedRanges.emplace_back(row.valueStart, row.end);
 			text += '\n';
@@ -558,9 +562,10 @@ void MRBentoBox::layoutGdbDebuggerValues(bool watches, bool valuesChanged) {
 			GdbDebuggerVariableRow &element = rows[member];
 			if (member != i) text += "  ";
 			element.start = member == i ? lineStart : text.size();
-			text.append(arrayValueWidths[owner] - strwidth(element.value.c_str()), ' ');
+			text.append(arrayValueWidths[owner] - strwidth(element.value.c_str()) - strwidth(element.formats.c_str()), ' ');
 			element.valueStart = text.size();
 			text += element.value;
+			text += element.formats;
 			element.end = text.size();
 			if (element.changed) changedRanges.emplace_back(element.valueStart, element.end);
 		}

@@ -30,6 +30,7 @@ struct MRGdbMiVariable {
 	std::string identity;
 	std::string name;
 	std::string value;
+	std::string formats;
 	std::string type;
 	std::string objectName;
 	std::string parentObjectName;

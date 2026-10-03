@@ -620,6 +620,7 @@ class MRBentoBox : public MREditWindow {
 		std::string expression;
 		std::string objectName;
 		std::string value;
+		std::string formats;
 	};
 
 	MRDebuggerValueInput *debuggerValueInput;

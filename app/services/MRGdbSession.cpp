@@ -58,6 +58,8 @@ enum class PendingMiKind : unsigned char {
 	VariableNames,
 	VariableCreate,
 	VariableChildren,
+	VariableHexadecimal,
+	VariableBinary,
 	VariableAssign,
 	Evaluate,
 	WatchCreate
@@ -74,6 +76,7 @@ struct PendingMiCommand {
 	int line;
 	int depth;
 	std::size_t rowLimit;
+	std::size_t variableIndex = 0;
 	std::uint64_t refreshGeneration;
 	bool watch;
 };
@@ -177,6 +180,8 @@ void GdbProcess::storePending(const std::string &branch, const std::string &key,
 	store.write(item.hashHandle, "line", mrvmMakeInt(pending.line));
 	store.write(item.hashHandle, "depth", mrvmMakeInt(pending.depth));
 	store.write(item.hashHandle, "rowLimit", mrvmMakeString(std::to_string(pending.rowLimit)));
+	if (pending.kind == PendingMiKind::VariableHexadecimal || pending.kind == PendingMiKind::VariableBinary)
+		store.write(item.hashHandle, "variableIndex", mrvmMakeString(std::to_string(pending.variableIndex)));
 	store.write(item.hashHandle, "refreshGeneration", mrvmMakeString(std::to_string(pending.refreshGeneration)));
 	store.write(item.hashHandle, "watch", mrvmMakeInt(pending.watch));
 }
@@ -197,6 +202,8 @@ PendingMiCommand GdbProcess::takePending(const std::string &branch, const std::s
 	pending.line = store.read(item.hashHandle, "line").i;
 	pending.depth = store.read(item.hashHandle, "depth").i;
 	pending.rowLimit = std::strtoull(store.read(item.hashHandle, "rowLimit").s.c_str(), nullptr, 10);
+	if (pending.kind == PendingMiKind::VariableHexadecimal || pending.kind == PendingMiKind::VariableBinary)
+		pending.variableIndex = std::strtoull(store.read(item.hashHandle, "variableIndex").s.c_str(), nullptr, 10);
 	pending.refreshGeneration = std::strtoull(store.read(item.hashHandle, "refreshGeneration").s.c_str(), nullptr, 10);
 	pending.watch = store.read(item.hashHandle, "watch").i != 0;
 	kv.eraseChild(entries, key);
@@ -268,6 +275,8 @@ std::vector<MRGdbMiVariable> GdbProcess::variables(bool watch) const {
 		variable.identity = store.read(item.hashHandle, "identity").s;
 		variable.name = store.read(item.hashHandle, "name").s;
 		variable.value = store.read(item.hashHandle, "value").s;
+		if (store.contains(item.hashHandle, "hexadecimal")) variable.formats += "  hex: " + store.read(item.hashHandle, "hexadecimal").s;
+		if (store.contains(item.hashHandle, "binary")) variable.formats += "  bin: 0b" + store.read(item.hashHandle, "binary").s;
 		variable.type = store.read(item.hashHandle, "type").s;
 		variable.objectName = store.read(item.hashHandle, "objectName").s;
 		variable.parentObjectName = store.read(item.hashHandle, "parentObjectName").s;
@@ -384,6 +393,9 @@ void requestStoppedState(GdbProcess &process, bool nextThread = false) {
 	process.setNumber("variableRefreshGeneration", process.number("variableRefreshGeneration") + 1);
 	process.setNumber("variableOutstanding", 0);
 	process.write("variableChildrenRunning", mrvmMakeInt(false));
+	process.setNumber("variableFormatIndex", 0);
+	process.write("variableFormatWatches", mrvmMakeInt(false));
+	process.write("variableFormatsComplete", mrvmMakeInt(false));
 	PendingMiCommand frame;
 	frame.kind = PendingMiKind::FrameDepth;
 	frame.refreshGeneration = process.number("variableRefreshGeneration");
@@ -529,7 +541,7 @@ void persistBreakpointMutation(const GdbProcess &process, const PendingMiCommand
 }
 
 bool variableRefreshCommand(PendingMiKind kind) noexcept {
-	return kind == PendingMiKind::FrameDepth || kind == PendingMiKind::WatchCreate || kind == PendingMiKind::VariableNames || kind == PendingMiKind::VariableCreate || kind == PendingMiKind::VariableChildren;
+	return kind == PendingMiKind::FrameDepth || kind == PendingMiKind::WatchCreate || kind == PendingMiKind::VariableNames || kind == PendingMiKind::VariableCreate || kind == PendingMiKind::VariableChildren || kind == PendingMiKind::VariableHexadecimal || kind == PendingMiKind::VariableBinary;
 }
 
 void appendVariableTree(const std::string &parentObjectName, const std::vector<MRGdbMiVariable> &source, std::vector<MRGdbMiVariable> &target, std::set<std::string> &visited) {
@@ -541,7 +553,7 @@ void appendVariableTree(const std::string &parentObjectName, const std::vector<M
 }
 
 void postVariableProjectionIfComplete(GdbProcess &process, const mr::coprocessor::TaskInfo &info, std::size_t sourceId, int targetBufferId, std::uint64_t generation) {
-	if (process.number("variableOutstanding") != 0 || process.read("variableChildrenRunning").i || (process.number("expansionHead") != process.number("expansionTail"))) return;
+	if (process.number("variableOutstanding") != 0 || process.read("variableChildrenRunning").i || (process.number("expansionHead") != process.number("expansionTail")) || !process.read("variableFormatsComplete").i) return;
 	MRGdbEvent event;
 	std::set<std::string> visited;
 	event.kind = MRGdbEventKind::Variables;
@@ -583,11 +595,58 @@ void dispatchNextVariableChildren(GdbProcess &process) {
 	}
 }
 
+void requestVariableFormats(GdbProcess &process) {
+	if (process.number("variableOutstanding") != 0 || process.read("variableChildrenRunning").i || process.number("expansionHead") != process.number("expansionTail")) return;
+	while (process.number("variableOutstanding") < 32) {
+		const bool watches = process.read("variableFormatWatches").i != 0;
+		const std::size_t index = process.number("variableFormatIndex");
+		const std::size_t count = process.number(watches ? "watchVariableCount" : "localVariableCount");
+		if (index >= count) {
+			if (watches) {
+				process.write("variableFormatsComplete", mrvmMakeInt(true));
+				return;
+			}
+			process.write("variableFormatWatches", mrvmMakeInt(true));
+			process.setNumber("variableFormatIndex", 0);
+			continue;
+		}
+		process.setNumber("variableFormatIndex", index + 1);
+		std::string objectName;
+		{
+			std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+			MRVMRuntimeKv &kv = mrvmRuntimeKv();
+			MRVMHashStore &store = kv.globalStore();
+			VirtualMachine::Value entries, item;
+			if (!kv.findChild(process.threadFrame(), watches ? "watchVariables" : "localVariables", entries) || !kv.findChild(entries, std::to_string(index), item)) continue;
+			const std::string value = store.read(item.hashHandle, "value").s;
+			const std::string type = store.read(item.hashHandle, "type").s;
+			const int children = store.read(item.hashHandle, "childCount").i;
+			if (value.empty() || type.empty() || value.front() == '{' || value.front() == '"' || value.front() == '<' || type.back() == ']') continue;
+			if (children != 0 && value.rfind("0x", 0) != 0) continue;
+			objectName = store.read(item.hashHandle, "objectName").s;
+		}
+		if (objectName.empty()) continue;
+		PendingMiCommand hexadecimal;
+		hexadecimal.kind = PendingMiKind::VariableHexadecimal;
+		hexadecimal.objectName = objectName;
+		hexadecimal.variableIndex = index;
+		hexadecimal.watch = watches;
+		hexadecimal.refreshGeneration = process.number("variableRefreshGeneration");
+		PendingMiCommand binary = hexadecimal;
+		binary.kind = PendingMiKind::VariableBinary;
+		if (sendMi(process, "-var-evaluate-expression -f hexadecimal " + objectName, std::move(hexadecimal)) != 0)
+			process.setNumber("variableOutstanding", process.number("variableOutstanding") + 1);
+		if (sendMi(process, "-var-evaluate-expression -f binary " + objectName, std::move(binary)) != 0)
+			process.setNumber("variableOutstanding", process.number("variableOutstanding") + 1);
+	}
+}
+
 void finishVariableCommand(GdbProcess &process, const PendingMiCommand &pending, const mr::coprocessor::TaskInfo &info, std::size_t sourceId, int targetBufferId, std::uint64_t generation) {
 	if (!variableRefreshCommand(pending.kind) || pending.refreshGeneration != process.number("variableRefreshGeneration")) return;
 	if (pending.kind == PendingMiKind::VariableChildren) process.write("variableChildrenRunning", mrvmMakeInt(false));
 	if (process.number("variableOutstanding") > 0) process.setNumber("variableOutstanding", process.number("variableOutstanding") - 1);
 	dispatchNextVariableChildren(process);
+	requestVariableFormats(process);
 	postVariableProjectionIfComplete(process, info, sourceId, targetBufferId, generation);
 }
 
@@ -670,6 +729,10 @@ void handleMiRecord(GdbProcess &process, const MRGdbMiRecord &record, const mr::
 	if (pending.kind == PendingMiKind::BreakpointMutation && pending.text == "restore" && process.number("breakpointRestores") > 0)
 		process.setNumber("breakpointRestores", process.number("breakpointRestores") - 1);
 	if (record.resultClass == "error") {
+		if (pending.kind == PendingMiKind::VariableHexadecimal || pending.kind == PendingMiKind::VariableBinary) {
+			finishVariableCommand(process, pending, info, sourceId, targetBufferId, generation);
+			return;
+		}
 		if (pending.kind == PendingMiKind::ToggleQuery || pending.kind == PendingMiKind::BreakpointAssertQuery || pending.kind == PendingMiKind::BreakpointMutation)
 			process.write("pendingExecution", mrvmMakeInt(0));
 		if (pending.kind == PendingMiKind::ToggleQuery || pending.kind == PendingMiKind::BreakpointAssertQuery ||
@@ -830,6 +893,21 @@ void handleMiRecord(GdbProcess &process, const MRGdbMiRecord &record, const mr::
 					process.appendVariable(child, pending.watch);
 					if (requestChildren) requestVariableChildren(process, objectName, pending.depth + 1, pending.watch);
 				}
+			}
+			finishVariableCommand(process, pending, info, sourceId, targetBufferId, generation);
+			break;
+		}
+		case PendingMiKind::VariableHexadecimal:
+		case PendingMiKind::VariableBinary: {
+			const std::string value = mrGdbMiField(record.raw, "value");
+			const bool hexadecimal = pending.kind == PendingMiKind::VariableHexadecimal;
+			if ((hexadecimal && value.rfind("0x", 0) == 0 && value.size() > 2 && value.find_first_not_of("0123456789abcdefABCDEF", 2) == std::string::npos) ||
+			    (!hexadecimal && !value.empty() && value.find_first_not_of("01") == std::string::npos)) {
+				std::lock_guard<std::recursive_mutex> lock(mrvmExecutionMutex());
+				MRVMRuntimeKv &kv = mrvmRuntimeKv();
+				VirtualMachine::Value entries, item;
+				if (kv.findChild(process.threadFrame(), pending.watch ? "watchVariables" : "localVariables", entries) && kv.findChild(entries, std::to_string(pending.variableIndex), item))
+					kv.globalStore().write(item.hashHandle, hexadecimal ? "hexadecimal" : "binary", mrvmMakeString(value));
 			}
 			finishVariableCommand(process, pending, info, sourceId, targetBufferId, generation);
 			break;
