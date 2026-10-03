@@ -17,6 +17,20 @@
 > - "Software is a gas. It expands to fit the container it's in." Nathan Myhrvold
 > - "The three chief virtues of a programmer are: Laziness, Impatience and Hubris." Larry Wall
 
+## Manuals (PDF)
+
+### [MR Users Manual](documentation/manuals/mr-users-manual.pdf)
+
+A practical guide to installing and using MR: editing and navigation, block operations, search and replace, windows and workspaces, configuration, compiler tools, and debugging.
+
+### [MRMAC Reference Manual](documentation/manuals/mr-macro-reference.pdf)
+
+The reference for MR's macro language, covering syntax, data types, commands, functions, and example macros for editor automation and custom user interfaces.
+
+### [MR Technical Manual](documentation/manuals/mr-technical-manual.pdf)
+
+An explanation of MR's architecture and engineering decisions, including large-file editing, document storage, the coprocessor, the MRMAC compiler and virtual machine, and TVision integration.
+
 ## Look at the size of that thing!
 
 - American Cybernetics (makers of Multi-Edit) went out of business in 2020 and stopped development of the TUI version of Multi-Edit years bevor
