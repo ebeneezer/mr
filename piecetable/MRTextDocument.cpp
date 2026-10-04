@@ -723,7 +723,7 @@ bool TextDocument::eraseNoVersionBump(Range range) {
 	std::size_t endIndex = splitAt(bounded.end);
 	if (startIndex < endIndex) mPieces->erase(mPieces->begin() + static_cast<std::ptrdiff_t>(startIndex), mPieces->begin() + static_cast<std::ptrdiff_t>(endIndex));
 	mLength -= bounded.end - bounded.start;
-	compactPieces();
+	mergeAdjacentPiecesAt(startIndex);
 	if (preserveLazyLineIndex) shiftLazyLineIndexForEraseWithoutLineBreak(bounded.start, bounded.length());
 	else
 		invalidateLazyLineIndexFrom(bounded.start);
@@ -749,7 +749,7 @@ bool TextDocument::insertAddSpanNoVersionBump(Offset offset, TextSpan span) {
 	mPieces->insert(mPieces->begin() + static_cast<std::ptrdiff_t>(index), Piece(BufferKind::Add, span));
 
 	mLength += span.length;
-	compactPieces();
+	mergeAdjacentPiecesAt(index);
 	std::string_view inserted(mAddBuffer.text().data() + span.start, span.length);
 	bool insertedLineBreak = false;
 	for (char ch : inserted) {
@@ -766,20 +766,28 @@ bool TextDocument::insertAddSpanNoVersionBump(Offset offset, TextSpan span) {
 	return true;
 }
 
-void TextDocument::compactPieces() {
-	std::vector<Piece> compacted;
-	compacted.reserve(pieceCount());
+void TextDocument::mergeAdjacentPiecesAt(std::size_t index) {
+	if (mPieces == nullptr || mPieces->empty()) return;
+	if (index >= mPieces->size()) index = mPieces->size() - 1;
 
-	if (mPieces != nullptr)
-		for (const auto &piece : *mPieces) {
-			if (piece.empty()) continue;
-			if (!compacted.empty() && compacted.back().source == piece.source && compacted.back().span.end() == piece.span.start) {
-				compacted.back().span.length += piece.span.length;
-			} else
-				compacted.push_back(piece);
+	if (index > 0) {
+		Piece &left = (*mPieces)[index - 1];
+		const Piece &right = (*mPieces)[index];
+		if (left.source == right.source && left.span.end() == right.span.start) {
+			left.span.length += right.span.length;
+			mPieces->erase(mPieces->begin() + static_cast<std::ptrdiff_t>(index));
+			--index;
 		}
+	}
 
-	mPieces->swap(compacted);
+	if (index + 1 < mPieces->size()) {
+		Piece &left = (*mPieces)[index];
+		const Piece &right = (*mPieces)[index + 1];
+		if (left.source == right.source && left.span.end() == right.span.start) {
+			left.span.length += right.span.length;
+			mPieces->erase(mPieces->begin() + static_cast<std::ptrdiff_t>(index + 1));
+		}
+	}
 }
 
 } // namespace editor

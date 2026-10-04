@@ -628,7 +628,7 @@ class TextDocument {
 	std::size_t splitAt(Offset offset);
 	bool eraseNoVersionBump(Range range);
 	bool insertAddSpanNoVersionBump(Offset offset, TextSpan span);
-	void compactPieces();
+	void mergeAdjacentPiecesAt(std::size_t index);
 
 	std::shared_ptr<const std::string> mOriginalBuffer;
 	MappedFileSource mMappedOriginal;
