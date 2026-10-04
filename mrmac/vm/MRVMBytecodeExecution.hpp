@@ -43,6 +43,7 @@ class VirtualMachine::BytecodeExecution final {
 	void readInt(int &value);
 	void readDouble(double &value);
 	void readCString(std::string &value);
+	unsigned char readByte();
 	std::vector<Value> popArguments(unsigned char count);
 };
 

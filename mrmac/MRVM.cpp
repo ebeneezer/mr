@@ -280,8 +280,7 @@ VirtualMachine::Value VirtualMachine::pop() {
 		return value;
 	}
 
-	appendLogLine("VM Error: Stack underflow.", true);
-	return mrvmMakeInt(0);
+	throw std::runtime_error("Stack underflow.");
 }
 
 int mrvmUiCurrentWindowIndex(const void *windowKey) {

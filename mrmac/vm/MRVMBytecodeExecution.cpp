@@ -40,22 +40,33 @@ VirtualMachine::BytecodeExecution::BytecodeExecution(VirtualMachine &machine, co
 }
 
 void VirtualMachine::BytecodeExecution::readInt(int &value) {
+	if (ip > length || sizeof(value) > length - ip) throw std::runtime_error("Malformed bytecode: truncated integer.");
 	std::memcpy(&value, &bytecode[ip], sizeof(int));
 	ip += sizeof(int);
 }
 
 void VirtualMachine::BytecodeExecution::readDouble(double &value) {
+	if (ip > length || sizeof(value) > length - ip) throw std::runtime_error("Malformed bytecode: truncated real.");
 	std::memcpy(&value, &bytecode[ip], sizeof(double));
 	ip += sizeof(double);
 }
 
 void VirtualMachine::BytecodeExecution::readCString(std::string &value) {
-	const char *text = reinterpret_cast<const char *>(&bytecode[ip]);
-	value = text;
-	ip += value.size() + 1;
+	if (ip >= length) throw std::runtime_error("Malformed bytecode: missing string.");
+	const unsigned char *end = static_cast<const unsigned char *>(std::memchr(bytecode + ip, 0, length - ip));
+	if (end == nullptr) throw std::runtime_error("Malformed bytecode: unterminated string.");
+	const std::size_t size = static_cast<std::size_t>(end - (bytecode + ip));
+	value.assign(reinterpret_cast<const char *>(bytecode + ip), size);
+	ip += size + 1;
+}
+
+unsigned char VirtualMachine::BytecodeExecution::readByte() {
+	if (ip >= length) throw std::runtime_error("Malformed bytecode: missing operand.");
+	return bytecode[ip++];
 }
 
 std::vector<VirtualMachine::Value> VirtualMachine::BytecodeExecution::popArguments(unsigned char count) {
+	if (vm.stack.size() < count) throw std::runtime_error("Stack underflow.");
 	std::vector<Value> args;
 	args.reserve(count);
 	for (unsigned char i = 0; i < count; ++i)
@@ -225,7 +236,7 @@ void VirtualMachine::BytecodeExecution::run() {
 				} break;
 				case OP_DEF_VAR: {
 					std::string varName;
-					int varType = static_cast<int>(bytecode[ip++]);
+					int varType = static_cast<int>(readByte());
 					Value value;
 					readCString(varName);
 					if (!vm.mClosureId.empty()) {
@@ -272,7 +283,7 @@ void VirtualMachine::BytecodeExecution::run() {
 				} break;
 				case OP_STORE_VAR: {
 					std::string varName;
-					int targetType = static_cast<int>(bytecode[ip++]);
+					int targetType = static_cast<int>(readByte());
 					readCString(varName);
 					Value value = mrvmCoerceForStore(vm.pop(), targetType);
 					if (value.type == TYPE_STR) mrvmEnforceStringLength(value.s);
@@ -380,9 +391,11 @@ void VirtualMachine::BytecodeExecution::run() {
 					ip = static_cast<size_t>(target);
 				} break;
 				case OP_CALL: {
+					constexpr std::size_t maxCallDepth = 4096;
 					int target;
 					readInt(target);
 					if (target < 0 || static_cast<size_t>(target) >= length) throw std::runtime_error("Invalid jump target in CALL.");
+					if (callStack.size() >= maxCallDepth) throw std::runtime_error("Call stack overflow.");
 					callStack.push_back(ip);
 					ip = static_cast<size_t>(target);
 				} break;
@@ -409,8 +422,11 @@ void VirtualMachine::BytecodeExecution::run() {
 						vm.push(mrvmMakeString(s));
 					} else if (mrvmIsNumeric(a) && mrvmIsNumeric(b)) {
 						if (a.type == TYPE_REAL || b.type == TYPE_REAL) vm.push(mrvmMakeReal(mrvmValueAsReal(a) + mrvmValueAsReal(b)));
-						else
-							vm.push(mrvmMakeInt(a.i + b.i));
+						else {
+							int result;
+							if (__builtin_add_overflow(a.i, b.i, &result)) throw std::runtime_error("Integer overflow.");
+							vm.push(mrvmMakeInt(result));
+						}
 					} else
 						throw std::runtime_error(MRConstants::kErrorTypeMismatch);
 				} break;
@@ -419,16 +435,22 @@ void VirtualMachine::BytecodeExecution::run() {
 					Value a = vm.pop();
 					if (!mrvmIsNumeric(a) || !mrvmIsNumeric(b)) throw std::runtime_error(MRConstants::kErrorTypeMismatch);
 					if (a.type == TYPE_REAL || b.type == TYPE_REAL) vm.push(mrvmMakeReal(mrvmValueAsReal(a) - mrvmValueAsReal(b)));
-					else
-						vm.push(mrvmMakeInt(a.i - b.i));
+					else {
+						int result;
+						if (__builtin_sub_overflow(a.i, b.i, &result)) throw std::runtime_error("Integer overflow.");
+						vm.push(mrvmMakeInt(result));
+					}
 				} break;
 				case OP_MUL: {
 					Value b = vm.pop();
 					Value a = vm.pop();
 					if (!mrvmIsNumeric(a) || !mrvmIsNumeric(b)) throw std::runtime_error(MRConstants::kErrorTypeMismatch);
 					if (a.type == TYPE_REAL || b.type == TYPE_REAL) vm.push(mrvmMakeReal(mrvmValueAsReal(a) * mrvmValueAsReal(b)));
-					else
-						vm.push(mrvmMakeInt(a.i * b.i));
+					else {
+						int result;
+						if (__builtin_mul_overflow(a.i, b.i, &result)) throw std::runtime_error("Integer overflow.");
+						vm.push(mrvmMakeInt(result));
+					}
 				} break;
 				case OP_DIV: {
 					Value b = vm.pop();
@@ -436,22 +458,27 @@ void VirtualMachine::BytecodeExecution::run() {
 					if (!mrvmIsNumeric(a) || !mrvmIsNumeric(b)) throw std::runtime_error(MRConstants::kErrorTypeMismatch);
 					if ((b.type == TYPE_REAL && b.r == 0.0) || (b.type == TYPE_INT && b.i == 0)) throw std::runtime_error("Division by zero.");
 					if (a.type == TYPE_REAL || b.type == TYPE_REAL) vm.push(mrvmMakeReal(mrvmValueAsReal(a) / mrvmValueAsReal(b)));
-					else
+					else {
+						if (a.i == std::numeric_limits<int>::min() && b.i == -1) throw std::runtime_error("Integer overflow.");
 						vm.push(mrvmMakeInt(a.i / b.i));
+					}
 				} break;
 				case OP_MOD: {
 					Value b = vm.pop();
 					Value a = vm.pop();
 					if (a.type != TYPE_INT || b.type != TYPE_INT) throw std::runtime_error(MRConstants::kErrorTypeMismatch);
 					if (b.i == 0) throw std::runtime_error("Modulo by zero.");
+					if (a.i == std::numeric_limits<int>::min() && b.i == -1) throw std::runtime_error("Integer overflow.");
 					vm.push(mrvmMakeInt(a.i % b.i));
 				} break;
 				case OP_NEG: {
 					Value a = vm.pop();
 					if (!mrvmIsNumeric(a)) throw std::runtime_error(MRConstants::kErrorTypeMismatch);
 					if (a.type == TYPE_REAL) vm.push(mrvmMakeReal(-a.r));
-					else
+					else {
+						if (a.i == std::numeric_limits<int>::min()) throw std::runtime_error("Integer overflow.");
 						vm.push(mrvmMakeInt(-a.i));
+					}
 				} break;
 				case OP_CMP_EQ:
 				case OP_CMP_NE:
@@ -504,12 +531,17 @@ void VirtualMachine::BytecodeExecution::run() {
 				case OP_SHL: {
 					Value b = vm.pop();
 					Value a = vm.pop();
-					vm.push(mrvmMakeInt(mrvmValueAsInt(a) << mrvmValueAsInt(b)));
+					const int count = mrvmValueAsInt(b);
+					if (count < 0 || count >= std::numeric_limits<unsigned int>::digits) throw std::runtime_error("Invalid shift count.");
+					const unsigned int bits = static_cast<unsigned int>(mrvmValueAsInt(a)) << count;
+					vm.push(mrvmMakeInt(static_cast<int>(bits)));
 				} break;
 				case OP_SHR: {
 					Value b = vm.pop();
 					Value a = vm.pop();
-					vm.push(mrvmMakeInt(mrvmValueAsInt(a) >> mrvmValueAsInt(b)));
+					const int count = mrvmValueAsInt(b);
+					if (count < 0 || count >= std::numeric_limits<unsigned int>::digits) throw std::runtime_error("Invalid shift count.");
+					vm.push(mrvmMakeInt(mrvmValueAsInt(a) >> count));
 				} break;
 				case OP_BIT_AND: {
 					Value b = vm.pop();
@@ -529,7 +561,7 @@ void VirtualMachine::BytecodeExecution::run() {
 				case OP_INTRINSIC: {
 					std::string name;
 					readCString(name);
-					unsigned char argc = bytecode[ip++];
+					unsigned char argc = readByte();
 					std::vector<Value> args = popArguments(argc);
 					vm.push(intrinsics.apply(name, args));
 				} break;
@@ -609,7 +641,7 @@ void VirtualMachine::BytecodeExecution::run() {
 					unsigned char varArgc = 0;
 					std::map<std::string, Value>::iterator it;
 					readCString(name);
-					varArgc = bytecode[ip++];
+					varArgc = readByte();
 					if (varArgc == 0 || varArgc > 2) throw std::runtime_error("Malformed variable procedure call.");
 					readCString(varName);
 					if (varArgc > 1) readCString(indexVarName);
@@ -640,7 +672,7 @@ void VirtualMachine::BytecodeExecution::run() {
 				case OP_PROC: {
 					std::string name;
 					readCString(name);
-					unsigned char argc = bytecode[ip++];
+					unsigned char argc = readByte();
 					std::vector<Value> args = popArguments(argc);
 					const InstructionFlow flow = ProcedureExecution(vm, *this).execute(name, args, instructionOffset);
 
