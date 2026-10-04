@@ -182,8 +182,7 @@ int mrvmForkProcess(const std::vector<std::string> &arguments, int ownerBufferId
 			return 0;
 		}
 	}
-	if (::pipe(errorPipe) != 0) return errno != 0 ? errno : 1;
-	(void)::fcntl(errorPipe[1], F_SETFD, FD_CLOEXEC);
+	if (::pipe2(errorPipe, O_CLOEXEC) != 0) return errno != 0 ? errno : 1;
 	childPid = ::fork();
 	if (childPid < 0) {
 		const int savedErrno = errno != 0 ? errno : 1;
@@ -288,7 +287,7 @@ std::string mrvmCommandFirstLine(const std::string &command) {
 	int waitStatus = 0;
 
 	if (command.empty() || shellPath.empty()) return std::string();
-	if (::pipe(pipeFds) != 0) return std::string();
+	if (::pipe2(pipeFds, O_CLOEXEC) != 0) return std::string();
 	childPid = ::fork();
 	if (childPid < 0) {
 		::close(pipeFds[0]);
@@ -502,7 +501,7 @@ MRVMSubshellResult mrvmRunSubshellCapture(const std::string &command, int timeou
 		result.errorLevel = EINVAL;
 		return result;
 	}
-	if (::pipe(pipeFds) != 0) {
+	if (::pipe2(pipeFds, O_CLOEXEC) != 0) {
 		result.errorLevel = errno != 0 ? errno : 1;
 		return result;
 	}

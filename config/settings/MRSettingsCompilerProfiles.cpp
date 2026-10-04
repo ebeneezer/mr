@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <fcntl.h>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -43,7 +44,7 @@ std::vector<std::string> commandLines(const std::string &command) {
 	int waitStatus = 0;
 
 	if (command.empty() || shellPath.empty()) return lines;
-	if (::pipe(pipeFds) != 0) return lines;
+	if (::pipe2(pipeFds, O_CLOEXEC) != 0) return lines;
 	childPid = ::fork();
 	if (childPid < 0) {
 		::close(pipeFds[0]);

@@ -478,7 +478,7 @@ bool applyPackageThroughSudo(const UpdatePackagePayload &package, const std::sha
 		return false;
 	}
 	if (!writeProtocolFile(package, protocolPath, error)) return false;
-	if (::pipe(passwordPipe) != 0 || ::pipe(processOutputPipe) != 0) {
+	if (::pipe2(passwordPipe, O_CLOEXEC) != 0 || ::pipe2(processOutputPipe, O_CLOEXEC) != 0) {
 		if (passwordPipe[0] >= 0) {
 			::close(passwordPipe[0]);
 			::close(passwordPipe[1]);

@@ -346,7 +346,7 @@ mr::coprocessor::Result runExternalCommandTask(const mr::coprocessor::TaskInfo &
 	std::string shellPath;
 
 	result.task = info;
-	if (::pipe(pipeFds) != 0) {
+	if (::pipe2(pipeFds, O_CLOEXEC) != 0) {
 		result.status = mr::coprocessor::TaskStatus::Failed;
 		result.error = std::string("pipe failed: ") + std::strerror(errno);
 		result.payload = makeFinishedPayload(channelId, -1, false, 0, buildContext, successAudioUri, failureAudioUri);

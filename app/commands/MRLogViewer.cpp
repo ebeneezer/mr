@@ -83,7 +83,7 @@ std::vector<std::string> collectJournalSyslogIdentifiers() {
 	std::string output;
 	char buffer[4096];
 
-	if (::pipe(pipeFds) != 0) return identifiers;
+	if (::pipe2(pipeFds, O_CLOEXEC) != 0) return identifiers;
 	pid = ::fork();
 	if (pid == 0) {
 		::close(pipeFds[0]);
@@ -367,7 +367,7 @@ mr::coprocessor::Result runJournalTask(const mr::coprocessor::TaskInfo &info, st
 	result.task = info;
 	result.payload = std::make_shared<mr::coprocessor::ExternalIoFinishedPayload>(sourceId, -1, false, 0, targetBufferId);
 	if (!search.pattern.empty()) compileSearchRegex(buildSearchPatternExpression(search.pattern, search.options.textType), !search.options.caseSensitive, &searchCode, regexError);
-	if (::pipe(pipeFds) != 0) {
+	if (::pipe2(pipeFds, O_CLOEXEC) != 0) {
 		if (searchCode != nullptr) pcre2_code_free(searchCode);
 		result.status = mr::coprocessor::TaskStatus::Failed;
 		result.error = std::string("pipe failed: ") + std::strerror(errno);

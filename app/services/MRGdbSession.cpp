@@ -295,11 +295,6 @@ void closeFd(int &fd) noexcept {
 	fd = -1;
 }
 
-void setCloseOnExec(int fd) noexcept {
-	const int flags = ::fcntl(fd, F_GETFD, 0);
-	if (flags >= 0) static_cast<void>(::fcntl(fd, F_SETFD, flags | FD_CLOEXEC));
-}
-
 void setNonBlocking(int fd) noexcept {
 	const int flags = ::fcntl(fd, F_GETFL, 0);
 	if (flags >= 0) static_cast<void>(::fcntl(fd, F_SETFL, flags | O_NONBLOCK));
@@ -970,7 +965,7 @@ bool startGdbProcess(GdbProcess &process, const std::string &programPath, const 
 		return false;
 	}
 	process.write("sourcePath", mrvmMakeString(sourcePath));
-	if (::pipe(inputPipe) != 0 || ::pipe(outputPipe) != 0 || ::pipe(errorPipe) != 0) {
+	if (::pipe2(inputPipe, O_CLOEXEC) != 0 || ::pipe2(outputPipe, O_CLOEXEC) != 0 || ::pipe2(errorPipe, O_CLOEXEC) != 0) {
 		errorMessage = std::string("Unable to create GDB MI pipes: ") + std::strerror(errno);
 		for (int *pipeFds : {inputPipe, outputPipe, errorPipe}) {
 			if (pipeFds[0] >= 0) ::close(pipeFds[0]);
@@ -979,10 +974,6 @@ bool startGdbProcess(GdbProcess &process, const std::string &programPath, const 
 		closeFd(process.ptyMasterFd);
 		closeFd(process.ptySlaveFd);
 		return false;
-	}
-	for (int *pipeFds : {inputPipe, outputPipe, errorPipe}) {
-		setCloseOnExec(pipeFds[0]);
-		setCloseOnExec(pipeFds[1]);
 	}
 	process.pid = ::fork();
 	if (process.pid < 0) {
@@ -1386,14 +1377,12 @@ bool MRGdbSession::start(const std::string &programPath, const std::string &sour
 	stop();
 	std::shared_ptr<MRGdbControlChannel> channel = std::make_shared<MRGdbControlChannel>();
 	int wakePipe[2] = {-1, -1};
-	if (::pipe(wakePipe) != 0) {
+	if (::pipe2(wakePipe, O_CLOEXEC) != 0) {
 		errorMessage = std::string("Unable to create GDB control pipe: ") + std::strerror(errno);
 		return false;
 	}
 	channel->readFd = wakePipe[0];
 	channel->writeFd = wakePipe[1];
-	setCloseOnExec(channel->readFd);
-	setCloseOnExec(channel->writeFd);
 	setNonBlocking(channel->readFd);
 	setNonBlocking(channel->writeFd);
 	const std::size_t newSourceId = mr::coprocessor::globalCoprocessor().registerExternalSource(mr::coprocessor::ExternalSourceKind::Pipe, "GDB/MI");
