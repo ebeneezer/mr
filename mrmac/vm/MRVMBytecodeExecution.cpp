@@ -219,20 +219,20 @@ void VirtualMachine::BytecodeExecution::run() {
 					int val;
 					readInt(val);
 					vm.push(mrvmMakeInt(val));
-					vm.appendLogLine("Push integer: " + std::to_string(val));
+					if (vm.verboseLogging) vm.appendLogLine("Push integer: " + std::to_string(val));
 				} break;
 				case OP_PUSH_R: {
 					double val;
 					readDouble(val);
 					vm.push(mrvmMakeReal(val));
-					vm.appendLogLine("Push real: " + mrvmValueAsString(mrvmMakeReal(val)));
+					if (vm.verboseLogging) vm.appendLogLine("Push real: " + mrvmValueAsString(mrvmMakeReal(val)));
 				} break;
 				case OP_PUSH_S: {
 					std::string str;
 					readCString(str);
 					mrvmEnforceStringLength(str);
 					vm.push(mrvmMakeString(str));
-					vm.appendLogLine("Push string: " + str);
+					if (vm.verboseLogging) vm.appendLogLine("Push string: " + str);
 				} break;
 				case OP_DEF_VAR: {
 					std::string varName;
@@ -265,7 +265,7 @@ void VirtualMachine::BytecodeExecution::run() {
 						vm.variables[varName] = mrvmMakeHash(vm.mHashStore->createHash());
 					else
 						vm.variables[varName] = mrvmDefaultValueForType(varType);
-					vm.appendLogLine("Define variable: " + varName);
+					if (vm.verboseLogging) vm.appendLogLine("Define variable: " + varName);
 				} break;
 				case OP_LOAD_VAR: {
 					std::string varName;
@@ -279,7 +279,7 @@ void VirtualMachine::BytecodeExecution::run() {
 						if (it == vm.variables.end()) vm.variables[varName] = mrvmMakeInt(0);
 						vm.push(vm.variables[varName]);
 					}
-					vm.appendLogLine("Load variable: " + varName);
+					if (vm.verboseLogging) vm.appendLogLine("Load variable: " + varName);
 				} break;
 				case OP_STORE_VAR: {
 					std::string varName;
@@ -291,7 +291,7 @@ void VirtualMachine::BytecodeExecution::run() {
 					if (!vm.mClosureId.empty() && vm.mClosureVariableNames.find(varName) != vm.mClosureVariableNames.end()) mrvmExecSessionsWriteClosureVariable(mrvmRuntimeKv(), vm.mClosureId, varName, value, *vm.mHashStore);
 					else if (currentExecutionSessionId() != 0 && vm.mSessionVariableNames.find(varName) != vm.mSessionVariableNames.end())
 						mrvmExecSessionsWriteSessionVariable(mrvmRuntimeKv(), currentExecutionSessionId(), varName, value, *vm.mHashStore);
-					vm.appendLogLine("Store variable: " + varName);
+					if (vm.verboseLogging) vm.appendLogLine("Store variable: " + varName);
 				} break;
 				case OP_HASH_LOAD: {
 					std::string varName;
@@ -303,7 +303,7 @@ void VirtualMachine::BytecodeExecution::run() {
 					it = vm.variables.find(varName);
 					if (it == vm.variables.end() || it->second.type != TYPE_HASH) throw std::runtime_error("Invalid hash value.");
 					vm.push(mrvmHashReadValue(*vm.mHashStore, mrvmRuntimeKv().globalStore(), it->second, mrvmValueAsString(key)));
-					vm.appendLogLine("Load hash value: " + varName);
+					if (vm.verboseLogging) vm.appendLogLine("Load hash value: " + varName);
 				} break;
 				case OP_HASH_LOAD_VALUE: {
 					Value key;
@@ -313,7 +313,7 @@ void VirtualMachine::BytecodeExecution::run() {
 					if (hash.type != TYPE_HASH) throw std::runtime_error("Invalid hash value.");
 					if (!mrvmIsStringLike(key)) throw std::runtime_error("type mismatch");
 					vm.push(mrvmHashReadValue(*vm.mHashStore, mrvmRuntimeKv().globalStore(), hash, mrvmValueAsString(key)));
-					vm.appendLogLine("Load hash value from expression.");
+					if (vm.verboseLogging) vm.appendLogLine("Load hash value from expression.");
 				} break;
 				case OP_HASH_STORE: {
 					std::string varName;
@@ -331,7 +331,7 @@ void VirtualMachine::BytecodeExecution::run() {
 					if (!vm.mClosureId.empty() && vm.mClosureVariableNames.find(varName) != vm.mClosureVariableNames.end()) mrvmExecSessionsWriteClosureVariable(mrvmRuntimeKv(), vm.mClosureId, varName, it->second, *vm.mHashStore);
 					else if (currentExecutionSessionId() != 0 && vm.mSessionVariableNames.find(varName) != vm.mSessionVariableNames.end())
 						mrvmExecSessionsWriteSessionVariable(mrvmRuntimeKv(), currentExecutionSessionId(), varName, it->second, *vm.mHashStore);
-					vm.appendLogLine("Store hash value: " + varName);
+					if (vm.verboseLogging) vm.appendLogLine("Store hash value: " + varName);
 				} break;
 				case OP_HASH_STORE_VALUE: {
 					Value value;
@@ -344,7 +344,7 @@ void VirtualMachine::BytecodeExecution::run() {
 					if (!mrvmIsStringLike(key)) throw std::runtime_error("type mismatch");
 					if (value.type == TYPE_STR) mrvmEnforceStringLength(value.s);
 					mrvmHashWriteValue(*vm.mHashStore, mrvmRuntimeKv().globalStore(), hash, mrvmValueAsString(key), value);
-					vm.appendLogLine("Store hash value from expression.");
+					if (vm.verboseLogging) vm.appendLogLine("Store hash value from expression.");
 				} break;
 				case OP_ARRAY_LOAD: {
 					std::string varName;
@@ -356,7 +356,7 @@ void VirtualMachine::BytecodeExecution::run() {
 					it = vm.variables.find(varName);
 					if (it == vm.variables.end() || !mrvmValueIsArrayType(it->second.type)) throw std::runtime_error("Invalid array value.");
 					vm.push(mrvmArrayReadValue(it->second, index.i));
-					vm.appendLogLine("Load array value: " + varName);
+					if (vm.verboseLogging) vm.appendLogLine("Load array value: " + varName);
 				} break;
 				case OP_ARRAY_LOAD_VALUE: {
 					Value index;
@@ -365,7 +365,7 @@ void VirtualMachine::BytecodeExecution::run() {
 					arrayValue = vm.pop();
 					if (index.type != TYPE_INT) throw std::runtime_error("type mismatch");
 					vm.push(mrvmArrayReadValue(arrayValue, index.i));
-					vm.appendLogLine("Load array value from expression.");
+					if (vm.verboseLogging) vm.appendLogLine("Load array value from expression.");
 				} break;
 				case OP_ARRAY_STORE: {
 					std::string varName;
@@ -382,7 +382,7 @@ void VirtualMachine::BytecodeExecution::run() {
 					if (!vm.mClosureId.empty() && vm.mClosureVariableNames.find(varName) != vm.mClosureVariableNames.end()) mrvmExecSessionsWriteClosureVariable(mrvmRuntimeKv(), vm.mClosureId, varName, it->second, *vm.mHashStore);
 					else if (currentExecutionSessionId() != 0 && vm.mSessionVariableNames.find(varName) != vm.mSessionVariableNames.end())
 						mrvmExecSessionsWriteSessionVariable(mrvmRuntimeKv(), currentExecutionSessionId(), varName, it->second, *vm.mHashStore);
-					vm.appendLogLine("Store array value: " + varName);
+					if (vm.verboseLogging) vm.appendLogLine("Store array value: " + varName);
 				} break;
 				case OP_GOTO: {
 					int target;
@@ -680,7 +680,7 @@ void VirtualMachine::BytecodeExecution::run() {
 					if (flow == InstructionFlow::FinishExecution) finishExecution = true;
 				} break;
 				case OP_HALT: {
-					vm.appendLogLine("Program end reached.");
+					if (vm.verboseLogging) vm.appendLogLine("Program end reached.");
 					finishExecution = true;
 					break;
 				} break;
