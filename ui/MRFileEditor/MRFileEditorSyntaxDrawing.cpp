@@ -85,7 +85,7 @@ void MRFileEditor::formatSyntaxLine(TDrawBuffer &b, std::size_t lineStart, std::
 	std::size_t bytePos = 0;
 	int visual = 0;
 	int x = 0;
-	const MREditSetupSettings settings = effectiveEditSetupSettings();
+	const MREditSetupSettings &settings = effectiveEditSetupSettings();
 	const bool displayTabs = configuredDisplayTabs();
 	unsigned char diffLineKind = mrfclkNone;
 	bool diffTextActive = false;
