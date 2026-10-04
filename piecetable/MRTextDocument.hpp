@@ -440,7 +440,7 @@ class ReadSnapshot {
 	[[nodiscard]] Offset length() const noexcept;
 	[[nodiscard]] bool empty() const noexcept;
 	[[nodiscard]] char charAt(Offset pos) const noexcept;
-	[[nodiscard]] std::string text() const;
+	[[nodiscard]] const std::string &text() const;
 
 	[[nodiscard]] bool hasMappedOriginal() const noexcept {
 		return mMappedOriginal.mapped();

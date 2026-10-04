@@ -217,36 +217,41 @@ int currentEditorRow(MRFileEditor *editor) {
 	return editor->currentViewRow();
 }
 
-int currentEditorPage(MRFileEditor *editor) {
-	std::string text = snapshotEditorText(editor);
-	std::size_t end = currentEditorCursorOffset(editor);
-	std::size_t pos = 0;
+static int countEditorPagesBeforeCursor(MRFileEditor *editor, std::size_t &lastBreak) {
+	lastBreak = std::string::npos;
+	BackgroundEditSession *session = currentBackgroundEditSession();
+	if (editor == nullptr && session == nullptr) return 1;
+	const mr::editor::ReadSnapshot snapshot = editor != nullptr ? editor->readSnapshot() : session->document.readSnapshot();
+	const std::size_t end = std::min(currentEditorCursorOffset(editor), snapshot.length());
+	const char pageBreak = configuredPageBreakCharacter();
+	std::size_t offset = 0;
 	int page = 1;
-	char pageBreak = configuredPageBreakCharacter();
 
-	if (end > text.size()) end = text.size();
-
-	while ((pos = text.find(pageBreak, pos)) != std::string::npos && pos < end) {
-		++page;
-		++pos;
+	for (std::size_t i = 0; i < snapshot.pieceCount() && offset < end; ++i) {
+		const mr::editor::PieceChunkView chunk = snapshot.pieceChunk(i);
+		if (chunk.data == nullptr) break;
+		const std::size_t limit = std::min(chunk.length, end - offset);
+		const char *scan = chunk.data;
+		const char *const chunkEnd = chunk.data + limit;
+		while ((scan = static_cast<const char *>(std::memchr(scan, pageBreak, static_cast<std::size_t>(chunkEnd - scan)))) != nullptr) {
+			++page;
+			lastBreak = offset + static_cast<std::size_t>(scan - chunk.data);
+			++scan;
+		}
+		offset += chunk.length;
 	}
 	return page;
 }
 
+int currentEditorPage(MRFileEditor *editor) {
+	std::size_t lastBreak;
+	return countEditorPagesBeforeCursor(editor, lastBreak);
+}
+
 int currentEditorPageLine(MRFileEditor *editor) {
-	std::string text = snapshotEditorText(editor);
-	std::size_t end = currentEditorCursorOffset(editor);
-	std::size_t pos = 0;
-	std::size_t lastBreak = std::string::npos;
-	char pageBreak = configuredPageBreakCharacter();
+	std::size_t lastBreak;
+	countEditorPagesBeforeCursor(editor, lastBreak);
 	int currentLine = currentEditorLineNumber(editor);
-
-	if (end > text.size()) end = text.size();
-
-	while ((pos = text.find(pageBreak, pos)) != std::string::npos && pos < end) {
-		lastBreak = pos;
-		++pos;
-	}
 
 	if (lastBreak == std::string::npos) return currentLine;
 

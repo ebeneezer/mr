@@ -172,7 +172,7 @@ SearchMatchSnapshot currentSearchMatchSnapshot() {
 	BackgroundEditSession *session = currentBackgroundEditSession();
 
 	if (session != nullptr) {
-		const std::string text = session->document.text();
+		const std::string &text = session->document.text();
 		if (!session->lastSearchValid || session->lastSearchEnd < session->lastSearchStart || session->lastSearchEnd > text.size()) return snapshot;
 		snapshot.valid = true;
 		snapshot.fileName = session->fileName;

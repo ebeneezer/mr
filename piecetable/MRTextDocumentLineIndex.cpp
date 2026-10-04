@@ -226,7 +226,7 @@ char ReadSnapshot::charAt(Offset pos) const noexcept {
 	return piecewiseCharAt(*this, pos);
 }
 
-std::string ReadSnapshot::text() const {
+const std::string &ReadSnapshot::text() const {
 	ensureMaterialized();
 	return mMaterializedText;
 }
@@ -538,8 +538,7 @@ ReadSnapshot TextDocument::readSnapshot() const {
 	snapshot.mAddBuffer = mAddBuffer.sharedText();
 	snapshot.mPieces = mPieces;
 	snapshot.mLength = mLength;
-	snapshot.mCacheDirty = mCacheDirty;
-	snapshot.mMaterializedText = mCacheDirty ? std::string() : mMaterializedText;
+	snapshot.mCacheDirty = mLength != 0;
 	snapshot.mLineIndexCheckpoints = mLineIndexCheckpoints;
 	snapshot.mLazyIndexedOffset = mLazyIndexedOffset;
 	snapshot.mLazyIndexedLine = mLazyIndexedLine;

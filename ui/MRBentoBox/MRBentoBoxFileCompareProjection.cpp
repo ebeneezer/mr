@@ -354,7 +354,7 @@ std::shared_ptr<const MRBentoFileCompareAcquisitionPayload> mrBuildBentoFileComp
 	const MRTextBufferModel::ReadSnapshot &snapshot, std::uint64_t generation, bool original,
 	const std::atomic_bool *cancelFlag) {
 	if (projectionCancelled(cancelFlag)) return std::shared_ptr<const MRBentoFileCompareAcquisitionPayload>();
-	std::string text = snapshot.text();
+	const std::string &text = snapshot.text();
 	if (projectionCancelled(cancelFlag)) return std::shared_ptr<const MRBentoFileCompareAcquisitionPayload>();
 	std::shared_ptr<std::vector<std::string>> lines = std::make_shared<std::vector<std::string>>();
 	mr::diff::mrSplitTextLinesForDiff(text, *lines);
