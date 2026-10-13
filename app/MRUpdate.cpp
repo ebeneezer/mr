@@ -272,6 +272,10 @@ bool downloadHttps(CURL *curl, const std::string &url, std::size_t limit, long t
 }
 
 bool downloadSignedManifest(CURL *curl, UpdateManifest &manifest, std::vector<unsigned char> &manifestBytes, std::vector<unsigned char> &signature, std::string &error, const mr::coprocessor::TaskInfo &task) {
+#if defined(__APPLE__)
+	error = "Application updates are not available for macOS.";
+	return false;
+#endif
 	if (!downloadHttps(curl, kLatestManifestUrl, kManifestLimit, 30, manifestBytes, error, task)) return false;
 	if (!downloadHttps(curl, kLatestSignatureUrl, kSignatureLimit, 30, signature, error, task)) return false;
 	if (!verifyManifestSignatureLocal(manifestBytes, signature, error)) return false;
@@ -606,6 +610,11 @@ MRUpdateInternalStartup mrStartInternalUpdateApply(int argc, char **argv, int &e
 	for (int index = 1; argv != nullptr && index < argc; ++index)
 		if (argv[index] != nullptr && std::strcmp(argv[index], mr::update_internal::kInternalApplyOption) == 0) requested = true;
 	if (!requested) return MRUpdateInternalStartup::RunApplication;
+#if defined(__APPLE__)
+	error = "Application updates are not available for macOS.";
+	exitCode = 2;
+	return MRUpdateInternalStartup::Failed;
+#endif
 	if (argc != 3 || argv[2] == nullptr || argv[2][0] != '/') {
 		error = "Internal update mode requires an absolute protocol file path.";
 		exitCode = 2;
@@ -620,6 +629,10 @@ MRUpdateInternalStartup mrStartInternalUpdateApply(int argc, char **argv, int &e
 }
 
 void mrStartAutomaticUpdateCheck() {
+#if defined(__APPLE__)
+	// shortcut: automatic updates remain disabled until signed macOS packages are published.
+	return;
+#endif
 	if (readUpdateInt("busy") != 0) return;
 	storeUpdateInt("available", 0);
 	storeUpdateString("version", "");

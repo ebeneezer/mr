@@ -1833,12 +1833,21 @@ bool handleBuildCurrentFile(mr::coprocessor::BuildDebuggerContinuation debuggerC
 		postDialogWarning(errorText.empty() ? "Pre build macro failed." : errorText);
 		return true;
 	}
+#if defined(__APPLE__)
+	const bool sourceChangedAfterSave = !sourceStatAvailable || ::stat(sourcePath.c_str(), &sourceAfterHook) != 0 ||
+	                                    sourceBeforeHook.st_dev != sourceAfterHook.st_dev || sourceBeforeHook.st_ino != sourceAfterHook.st_ino ||
+	                                    sourceBeforeHook.st_size != sourceAfterHook.st_size ||
+	                                    sourceBeforeHook.st_mtimespec.tv_sec != sourceAfterHook.st_mtimespec.tv_sec || sourceBeforeHook.st_mtimespec.tv_nsec != sourceAfterHook.st_mtimespec.tv_nsec ||
+	                                    sourceBeforeHook.st_ctimespec.tv_sec != sourceAfterHook.st_ctimespec.tv_sec || sourceBeforeHook.st_ctimespec.tv_nsec != sourceAfterHook.st_ctimespec.tv_nsec ||
+	                                    win->getEditor()->documentVersion() != sourceVersionBeforeHook;
+#else
 	const bool sourceChangedAfterSave = !sourceStatAvailable || ::stat(sourcePath.c_str(), &sourceAfterHook) != 0 ||
 	                                    sourceBeforeHook.st_dev != sourceAfterHook.st_dev || sourceBeforeHook.st_ino != sourceAfterHook.st_ino ||
 	                                    sourceBeforeHook.st_size != sourceAfterHook.st_size ||
 	                                    sourceBeforeHook.st_mtim.tv_sec != sourceAfterHook.st_mtim.tv_sec || sourceBeforeHook.st_mtim.tv_nsec != sourceAfterHook.st_mtim.tv_nsec ||
 	                                    sourceBeforeHook.st_ctim.tv_sec != sourceAfterHook.st_ctim.tv_sec || sourceBeforeHook.st_ctim.tv_nsec != sourceAfterHook.st_ctim.tv_nsec ||
 	                                    win->getEditor()->documentVersion() != sourceVersionBeforeHook;
+#endif
 	outputTitle = buildCompilerOutputTitle(compilerProfile, matchedProfileName, sourcePath);
 
 	bentoBox = sourceBentoBox != nullptr ? sourceBentoBox : findBuildBentoBoxForSource(sourcePath);

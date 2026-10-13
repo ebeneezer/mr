@@ -170,7 +170,7 @@ void AppendBuffer::ensureUnique() {
 		mText = std::make_shared<std::string>();
 		return;
 	}
-	if (!mText.unique()) mText = std::make_shared<std::string>(*mText);
+	if (mText.use_count() != 1) mText = std::make_shared<std::string>(*mText);
 }
 
 TextSpan AppendBuffer::append(std::string_view text) {
@@ -185,7 +185,7 @@ void AppendBuffer::clear() noexcept {
 		mText = std::make_shared<std::string>();
 		return;
 	}
-	if (mText.unique()) mText->clear();
+	if (mText.use_count() == 1) mText->clear();
 	else
 		mText = std::make_shared<std::string>();
 }
@@ -623,7 +623,7 @@ void TextDocument::ensureUniquePieces() {
 		mPieces = std::make_shared<std::vector<Piece>>();
 		return;
 	}
-	if (!mPieces.unique()) mPieces = std::make_shared<std::vector<Piece>>(*mPieces);
+	if (mPieces.use_count() != 1) mPieces = std::make_shared<std::vector<Piece>>(*mPieces);
 }
 
 void TextDocument::ensureMaterialized() const noexcept {

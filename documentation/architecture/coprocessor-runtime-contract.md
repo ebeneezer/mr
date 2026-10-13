@@ -28,6 +28,10 @@ lifetime, scheduling metadata, result delivery and cancellation signaling.
   directions.
 - Core assignment is stable for a worker lifetime and uses strict round robin:
   `allowedCores[workerOrdinal % allowedCoreCount]`.
+  On macOS this is a logical assignment only: the OS schedules the worker,
+  native thread IDs remain observable and affinity reports `ENOTSUP` because
+  macOS does not support pinning a pthread to an individual CPU. Worker
+  ownership, scheduling and cancellation retain their existing semantics.
 - Workers read immutable snapshots and never mutate TVision objects or
   canonical document state.
 - Results carry enough owner, document, version, generation and span metadata
@@ -60,6 +64,8 @@ lifetime, scheduling metadata, result delivery and cancellation signaling.
 
 - Run independent work for multiple editor and pane owners concurrently.
 - Verify strict round-robin affinity with more workers than allowed cores.
+  On macOS verify logical round-robin assignment, native thread IDs and
+  `ENOTSUP` affinity results instead of physical CPU pinning.
 - Replace a generation while older work is running and reject stale adoption.
 - Confirm background owners continue after focus changes.
 - Close owners and external sources and verify complete worker termination.

@@ -22,10 +22,14 @@
 
 #include <array>
 #include <cstdint>
+#include <cstdlib>
 #include <fstream>
 #include <string>
 #include <string_view>
 #include <unistd.h>
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
 
 namespace {
 static constexpr std::uint32_t kHelpFileMagic = 0x46484246U;
@@ -46,12 +50,19 @@ static constexpr std::uint32_t kHelpFileMagic = 0x46484246U;
 
 [[nodiscard]] std::string executableDirectory() {
 	std::array<char, 4096> path{};
+#if defined(__APPLE__)
+	std::uint32_t size = path.size();
+	if (::_NSGetExecutablePath(path.data(), &size) != 0) return std::string();
+	std::array<char, 4096> resolved{};
+	if (::realpath(path.data(), resolved.data()) == nullptr) return std::string();
+	path = resolved;
+#else
 	const ssize_t length = ::readlink("/proc/self/exe", path.data(), path.size() - 1);
-	std::size_t separator;
 
 	if (length <= 0) return std::string();
 	path[static_cast<std::size_t>(length)] = '\0';
-	separator = std::string_view(path.data()).find_last_of('/');
+#endif
+	const std::size_t separator = std::string_view(path.data()).find_last_of('/');
 	if (separator == std::string_view::npos) return std::string();
 	return std::string(path.data(), separator);
 }

@@ -22,6 +22,9 @@
 #include <thread>
 #include <unistd.h>
 #include <vector>
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
 
 namespace {
 
@@ -352,10 +355,18 @@ int mrvmRunShellCommand(const std::string &command, const std::string &shellPath
 
 std::string mrvmDetectExecutablePathFromProc() {
 	char buffer[PATH_MAX + 1];
+#if defined(__APPLE__)
+	std::uint32_t size = sizeof(buffer);
+	if (::_NSGetExecutablePath(buffer, &size) != 0) return std::string();
+	char resolved[PATH_MAX + 1];
+	if (::realpath(buffer, resolved) == nullptr) return std::string();
+	return std::string(resolved);
+#else
 	ssize_t len = ::readlink("/proc/self/exe", buffer, PATH_MAX);
 	if (len <= 0) return std::string();
 	buffer[len] = '\0';
 	return std::string(buffer);
+#endif
 }
 
 std::string mrvmNormalizeDirPath(const std::string &path) {
