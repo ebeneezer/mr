@@ -12,6 +12,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
 
 namespace {
 
@@ -67,11 +70,19 @@ std::string appendPathSegment(std::string_view base, const char *segment) {
 
 std::string executableDirectory() {
 	char exePath[4096];
+#if defined(__APPLE__)
+	std::uint32_t size = sizeof(exePath);
+	if (::_NSGetExecutablePath(exePath, &size) != 0) return std::string();
+	char resolved[4096];
+	if (::realpath(exePath, resolved) == nullptr) return std::string();
+	return directoryPartOf(normalizeDialogPath(resolved));
+#else
 	ssize_t length = ::readlink("/proc/self/exe", exePath, sizeof(exePath) - 1);
 
 	if (length <= 0) return std::string();
 	exePath[length] = '\0';
 	return directoryPartOf(normalizeDialogPath(exePath));
+#endif
 }
 
 std::string builtInShellExecutablePath() {

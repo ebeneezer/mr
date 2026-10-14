@@ -156,8 +156,13 @@ std::string expandInvokingUserHome(std::string path, const std::string &home) {
 }
 
 bool statFingerprintEqual(const struct stat &left, const struct stat &right) noexcept {
+#if defined(__APPLE__)
+	return left.st_dev == right.st_dev && left.st_ino == right.st_ino && left.st_size == right.st_size && left.st_mtimespec.tv_sec == right.st_mtimespec.tv_sec &&
+	       left.st_mtimespec.tv_nsec == right.st_mtimespec.tv_nsec && left.st_ctimespec.tv_sec == right.st_ctimespec.tv_sec && left.st_ctimespec.tv_nsec == right.st_ctimespec.tv_nsec;
+#else
 	return left.st_dev == right.st_dev && left.st_ino == right.st_ino && left.st_size == right.st_size && left.st_mtim.tv_sec == right.st_mtim.tv_sec &&
 	       left.st_mtim.tv_nsec == right.st_mtim.tv_nsec && left.st_ctim.tv_sec == right.st_ctim.tv_sec && left.st_ctim.tv_nsec == right.st_ctim.tv_nsec;
+#endif
 }
 
 bool authorizeFile(const std::string &rawPath, const std::string &home, std::vector<AuthorizedFile> &files) {
@@ -630,12 +635,20 @@ bool dropPrivileges(const passwd &account, gid_t invokingGroup, std::string &err
 		error += std::strerror(errno);
 		return false;
 	}
+#if defined(__APPLE__)
+	if (::setgid(invokingGroup) != 0) {
+#else
 	if (::setresgid(invokingGroup, invokingGroup, invokingGroup) != 0) {
+#endif
 		error = "Could not drop group privileges: ";
 		error += std::strerror(errno);
 		return false;
 	}
+#if defined(__APPLE__)
+	if (::setuid(account.pw_uid) != 0) {
+#else
 	if (::setresuid(account.pw_uid, account.pw_uid, account.pw_uid) != 0) {
+#endif
 		error = "Could not drop user privileges: ";
 		error += std::strerror(errno);
 		return false;
@@ -677,6 +690,13 @@ MRPrivilegedFileBrokerStartup mrStartPrivilegedFileBroker(int argc, char **argv,
 
 	exitCode = 1;
 	error.clear();
+#if defined(__APPLE__)
+	// shortcut: elevated macOS launches are refused until broker lifetime and metadata guarantees are supported.
+	if (::geteuid() == 0) {
+		error = "Elevated launches are not supported on macOS. Run MR as your normal user.";
+		return MRPrivilegedFileBrokerStartup::Failed;
+	}
+#endif
 	if (::geteuid() != 0 || sudoUidText == nullptr) return MRPrivilegedFileBrokerStartup::RunApplication;
 	if (!parseUnsignedId(sudoUidText, std::numeric_limits<uid_t>::max(), invokingUidValue) ||
 	    !parseUnsignedId(sudoGidText, std::numeric_limits<gid_t>::max(), invokingGidValue)) {
@@ -693,7 +713,11 @@ MRPrivilegedFileBrokerStartup mrStartPrivilegedFileBroker(int argc, char **argv,
 	for (const std::string &path : commandLineFileArguments(argc, argv))
 		static_cast<void>(authorizeFile(path, account->pw_dir, files));
 
+#if defined(__APPLE__)
+	if (::socketpair(AF_UNIX, SOCK_SEQPACKET, 0, sockets) != 0) {
+#else
 	if (::socketpair(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, sockets) != 0) {
+#endif
 		error = "Could not create privileged file broker channel: ";
 		error += std::strerror(errno);
 		return MRPrivilegedFileBrokerStartup::Failed;

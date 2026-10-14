@@ -569,8 +569,13 @@ std::string uniqueMacroStampKey(const MacroRef &macroRef) {
 void noteUniqueMacroAttempt(const MacroRef &macroRef, const LoadedMacroFile &file) {
 	struct stat status {};
 	if (!macroRef.uniqueAttr || file.resolvedPath.empty() || ::stat(file.resolvedPath.c_str(), &status) != 0) return;
+#if defined(__APPLE__)
+	const timespec &modified = status.st_mtimespec;
+#else
+	const timespec &modified = status.st_mtim;
+#endif
 	mrvmStoreRuntimeStateString("uniqueMacroRuns", uniqueMacroStampKey(macroRef),
-	                            std::to_string(static_cast<long long>(status.st_mtim.tv_sec)) + ":" + std::to_string(status.st_mtim.tv_nsec));
+	                            std::to_string(static_cast<long long>(modified.tv_sec)) + ":" + std::to_string(modified.tv_nsec));
 }
 
 bool uniqueMacroHasCurrentAttempt(const MacroRef &macroRef, const std::string &resolvedPath) {
@@ -580,7 +585,12 @@ bool uniqueMacroHasCurrentAttempt(const MacroRef &macroRef, const std::string &r
 	long long recordedSeconds = 0;
 	long recordedNanoseconds = 0;
 	if (std::sscanf(stamp.c_str(), "%lld:%ld", &recordedSeconds, &recordedNanoseconds) != 2) return false;
-	return recordedSeconds > status.st_mtim.tv_sec || (recordedSeconds == status.st_mtim.tv_sec && recordedNanoseconds >= status.st_mtim.tv_nsec);
+#if defined(__APPLE__)
+	const timespec &modified = status.st_mtimespec;
+#else
+	const timespec &modified = status.st_mtim;
+#endif
+	return recordedSeconds > modified.tv_sec || (recordedSeconds == modified.tv_sec && recordedNanoseconds >= modified.tv_nsec);
 }
 
 bool executeLoadedMacro(const std::string &macroKey, const std::string &paramPart, std::vector<std::string> *logSink) {

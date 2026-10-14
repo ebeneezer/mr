@@ -6,6 +6,13 @@
 # - no variant/object-dir refactor
 
 PKG_CONFIG ?= pkg-config
+HOST_SYSTEM := $(shell uname -s)
+ifeq ($(HOST_SYSTEM),Darwin)
+HOMEBREW_PREFIX := $(shell brew --prefix 2>/dev/null)
+export PKG_CONFIG_PATH := $(HOMEBREW_PREFIX)/opt/libarchive/lib/pkgconfig:$(HOMEBREW_PREFIX)/opt/ncurses/lib/pkgconfig:$(HOMEBREW_PREFIX)/opt/openssl@3/lib/pkgconfig:$(PKG_CONFIG_PATH)
+PKG_CONFIG := env PKG_CONFIG_PATH="$(PKG_CONFIG_PATH)" $(PKG_CONFIG)
+export CMAKE_BUILD_PARALLEL_LEVEL = $(NPROC)
+endif
 CXX = clang++
 CC = clang
 CMAKE ?= cmake
@@ -55,9 +62,16 @@ TVISION_UPSTREAM_URL ?= https://github.com/magiblot/tvision.git
 TVISION_UPSTREAM_REF ?= master
 TVISION_ACTIVE_SOURCE_DIR := $(TVISION_SOURCE_DIR)
 TVISION_ACTIVE_BUILD_DIR := $(TVISION_SOURCE_DIR)/build
+ifeq ($(HOST_SYSTEM),Darwin)
+TVISION_ACTIVE_BUILD_DIR := $(TMP_BASE_DIR)/mr-tvision-$(shell id -u)-$(notdir $(CURDIR))
+endif
 
 PCRE2_LIB ?= $(shell if [ -e /usr/lib/libpcre2-8.so ]; then echo /usr/lib/libpcre2-8.so; else echo /usr/lib/x86_64-linux-gnu/libpcre2-8.so; fi)
 PCRE2_HEADER ?= /usr/include/pcre2.h
+ifeq ($(HOST_SYSTEM),Darwin)
+PCRE2_LIB = $(shell $(PKG_CONFIG) --libs libpcre2-8)
+PCRE2_HEADER = $(shell $(PKG_CONFIG) --variable=includedir libpcre2-8)/pcre2.h
+endif
 
 PDF_EXPORT_CFLAGS := $(shell $(PKG_CONFIG) --cflags pangocairo cairo 2>/dev/null)
 PDF_EXPORT_LIBS := $(shell $(PKG_CONFIG) --libs pangocairo cairo 2>/dev/null)
@@ -100,12 +114,19 @@ TVISION_CMAKE_FLAGS = \
 	-DTV_BUILD_TESTS=OFF \
 	-DTV_BUILD_AVSCOLOR=OFF \
 	-DTV_OPTIMIZE_BUILD=OFF
+ifeq ($(HOST_SYSTEM),Darwin)
+TVISION_CMAKE_FLAGS += -DNCURSESW=$(HOMEBREW_PREFIX)/opt/ncurses/lib/libncursesw.dylib -DNCURSESW_INCLUDE=$(HOMEBREW_PREFIX)/opt/ncurses/include -DCMAKE_CXX_FLAGS="$(shell $(PKG_CONFIG) --cflags ncursesw)"
+INCLUDES += $(shell $(PKG_CONFIG) --cflags libpcre2-8 ncursesw)
+endif
 
 # Linker paths and libraries
 NCURSESW_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libncursesw.so.6 ]; then echo -l:libncursesw.so.6; else echo -lncursesw; fi)
 GPM_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libgpm.so.2 ]; then echo -l:libgpm.so.2; else echo -lgpm; fi)
 TINFO_LIB ?= $(shell if [ -e /lib/x86_64-linux-gnu/libtinfo.so.6 ]; then echo -l:libtinfo.so.6; else echo -ltinfo; fi)
 LDFLAGS = $(PTHREAD_FLAGS) $(TVISION_LIB) $(PCRE2_LIB) $(NCURSESW_LIB) $(GPM_LIB) $(TINFO_LIB) $(PDF_EXPORT_LIBS) $(UPDATE_LIBS) -ldl -Wl,--strip-debug $(ARCH_LDFLAGS)
+ifeq ($(HOST_SYSTEM),Darwin)
+LDFLAGS = $(PTHREAD_FLAGS) $(TVISION_LIB) $(PCRE2_LIB) $(shell $(PKG_CONFIG) --libs ncursesw) $(PDF_EXPORT_LIBS) $(UPDATE_LIBS) $(ARCH_LDFLAGS)
+endif
 
 TARGET = mr
 MRFOLDTRAINER_TARGET = trainers/foldtrainer/mrfoldtrainer
@@ -818,17 +839,17 @@ $(TVISION_LOCAL_PATCH_STAMP): $(TVISION_PATCHES) Makefile
 	touch $(TVISION_LOCAL_PATCH_STAMP)
 
 tvision-build: $(TVISION_SOURCE_DIR)/CMakeLists.txt $(TVISION_SOURCE_DIR)/source/CMakeLists.txt $(TVISION_LOCAL_PATCH_STAMP) $(TMP_COMPILER_LAUNCHER)
-	@mkdir -p $(TVISION_SOURCE_DIR)/build
-	@if [ ! -f $(TVISION_SOURCE_DIR)/build/CMakeCache.txt ] || \
-		[ Makefile -nt $(TVISION_SOURCE_DIR)/build/CMakeCache.txt ] || \
-		[ $(TVISION_SOURCE_DIR)/CMakeLists.txt -nt $(TVISION_SOURCE_DIR)/build/CMakeCache.txt ] || \
-		[ $(TVISION_SOURCE_DIR)/source/CMakeLists.txt -nt $(TVISION_SOURCE_DIR)/build/CMakeCache.txt ] || \
+	@mkdir -p $(TVISION_BUILD_DIR)
+	@if [ ! -f $(TVISION_BUILD_DIR)/CMakeCache.txt ] || \
+		[ Makefile -nt $(TVISION_BUILD_DIR)/CMakeCache.txt ] || \
+		[ $(TVISION_SOURCE_DIR)/CMakeLists.txt -nt $(TVISION_BUILD_DIR)/CMakeCache.txt ] || \
+		[ $(TVISION_SOURCE_DIR)/source/CMakeLists.txt -nt $(TVISION_BUILD_DIR)/CMakeCache.txt ] || \
 		[ ! -f $(TVISION_TOOLCHAIN_STAMP) ] || \
 		[ "$$(cat $(TVISION_TOOLCHAIN_STAMP) 2>/dev/null)" != "$(TVISION_TOOLCHAIN_SIGNATURE)" ]; then \
-		$(CMAKE) -S $(TVISION_SOURCE_DIR) -B $(TVISION_SOURCE_DIR)/build $(TVISION_CMAKE_FLAGS); \
+		$(CMAKE) -S $(TVISION_SOURCE_DIR) -B $(TVISION_BUILD_DIR) $(TVISION_CMAKE_FLAGS); \
 		printf '%s\n' "$(TVISION_TOOLCHAIN_SIGNATURE)" > $(TVISION_TOOLCHAIN_STAMP); \
 	fi
-	+$(CMAKE) --build $(TVISION_SOURCE_DIR)/build --target tvision
+	+$(CMAKE) --build $(TVISION_BUILD_DIR) --target tvision
 
 $(TVISION_LIB): tvision-build
 	@test -f $(TVISION_LIB)
@@ -839,7 +860,11 @@ $(TVHC_BUILD_STAMP): Makefile $(TVISION_SOURCE_DIR)/CMakeLists.txt $(TVISION_SOU
 	@touch $@
 
 pcre2-check:
+ifeq ($(HOST_SYSTEM),Darwin)
+	@$(PKG_CONFIG) --exists libpcre2-8
+else
 	@test -f $(PCRE2_LIB)
+endif
 	@test -f $(PCRE2_HEADER)
 	@echo "Using system PCRE2: $(PCRE2_LIB) / $(PCRE2_HEADER)"
 
@@ -877,7 +902,7 @@ tvision-sync-safe: tvision-subtree-pull
 	$(MAKE) tvision-apply-patches
 
 clean-tvision:
-	rm -rf $(TVISION_SOURCE_DIR)/build $(TVISION_LOCAL_PATCH_STAMP)
+	rm -rf $(TVISION_BUILD_DIR) $(TVISION_LOCAL_PATCH_STAMP)
 
 rebuild-tvision: clean-tvision $(TVISION_LIB)
 

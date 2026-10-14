@@ -5,8 +5,10 @@
 #include <chrono>
 
 #include <pthread.h>
+#if !defined(__APPLE__)
 #include <sched.h>
 #include <sys/syscall.h>
+#endif
 #include <unistd.h>
 
 namespace mr {
@@ -23,6 +25,7 @@ std::uint64_t telemetryNowMicros() noexcept {
 
 std::vector<int> Coprocessor::detectAllowedCoreIds() noexcept {
 	std::vector<int> coreIds;
+#if !defined(__APPLE__)
 	cpu_set_t availableSet;
 
 	CPU_ZERO(&availableSet);
@@ -31,6 +34,7 @@ std::vector<int> Coprocessor::detectAllowedCoreIds() noexcept {
 			if (CPU_ISSET(cpu, &availableSet)) coreIds.push_back(cpu);
 	}
 	if (!coreIds.empty()) return coreIds;
+#endif
 
 	const long onlineCoreCount = sysconf(_SC_NPROCESSORS_ONLN);
 	if (onlineCoreCount <= 0) return coreIds;
@@ -45,16 +49,26 @@ std::size_t Coprocessor::allowedCoreCount() const noexcept {
 }
 
 int Coprocessor::assignCurrentWorkerCore(std::uint64_t workerOrdinal, int &assignedCore, std::uint64_t &osThreadId) const noexcept {
+#if defined(__APPLE__)
+	std::uint64_t threadId = 0;
+	osThreadId = pthread_threadid_np(nullptr, &threadId) == 0 ? threadId : 0;
+#else
 	const long threadId = syscall(SYS_gettid);
 	osThreadId = threadId > 0 ? static_cast<std::uint64_t>(threadId) : 0;
+#endif
 	assignedCore = -1;
 	if (allowedCoreIds.empty()) return ENODEV;
 
 	assignedCore = allowedCoreIds[static_cast<std::size_t>(workerOrdinal % allowedCoreIds.size())];
+#if defined(__APPLE__)
+	// macOS retains the logical assignment but has no supported API for pinning a pthread to a CPU.
+	return ENOTSUP;
+#else
 	cpu_set_t targetSet;
 	CPU_ZERO(&targetSet);
 	CPU_SET(assignedCore, &targetSet);
 	return pthread_setaffinity_np(pthread_self(), sizeof(targetSet), &targetSet);
+#endif
 }
 
 void Coprocessor::recordWorkerLifecycle(WorkerLifecycleState state, const LaneState &lane, const TaskInfo *task, TaskStatus taskStatus, const TaskTiming *timing, LifecycleReason reason) {

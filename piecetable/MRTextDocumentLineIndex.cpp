@@ -792,7 +792,7 @@ void TextDocument::updateEditedLineStartIndexForInsert(Offset offset, std::strin
 		return;
 	}
 
-	if (!mEditedLineStarts.unique()) mEditedLineStarts = std::make_shared<std::vector<Offset>>(*mEditedLineStarts);
+	if (mEditedLineStarts.use_count() != 1) mEditedLineStarts = std::make_shared<std::vector<Offset>>(*mEditedLineStarts);
 	std::vector<Offset> &starts = *mEditedLineStarts;
 	std::vector<Offset> insertedStarts;
 	appendLineStartsFromInsertedText(insertedStarts, offset, text, true);
@@ -811,7 +811,7 @@ void TextDocument::updateEditedLineStartIndexForErase(Range range) {
 		return;
 	}
 
-	if (!mEditedLineStarts.unique()) mEditedLineStarts = std::make_shared<std::vector<Offset>>(*mEditedLineStarts);
+	if (mEditedLineStarts.use_count() != 1) mEditedLineStarts = std::make_shared<std::vector<Offset>>(*mEditedLineStarts);
 	std::vector<Offset> &starts = *mEditedLineStarts;
 	const std::size_t baseLineIndex = lineIndexFromExactStarts(starts, range.start);
 	const Offset baseOffset = lineStartFromExactStarts(starts, baseLineIndex);
